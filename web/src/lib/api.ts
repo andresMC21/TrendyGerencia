@@ -71,14 +71,28 @@ export type LoginResponse = { id: string; email: string; token: string };
 
 export type Product = {
   id: string;
+  sellerId?: string;
   title: string;
   description: string;
   price: number;
   acceptsBarter: boolean;
   category: string;
   condition: string;
+  status?: 'AVAILABLE' | 'RESERVED' | 'SOLD' | 'REMOVED';
   neighborhoodId: string;
-  seller?: { fullName: string; ratingAverage: number };
+  favoritesCount?: number;
+  viewsCount?: number;
+  createdAt?: string;
+};
+
+/** HU-11 · GET /products/:id (incluye el perfil público del vendedor). */
+export type ProductDetail = Product & {
+  status: 'AVAILABLE' | 'RESERVED' | 'SOLD' | 'REMOVED';
+  estimatedWeightKg: number | null;
+  favoritesCount: number;
+  viewsCount: number;
+  createdAt: string;
+  seller: { id: string; fullName: string; ratingAverage: number; reviewsCount: number };
 };
 
 export const authApi = {
@@ -93,4 +107,6 @@ export const authApi = {
 
 export const productApi = {
   feed: () => apiRequest<{ items: Product[]; total: number }>('/products?limit=12'),
+  /** HU-11 · detalle de un producto (público, no requiere token). */
+  get: (id: string) => apiRequest<ProductDetail>(`/products/${encodeURIComponent(id)}`),
 };

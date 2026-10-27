@@ -755,6 +755,90 @@ h3 {
   color: var(--muted);
 }
 
+/* ---------- Perfil y detalle de producto (HU-03, HU-11) ---------- */
+.container--narrow {
+  max-width: 760px;
+}
+.back-link {
+  display: inline-block;
+  margin-bottom: 10px;
+  font-weight: 600;
+  color: var(--slate);
+}
+.profile-card--full {
+  max-width: 100%;
+}
+.avatar--lg {
+  width: 64px;
+  height: 64px;
+  font-size: 22px;
+}
+.profile-link {
+  margin-top: 14px;
+}
+.product-link {
+  color: inherit;
+}
+.product-link:hover {
+  color: var(--blue);
+}
+.product-more {
+  font-weight: 700;
+  font-size: 14px;
+}
+.product-detail {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-top: 5px solid var(--slate);
+  border-radius: 10px;
+  padding: 26px;
+}
+.product-detail h1 {
+  font-size: 30px;
+  font-weight: 800;
+  margin: 8px 0;
+}
+.product-detail-price {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 26px;
+  color: var(--navy);
+}
+.product-detail-desc {
+  margin: 0 0 18px;
+  color: var(--text);
+  white-space: pre-line;
+}
+.detail-h {
+  font-size: 16px;
+  margin: 18px 0 8px;
+}
+.profile-data--plain {
+  background: var(--panel-soft);
+}
+.seller-box {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+}
+.seller-box strong {
+  display: block;
+  font-family: var(--font-title);
+  color: var(--navy);
+}
+.seller-box span:not(.avatar) {
+  font-size: 14px;
+  color: var(--muted);
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
   .test-cards,

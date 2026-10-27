@@ -1,37 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { Footer, Header } from '../components/Brand';
 import { Alert } from '../components/Form';
-import { productApi, type Product, type UserProfile } from '../lib/api';
+import { productApi, type Product } from '../lib/api';
+import { barrio, CONDICION, fecha, iniciales, precio, ROL, VERIFICACION } from '../lib/format';
 import { useSession } from '../lib/session';
-
-const VERIFICACION: Record<UserProfile['verificationStatus'], { label: string; tone: string }> = {
-  VERIFIED: { label: 'Identidad verificada', tone: 'green' },
-  PENDING: { label: 'Verificación en revisión', tone: 'blue' },
-  UNVERIFIED: { label: 'Sin verificar', tone: 'orange' },
-  REJECTED: { label: 'Verificación rechazada', tone: 'gray' },
-};
-
-const ROL: Record<string, string> = { USER: 'Usuario', ADMIN: 'Administrador', MODERATOR: 'Moderador' };
-
-const CONDICION: Record<string, string> = {
-  NUEVO: 'Nuevo',
-  COMO_NUEVO: 'Como nuevo',
-  USADO: 'Usado',
-};
-
-const precio = (v: number) => (v === 0 ? 'Gratis' : `$${Math.round(v).toLocaleString('es-CO')}`);
-const barrio = (id: string) =>
-  id
-    .split('-')
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
-const iniciales = (n: string) =>
-  n
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]!.toUpperCase())
-    .join('');
 
 export default function Inicio() {
   const { user, isNewAccount, dismissWelcome } = useSession();
@@ -99,9 +72,12 @@ export default function Inicio() {
                 </div>
                 <div>
                   <dt>Miembro desde</dt>
-                  <dd>{new Date(user.createdAt).toLocaleDateString('es-CO', { dateStyle: 'long' })}</dd>
+                  <dd>{fecha(user.createdAt)}</dd>
                 </div>
               </dl>
+              <Link to="/perfil" className="btn btn-outline btn-block profile-link">
+                Ver mi perfil
+              </Link>
             </aside>
 
             <section>
@@ -119,7 +95,11 @@ export default function Inicio() {
                       <span className="product-cat">{p.category}</span>
                       {p.acceptsBarter && <span className="chip chip--orange">Acepta trueque</span>}
                     </div>
-                    <h3>{p.title}</h3>
+                    <h3>
+                      <Link to={`/producto/${p.id}`} className="product-link">
+                        {p.title}
+                      </Link>
+                    </h3>
                     <p className="product-desc">{p.description}</p>
                     <div className="product-foot">
                       <span className="product-price">{precio(Number(p.price))}</span>
@@ -127,6 +107,9 @@ export default function Inicio() {
                         {barrio(p.neighborhoodId)} · {CONDICION[p.condition] ?? p.condition}
                       </span>
                     </div>
+                    <Link to={`/producto/${p.id}`} className="product-more">
+                      Ver producto →
+                    </Link>
                   </article>
                 ))}
               </div>

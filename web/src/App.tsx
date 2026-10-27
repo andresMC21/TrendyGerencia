@@ -4,6 +4,8 @@ import { useSession } from './lib/session';
 import Ingresar from './pages/Ingresar';
 import Inicio from './pages/Inicio';
 import Landing from './pages/Landing';
+import Perfil from './pages/Perfil';
+import Producto from './pages/Producto';
 import Registro from './pages/Registro';
 
 function SoloInvitados({ children }: { children: ReactNode }) {
@@ -46,6 +48,15 @@ export default function App() {
           </SoloUsuarios>
         }
       />
+      <Route
+        path="/perfil"
+        element={
+          <SoloUsuarios>
+            <Perfil />
+          </SoloUsuarios>
+        }
+      />
+      <Route path="/producto/:id" element={<Producto />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
