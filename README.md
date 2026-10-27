@@ -42,7 +42,24 @@ NestJS 12 · TypeScript · TypeORM · PostgreSQL 16 + PostGIS · Passport JWT ·
 - **Docker** (para levantar PostgreSQL con PostGIS) o un PostgreSQL con la extensión PostGIS instalada
 - npm
 
+## Instalación y ejecución local
 
+Todo el backend vive en la carpeta `back/`.
+
+```bash
+cd back
+npm install
+cp .env.example .env          # ajusta DATABASE_URL y JWT_SECRET
+
+# Base de datos con PostGIS (opcional si ya tienes una)
+docker run -d --name trendy-db -p 5432:5432 \
+  -e POSTGRES_USER=trendy -e POSTGRES_PASSWORD=trendy -e POSTGRES_DB=trendy \
+  postgis/postgis:16-3.4
+
+npm run migration:run
+npm run seed                  # opcional: usuarios y productos de ejemplo
+npm run start:dev
+```
 
 La API queda en **http://localhost:3000/api** y Swagger en **http://localhost:3000/api/docs**.
 

@@ -9,6 +9,7 @@ services:
   - type: web
     name: trendy-app-web
     runtime: node
+    rootDir: back
     plan: free
     region: oregon
     branch: main

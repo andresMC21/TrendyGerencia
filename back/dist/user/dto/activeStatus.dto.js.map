@@ -1,1 +1,0 @@
-{"version":3,"file":"activeStatus.dto.js","sourceRoot":"","sources":["../../../src/user/dto/activeStatus.dto.ts"],"names":[],"mappings":";;;;;;;;;;;;AAAA,6CAA8C;AAC9C,qDAA4C;AAE5C,MAAa,eAAe;IAO1B,QAAQ,CAAU;CACnB;AARD,0CAQC;AADC;IANC,IAAA,qBAAW,EAAC;QACX,IAAI,EAAE,OAAO;QACb,OAAO,EAAE,KAAK;QACd,WAAW,EAAE,8CAA8C;KAC5D,CAAC;IACD,IAAA,2BAAS,GAAE;;iDACM"}
