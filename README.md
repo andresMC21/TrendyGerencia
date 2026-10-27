@@ -48,7 +48,7 @@ El proyecto tiene tres piezas que se ejecutan en este orden:
 
 | Pieza | Carpeta | Dirección |
 |---|---|---|
-| Base de datos PostgreSQL + PostGIS | contenedor Docker `trendy-db` | `localhost:5433` (base `trendy`, usuario `trendy`, clave `trendy`) |
+| Base de datos PostgreSQL + PostGIS | servicio `db` de `docker-compose.yml` (contenedor `trendy-db`) | `localhost:5433` (base `trendy`, usuario `trendy`, clave `trendy`) |
 | API (NestJS) | `back/` | http://localhost:3000/api · Swagger en http://localhost:3000/api/docs |
 | Página web (React + Vite) | `web/` | http://localhost:5173 |
 
@@ -57,23 +57,32 @@ El proyecto tiene tres piezas que se ejecutan en este orden:
 1. Abre Docker Desktop y espera a que diga *Engine running*.
 2. En Finder, abre la carpeta del repositorio y haz doble clic en **`iniciar-trendy.command`**.
    (Si macOS lo bloquea la primera vez: clic derecho → *Abrir* → *Abrir*.)
-3. El script crea o arranca la base de datos, escribe `back/.env`, aplica las migraciones, carga el seed (incluido el usuario fijo), levanta la API y abre la web en el navegador.
+3. El script levanta la base de datos con `docker compose`, crea `back/.env` si no existe, aplica las migraciones, carga el seed (incluido el usuario fijo), levanta la API y abre la web en el navegador.
 4. Para detener todo, presiona `Ctrl + C` en la ventana de Terminal. La base de datos sigue en Docker con tus datos.
 
 Los registros quedan en `.trendy-logs/` (`iniciar.log` y `api.log`).
 
-### Opción B · Paso a paso (cualquier sistema)
+### Opción B · Todo con Docker (Windows, Linux o Mac, sin instalar Node)
 
-**1. Base de datos (solo la primera vez la creas; después solo la enciendes)**
+Solo necesitas Docker Desktop. Desde la raíz del repositorio:
 
 ```bash
-# Crear el contenedor (primera vez)
-docker run -d --name trendy-db -p 5433:5432 \
-  -e POSTGRES_USER=trendy -e POSTGRES_PASSWORD=trendy -e POSTGRES_DB=trendy \
-  postgis/postgis:16-3.4
+docker compose --profile completo up -d --build
+```
 
-# Las siguientes veces
-docker start trendy-db
+Esto levanta la base de datos, la API (aplica migraciones y carga el seed con el usuario fijo) y la web:
+
+- Web: http://localhost:5173
+- API: http://localhost:3000/api · Swagger: http://localhost:3000/api/docs
+
+Para apagar: `docker compose --profile completo down` (los datos se conservan en el volumen `trendy_trendy-db-data`; con `down -v` se borran).
+
+### Opción C · Base de datos en Docker + API y web con npm (para desarrollar)
+
+**1. Base de datos**
+
+```bash
+docker compose up -d db      # crea y enciende el contenedor trendy-db (PostGIS) en el puerto 5433
 ```
 
 **2. API**
@@ -81,22 +90,10 @@ docker start trendy-db
 ```bash
 cd back
 npm install
-cp .env.example .env
-```
-
-Edita `back/.env` para que quede así:
-
-```
-DATABASE_URL=postgres://trendy:trendy@localhost:5433/trendy
-DB_SSL=false
-JWT_SECRET=trendy-local-dev-secret
-PORT=3000
-```
-
-```bash
-npm run migration:run   # crea las tablas
-npm run seed            # carga los datos de ejemplo y el usuario fijo
-npm run start:dev       # deja la API corriendo en http://localhost:3000/api
+cp .env.example .env         # ya trae los datos de conexión de docker-compose.yml
+npm run migration:run        # crea las tablas
+npm run seed                 # datos de ejemplo + usuario fijo
+npm run start:dev            # http://localhost:3000/api
 ```
 
 **3. Página web** (en otra terminal)
@@ -104,10 +101,22 @@ npm run start:dev       # deja la API corriendo en http://localhost:3000/api
 ```bash
 cd web
 npm install
-npm run dev             # abre http://localhost:5173
+npm run dev                  # http://localhost:5173
 ```
 
 Para usar la API desplegada en vez de la local: `VITE_API_URL=https://trendy-app-web-un9c.onrender.com/api npm run dev`.
+
+### Archivos de configuración
+
+| Archivo | Para qué sirve |
+|---|---|
+| `docker-compose.yml` | Define `db` (PostGIS) y, con el perfil `completo`, `api` y `web`. |
+| `.env.example` (raíz) | Variables opcionales de docker compose (puertos, usuario y clave de la base). Cópialo como `.env` solo si quieres cambiarlas. |
+| `back/.env.example` | Configuración de la API cuando corre con npm. Cópialo como `back/.env`. |
+| `web/.env.example` | URL de la API para la web (opcional). |
+| `back/Dockerfile`, `web/Dockerfile` | Imágenes de la API y de la web que usa el perfil `completo`. |
+
+Los archivos `.env` reales no se suben al repositorio (están en `.gitignore`); los `.env.example` traen valores que funcionan tal cual para desarrollo local.
 
 ### Usuario fijo
 

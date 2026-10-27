@@ -23,71 +23,32 @@ NODE_MAJOR=$(node -p 'process.versions.node.split(".")[0]')
 [ "$NODE_MAJOR" -ge 24 ] || falla "Se necesita Node 24 o superior (tienes $(node -v))"
 echo "Node $(node -v)"
 
-paso "Base de datos en Docker"
+paso "Base de datos (docker compose)"
 command -v docker >/dev/null || falla "No encuentro el comando docker"
-docker info >/dev/null 2>&1 || falla "Docker no está corriendo"
+docker info >/dev/null 2>&1 || falla "Docker no está corriendo: abre Docker Desktop"
 
-DB_NAME=trendy
-CID=""; DB_USER=""; DB_PASS=""; DB_PORT=""
-# 0) Si ya existe el contenedor propio de Trendy (con PostGIS), se usa ese.
-USAR_TRENDY_DB=0
-docker ps -a --format '{{.Names}}' | grep -qx trendy-db && USAR_TRENDY_DB=1
-# 1) Si no, un contenedor de Postgres ya abierto con el puerto 5432 publicado
-for c in $( [ $USAR_TRENDY_DB = 1 ] || docker ps --format '{{.ID}}'); do
-  img=$(docker inspect -f '{{.Config.Image}}' "$c")
-  echo "$img" | grep -qiE 'postgres|postgis' || continue
-  port=$(docker port "$c" 5432/tcp 2>/dev/null | head -1 | awk -F: '{print $NF}')
-  [ -n "$port" ] || { echo "Contenedor $c ($img) sin puerto publicado, lo omito"; continue; }
-  CID=$c; DB_PORT=$port
-  envs=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$c")
-  DB_USER=$(echo "$envs" | sed -n 's/^POSTGRES_USER=//p'); DB_USER=${DB_USER:-postgres}
-  DB_PASS=$(echo "$envs" | sed -n 's/^POSTGRES_PASSWORD=//p')
-  echo "Usando contenedor $(docker inspect -f '{{.Name}}' "$c") ($img) en el puerto $DB_PORT"
-  break
-done
-
-usar_propio() {
-  echo "Usaré un contenedor propio con PostGIS: trendy-db (puerto 5433)"
-  if ! docker ps -a --format '{{.Names}}' | grep -qx trendy-db; then
-    docker run -d --name trendy-db -p 5433:5432 \
-      -e POSTGRES_USER=trendy -e POSTGRES_PASSWORD=trendy -e POSTGRES_DB=trendy \
-      postgis/postgis:16-3.4 || falla "No se pudo crear el contenedor trendy-db"
-  else
-    docker start trendy-db >/dev/null
-  fi
-  CID=trendy-db; DB_USER=trendy; DB_PASS=trendy; DB_PORT=5433
-  for i in $(seq 1 30); do docker exec trendy-db pg_isready -U trendy >/dev/null 2>&1 && break; sleep 1; done
-  sleep 2
-}
-
-[ -n "$CID" ] || usar_propio
-
-psql_in() { docker exec -e PGPASSWORD="$DB_PASS" "$CID" psql -U "$DB_USER" -v ON_ERROR_STOP=1 "$@"; }
-
-if ! psql_in -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
-  psql_in -d postgres -c "CREATE DATABASE $DB_NAME" || falla "No se pudo crear la base $DB_NAME"
+# Un trendy-db creado antes a mano (sin docker compose) se detiene y se
+# renombra a trendy-db-anterior para no perder sus datos.
+if docker inspect trendy-db >/dev/null 2>&1 && \
+   [ -z "$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' trendy-db)" ]; then
+  echo "Encontré un trendy-db anterior (sin docker compose): lo renombro a trendy-db-anterior"
+  docker stop trendy-db >/dev/null
+  docker rename trendy-db trendy-db-anterior || falla "No pude renombrar el trendy-db anterior"
 fi
-if ! psql_in -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS postgis" >/dev/null 2>&1; then
-  echo "Ese Postgres no tiene PostGIS (Trendy lo necesita para la ubicación)."
-  [ "$CID" = "trendy-db" ] && falla "PostGIS no disponible en trendy-db"
-  usar_propio
-  psql_in -d "$DB_NAME" -c "CREATE EXTENSION IF NOT EXISTS postgis" >/dev/null || falla "PostGIS no disponible"
-fi
-echo "Base '$DB_NAME' lista en localhost:$DB_PORT"
+
+docker compose up -d --wait db || falla "No se pudo levantar la base de datos con docker compose"
+echo "Base de datos lista: localhost:${DB_PORT:-5433} · base trendy · usuario trendy"
 
 paso "API (back/)"
 cd "$ROOT/back"
-ENC_PASS=$(node -p 'encodeURIComponent(process.argv[1])' "$DB_PASS")
-[ -f .env ] && cp .env .env.bak
-cat > .env <<EOF
-DATABASE_URL=postgres://$DB_USER:$ENC_PASS@localhost:$DB_PORT/$DB_NAME
-DB_SSL=false
-JWT_SECRET=trendy-local-dev-secret
-PORT=3000
-NODE_ENV=development
-EOF
+[ -f .env ] || cp .env.example .env
 [ -d node_modules ] || npm install || falla "npm install falló en back/"
-npm run migration:run || falla "Las migraciones fallaron"
+migrado=0
+for intento in 1 2 3 4 5; do
+  npm run migration:run && { migrado=1; break; }
+  echo "La base aún no acepta conexiones, reintento en 5 s ($intento/5)..."; sleep 5
+done
+[ $migrado = 1 ] || falla "Las migraciones fallaron"
 npm run seed || falla "El seed falló"
 
 lsof -ti tcp:3000 | xargs kill 2>/dev/null
