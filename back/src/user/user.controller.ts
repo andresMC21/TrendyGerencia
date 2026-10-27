@@ -44,13 +44,13 @@ import { UserService } from './user.service';
 export class UserController {
   constructor(private readonly userService: UserService) { }
 
-  // TODO(Camilo): endpoints temporales de register/login para poder probar
-  // los demas modulos. Reemplazar por los definitivos del modulo 1.
+  // HU-01 · Crear una cuenta (visitante, sin autenticación).
   @Post('register')
   @ApiOperation({
     summary: 'Registrar una cuenta',
     description:
-      'Crea una cuenta USER activa con verificación UNVERIFIED. El correo se normaliza a minúsculas y la respuesta incluye el perfil y un JWT.',
+      'Crea una cuenta con rol USER, activa y con verificación UNVERIFIED. El correo se normaliza a minúsculas y debe ser único. ' +
+      'Solo se aceptan email, password y fullName: enviar role, isActive u otro campo devuelve 400. La respuesta incluye el perfil y un JWT.',
   })
   @ApiBody({
     type: RegisterUserDto,
@@ -63,9 +63,11 @@ export class UserController {
   })
   @ApiBadRequestResponse({
     description:
-      'El correo, la contraseña o el nombre no cumplen las reglas de validación',
+      'El correo, la contraseña o el nombre no cumplen las reglas de validación, o se envió un campo no permitido (por ejemplo role).',
   })
-  @ApiConflictResponse({ description: 'Ya existe una cuenta con ese correo' })
+  @ApiConflictResponse({
+    description: 'Ya existe una cuenta con ese correo; no se crea otra.',
+  })
   @ApiInternalServerErrorResponse({
     description: 'Error inesperado al crear la cuenta.',
   })

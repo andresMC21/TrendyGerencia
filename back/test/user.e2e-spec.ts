@@ -119,6 +119,74 @@ describe('Users (e2e)', () => {
       .expect(400);
   });
 
+  describe('HU-01 · Crear una cuenta', () => {
+    it('crea un USER activo y entrega un JWT válido', async () => {
+      const user = newUser('hu01-ok');
+
+      const res = await http.post('/api/user/register').send(user).expect(201);
+
+      expect(res.body).toMatchObject({
+        email: user.email,
+        fullName: user.fullName,
+        role: ['USER'],
+        isActive: true,
+        verificationStatus: 'UNVERIFIED',
+      });
+      expect(typeof res.body.token).toBe('string');
+      expect(res.body.password).toBeUndefined();
+      expect(res.body.tokenVersion).toBeUndefined();
+
+      // El JWT entregado sirve para acceder a rutas protegidas.
+      const me = await http
+        .get('/api/user/me')
+        .set(auth(res.body.token))
+        .expect(200);
+      expect(me.body.id).toBe(res.body.id);
+    });
+
+    it('devuelve 409 si el correo ya existe, sin importar mayúsculas, y no duplica la cuenta', async () => {
+      const user = newUser('hu01-dup');
+      await http.post('/api/user/register').send(user).expect(201);
+
+      await http
+        .post('/api/user/register')
+        .send({ ...user, email: `  ${user.email.toUpperCase()} ` })
+        .expect(409);
+
+      const [{ count }] = await dataSource.query(
+        'SELECT COUNT(*)::int AS count FROM "user" WHERE email = $1',
+        [user.email],
+      );
+      expect(count).toBe(1);
+    });
+
+    it.each([
+      ['role', { role: ['ADMIN'] }],
+      ['isActive', { isActive: false }],
+      ['verificationStatus', { verificationStatus: 'VERIFIED' }],
+    ])('devuelve 400 si intenta asignar %s y no crea la cuenta', async (field, extra) => {
+      const user = newUser(`hu01-${field.toLowerCase()}`);
+
+      await http
+        .post('/api/user/register')
+        .send({ ...user, ...extra })
+        .expect(400);
+
+      const [{ count }] = await dataSource.query(
+        'SELECT COUNT(*)::int AS count FROM "user" WHERE email = $1',
+        [user.email],
+      );
+      expect(count).toBe(0);
+    });
+
+    it('devuelve 400 con un nombre vacío', async () => {
+      await http
+        .post('/api/user/register')
+        .send({ ...newUser('hu01-noname'), fullName: '   ' })
+        .expect(400);
+    });
+  });
+
   it('POST /user/login inicia sesión con credenciales válidas', async () => {
     const res = await http
       .post('/api/user/login')
