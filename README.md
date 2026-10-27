@@ -61,6 +61,10 @@ npm run seed                  # opcional: usuarios y productos de ejemplo
 npm run start:dev
 ```
 
+### Arranque rápido en macOS
+
+Con Docker Desktop abierto, haz doble clic en **`iniciar-trendy.command`** (raíz del repo). El script crea la base `trendy` con PostGIS (contenedor `trendy-db`, puerto 5433, si tu Postgres no trae PostGIS), escribe `back/.env`, corre migraciones y seed, levanta la API y abre la app con Expo. Los logs quedan en `.trendy-logs/`.
+
 ### App móvil (Expo)
 
 La app está en `mobile/` (Expo + expo-router). Con la API encendida:
