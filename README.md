@@ -38,50 +38,91 @@ NestJS 12 · TypeScript · TypeORM · PostgreSQL 16 + PostGIS · Passport JWT ·
 
 ## Requisitos
 
-- **Node.js 24** (el proyecto y el CI usan Node 24)
-- **Docker** (para levantar PostgreSQL con PostGIS) o un PostgreSQL con la extensión PostGIS instalada
+- **Node.js 24** (`node -v` debe mostrar v24 o superior; con nvm: `nvm install 24`)
+- **Docker Desktop** abierto (para la base de datos PostgreSQL + PostGIS)
 - npm
 
-## Instalación y ejecución local
+## Cómo ejecutar Trendy (paso a paso)
 
-Todo el backend vive en la carpeta `back/`.
+El proyecto tiene tres piezas que se ejecutan en este orden:
+
+| Pieza | Carpeta | Dirección |
+|---|---|---|
+| Base de datos PostgreSQL + PostGIS | contenedor Docker `trendy-db` | `localhost:5433` (base `trendy`, usuario `trendy`, clave `trendy`) |
+| API (NestJS) | `back/` | http://localhost:3000/api · Swagger en http://localhost:3000/api/docs |
+| Página web (React + Vite) | `web/` | http://localhost:5173 |
+
+### Opción A · Un solo clic (macOS)
+
+1. Abre Docker Desktop y espera a que diga *Engine running*.
+2. En Finder, abre la carpeta del repositorio y haz doble clic en **`iniciar-trendy.command`**.
+   (Si macOS lo bloquea la primera vez: clic derecho → *Abrir* → *Abrir*.)
+3. El script crea o arranca la base de datos, escribe `back/.env`, aplica las migraciones, carga el seed (incluido el usuario fijo), levanta la API y abre la web en el navegador.
+4. Para detener todo, presiona `Ctrl + C` en la ventana de Terminal. La base de datos sigue en Docker con tus datos.
+
+Los registros quedan en `.trendy-logs/` (`iniciar.log` y `api.log`).
+
+### Opción B · Paso a paso (cualquier sistema)
+
+**1. Base de datos (solo la primera vez la creas; después solo la enciendes)**
+
+```bash
+# Crear el contenedor (primera vez)
+docker run -d --name trendy-db -p 5433:5432 \
+  -e POSTGRES_USER=trendy -e POSTGRES_PASSWORD=trendy -e POSTGRES_DB=trendy \
+  postgis/postgis:16-3.4
+
+# Las siguientes veces
+docker start trendy-db
+```
+
+**2. API**
 
 ```bash
 cd back
 npm install
-cp .env.example .env          # ajusta DATABASE_URL y JWT_SECRET
-
-# Base de datos con PostGIS (opcional si ya tienes una)
-docker run -d --name trendy-db -p 5432:5432 \
-  -e POSTGRES_USER=trendy -e POSTGRES_PASSWORD=trendy -e POSTGRES_DB=trendy \
-  postgis/postgis:16-3.4
-
-npm run migration:run
-npm run seed                  # opcional: usuarios y productos de ejemplo
-npm run start:dev
+cp .env.example .env
 ```
 
-### Arranque rápido en macOS
+Edita `back/.env` para que quede así:
 
-Con Docker Desktop abierto, haz doble clic en **`iniciar-trendy.command`** (raíz del repo). El script crea la base `trendy` con PostGIS (contenedor `trendy-db`, puerto 5433, si tu Postgres no trae PostGIS), escribe `back/.env`, corre migraciones y seed, levanta la API y abre la app con Expo. Los logs quedan en `.trendy-logs/`.
-
-### App móvil (Expo)
-
-La app está en `mobile/` (Expo + expo-router). Con la API encendida:
+```
+DATABASE_URL=postgres://trendy:trendy@localhost:5433/trendy
+DB_SSL=false
+JWT_SECRET=trendy-local-dev-secret
+PORT=3000
+```
 
 ```bash
-cd mobile
-npm install
-npx expo start          # escanea el QR con Expo Go (Android/iOS) o presiona "w" para abrirla en el navegador
+npm run migration:run   # crea las tablas
+npm run seed            # carga los datos de ejemplo y el usuario fijo
+npm run start:dev       # deja la API corriendo en http://localhost:3000/api
 ```
 
-- En el celular la app usa automáticamente la IP de tu computador (`http://<ip>:3000/api`); el celular debe estar en la misma red Wi-Fi.
-- Para apuntar a otra API: `EXPO_PUBLIC_API_URL=https://trendy-app-web-un9c.onrender.com/api npx expo start`.
-- Usuario fijo para probar: **`demo@trendy.local` / `Trendy123`** (lo crea `npm run seed` en `back/`).
+**3. Página web** (en otra terminal)
 
-La API queda en **http://localhost:3000/api** y Swagger en **http://localhost:3000/api/docs**.
+```bash
+cd web
+npm install
+npm run dev             # abre http://localhost:5173
+```
 
+Para usar la API desplegada en vez de la local: `VITE_API_URL=https://trendy-app-web-un9c.onrender.com/api npm run dev`.
 
+### Usuario fijo
+
+| Correo | Contraseña |
+|---|---|
+| `demo@trendy.local` | `Trendy123` |
+
+- **Dónde se define:** `back/src/seed/seed-data.ts` (lista `seedUsers`, último elemento, id `55555555-5555-4555-8555-555555555555`).
+- **Dónde se guarda:** en la tabla `"user"` de la base `trendy` (contenedor `trendy-db`). Lo crea `npm run seed`, que se puede ejecutar varias veces sin duplicarlo.
+- **Verlo en la base de datos:**
+
+  ```bash
+  docker exec -it trendy-db psql -U trendy -d trendy \
+    -c 'SELECT email, "fullName", role, "isActive" FROM "user";'
+  ```
 
 ### Scripts (`npm run`)
 
@@ -107,7 +148,7 @@ La API queda en **http://localhost:3000/api** y Swagger en **http://localhost:30
 | `moderador@trendy.local` | `Mod12345` | MODERATOR | Revisa verificaciones |
 | `ana@trendy.local` | `Ana12345` | USER | Verificada; vende 2 productos |
 | `carlos@trendy.local` | `Carlos12` | USER | Sin verificar; vende 1 producto y compró uno de Ana |
-| `demo@trendy.local` | `Trendy123` | USER | Usuario fijo para probar la app móvil |
+| `demo@trendy.local` | `Trendy123` | USER | Usuario fijo para probar la página web |
 
 El seed también crea 3 productos, 1 transacción completada y 1 reseña de ejemplo. Se puede ejecutar varias veces.
 
@@ -196,6 +237,7 @@ src/
 ├── transaction/             # Compra/trueque y máquina de estados
 └── review/                  # Reseñas y promedio de calificación
 test/                        # Pruebas de integración (Supertest)
+web/                         # Página web (React + Vite): portada, registro, ingreso, Mi Trendy
 postman/                     # Colección de Postman
 ```
 

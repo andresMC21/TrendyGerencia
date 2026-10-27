@@ -1,5 +1,5 @@
 #!/bin/bash
-# Trendy: levanta la base de datos, la API y la app móvil en macOS.
+# Trendy: levanta la base de datos, la API y la página web en macOS.
 # Doble clic en Finder o: ./iniciar-trendy.command
 set -uo pipefail
 cd "$(dirname "$0")"
@@ -29,8 +29,11 @@ docker info >/dev/null 2>&1 || falla "Docker no está corriendo"
 
 DB_NAME=trendy
 CID=""; DB_USER=""; DB_PASS=""; DB_PORT=""
-# 1) Un contenedor de Postgres ya abierto con el puerto 5432 publicado
-for c in $(docker ps --format '{{.ID}}'); do
+# 0) Si ya existe el contenedor propio de Trendy (con PostGIS), se usa ese.
+USAR_TRENDY_DB=0
+docker ps -a --format '{{.Names}}' | grep -qx trendy-db && USAR_TRENDY_DB=1
+# 1) Si no, un contenedor de Postgres ya abierto con el puerto 5432 publicado
+for c in $( [ $USAR_TRENDY_DB = 1 ] || docker ps --format '{{.ID}}'); do
   img=$(docker inspect -f '{{.Config.Image}}' "$c")
   echo "$img" | grep -qiE 'postgres|postgis' || continue
   port=$(docker port "$c" 5432/tcp 2>/dev/null | head -1 | awk -F: '{print $NF}')
@@ -94,20 +97,21 @@ for i in $(seq 1 90); do curl -sf http://localhost:3000/api/health >/dev/null &&
 curl -sf http://localhost:3000/api/health >/dev/null || falla "La API no arrancó (revisa .trendy-logs/api.log)"
 echo "API lista en http://localhost:3000/api  ·  Swagger: http://localhost:3000/api/docs"
 
-paso "App móvil (mobile/)"
-cd "$ROOT/mobile"
-[ -d node_modules ] || npm install || falla "npm install falló en mobile/"
+paso "Página web (web/)"
+cd "$ROOT/web"
+[ -d node_modules ] || npm install || falla "npm install falló en web/"
+for port in 5173 8081; do lsof -ti tcp:$port | xargs kill 2>/dev/null; done
 cat <<MSG
 
   ┌──────────────────────────────────────────────────────────┐
-  │  Usuario de prueba:  demo@trendy.local  /  Trendy123      │
-  │  Celular: escanea el QR con Expo Go (misma red Wi-Fi)     │
-  │  Navegador: se abre solo en http://localhost:8081         │
+  │  Trendy web:  http://localhost:5173                       │
+  │  API:         http://localhost:3000/api  (Swagger: /docs) │
+  │  Usuario fijo: demo@trendy.local  /  Trendy123            │
   │  Para detener todo: Ctrl+C en esta ventana                │
   └──────────────────────────────────────────────────────────┘
 
 MSG
 trap 'lsof -ti tcp:3000 | xargs kill 2>/dev/null' EXIT
-# Expo necesita la terminal directa (sin tee) para mostrar el QR y los atajos.
+(sleep 4; open http://localhost:5173) &
 exec 1>&3 2>&4
-npx expo start --web
+npm run dev
