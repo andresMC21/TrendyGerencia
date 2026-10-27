@@ -1,0 +1,6 @@
+export declare enum TransactionStatus {
+    PENDING = "PENDING",
+    AGREED_POINT = "AGREED_POINT",
+    COMPLETED = "COMPLETED",
+    CANCELLED = "CANCELLED"
+}

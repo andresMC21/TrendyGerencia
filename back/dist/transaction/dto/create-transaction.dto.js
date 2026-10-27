@@ -1,0 +1,42 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.CreateTransactionDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
+const class_validator_1 = require("class-validator");
+class CreateTransactionDto {
+    productId;
+    message;
+}
+exports.CreateTransactionDto = CreateTransactionDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({
+        type: String,
+        format: 'uuid',
+        example: '{{productId}}',
+        description: 'Identificador UUID del producto sobre el que se inicia la compra o trueque.',
+    }),
+    (0, class_validator_1.IsUUID)(),
+    __metadata("design:type", String)
+], CreateTransactionDto.prototype, "productId", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({
+        type: String,
+        example: 'Me interesa, ¿sigue disponible?',
+        maxLength: 500,
+        description: 'Mensaje opcional que el comprador envía al vendedor (máximo 500 caracteres).',
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MaxLength)(500),
+    __metadata("design:type", String)
+], CreateTransactionDto.prototype, "message", void 0);
+//# sourceMappingURL=create-transaction.dto.js.map
