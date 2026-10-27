@@ -41,6 +41,16 @@ export const seedUsers = [
     verificationStatus: VerificationStatus.UNVERIFIED,
     role: [ValidRoles.USER],
   },
+  {
+    // Usuario fijo para probar la app móvil (HU-01): demo@trendy.local / Trendy123
+    id: '55555555-5555-4555-8555-555555555555',
+    email: 'demo@trendy.local',
+    password: 'Trendy123',
+    fullName: 'Usuario Demo',
+    info: 'Cuenta de demostración de la app móvil',
+    verificationStatus: VerificationStatus.UNVERIFIED,
+    role: [ValidRoles.USER],
+  },
 ] as const;
 
 export const seedProducts = [

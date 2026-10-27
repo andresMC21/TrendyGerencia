@@ -61,6 +61,20 @@ npm run seed                  # opcional: usuarios y productos de ejemplo
 npm run start:dev
 ```
 
+### App móvil (Expo)
+
+La app está en `mobile/` (Expo + expo-router). Con la API encendida:
+
+```bash
+cd mobile
+npm install
+npx expo start          # escanea el QR con Expo Go (Android/iOS) o presiona "w" para abrirla en el navegador
+```
+
+- En el celular la app usa automáticamente la IP de tu computador (`http://<ip>:3000/api`); el celular debe estar en la misma red Wi-Fi.
+- Para apuntar a otra API: `EXPO_PUBLIC_API_URL=https://trendy-app-web-un9c.onrender.com/api npx expo start`.
+- Usuario fijo para probar: **`demo@trendy.local` / `Trendy123`** (lo crea `npm run seed` en `back/`).
+
 La API queda en **http://localhost:3000/api** y Swagger en **http://localhost:3000/api/docs**.
 
 
@@ -89,6 +103,7 @@ La API queda en **http://localhost:3000/api** y Swagger en **http://localhost:30
 | `moderador@trendy.local` | `Mod12345` | MODERATOR | Revisa verificaciones |
 | `ana@trendy.local` | `Ana12345` | USER | Verificada; vende 2 productos |
 | `carlos@trendy.local` | `Carlos12` | USER | Sin verificar; vende 1 producto y compró uno de Ana |
+| `demo@trendy.local` | `Trendy123` | USER | Usuario fijo para probar la app móvil |
 
 El seed también crea 3 productos, 1 transacción completada y 1 reseña de ejemplo. Se puede ejecutar varias veces.
 
