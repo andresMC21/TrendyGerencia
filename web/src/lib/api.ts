@@ -110,3 +110,22 @@ export const productApi = {
   /** HU-11 · detalle de un producto (público, no requiere token). */
   get: (id: string) => apiRequest<ProductDetail>(`/products/${encodeURIComponent(id)}`),
 };
+
+export type Transaction = {
+  id: string;
+  productId: string;
+  buyerId: string;
+  sellerId: string;
+  status: 'PENDING' | 'AGREED_POINT' | 'COMPLETED' | 'CANCELLED';
+  message: string | null;
+};
+
+/** HU-15 · El servidor obtiene comprador del JWT y vendedor del producto. */
+export const transactionApi = {
+  create: (token: string, productId: string, message?: string) =>
+    apiRequest<Transaction>('/transactions', {
+      method: 'POST',
+      token,
+      body: { productId, ...(message ? { message } : {}) },
+    }),
+};
