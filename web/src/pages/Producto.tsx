@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { Footer, Header } from '../components/Brand';
 import { Alert } from '../components/Form';
-import { ApiError, productApi, type ProductDetail } from '../lib/api';
+import { ApiError, productApi, transactionApi, type ProductDetail, type Transaction } from '../lib/api';
+import { useSession } from '../lib/session';
 import { barrio, CONDICION, ESTADO_PRODUCTO, fecha, iniciales, precio } from '../lib/format';
 
 type Estado =
@@ -68,7 +69,8 @@ function ProductoPagina({ id }: { id: string }) {
 }
 
 function Detalle({ p }: { p: ProductDetail }) {
-  const estado = ESTADO_PRODUCTO[p.status] ?? { label: p.status, tone: 'gray' };
+  const [producto, setProducto] = useState(p);
+  const estado = ESTADO_PRODUCTO[producto.status] ?? { label: producto.status, tone: 'gray' };
   const tieneRating = p.seller.reviewsCount > 0;
 
   return (
@@ -122,6 +124,85 @@ function Detalle({ p }: { p: ProductDetail }) {
           </span>
         </div>
       </div>
+      <IniciarTransaccion p={producto} onProductChange={setProducto} />
     </article>
+  );
+}
+
+function IniciarTransaccion({ p, onProductChange }: {
+  p: ProductDetail;
+  onProductChange: (product: ProductDetail) => void;
+}) {
+  const { user, token, loading } = useSession();
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [transaction, setTransaction] = useState<Transaction | null>(null);
+  const inFlight = useRef(false);
+
+  async function iniciar(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!token || !user || inFlight.current || transaction || p.status !== 'AVAILABLE' || user.id === p.seller.id) return;
+    inFlight.current = true;
+    setSending(true);
+    setError('');
+    try {
+      const created = await transactionApi.create(token, p.id, message.trim() || undefined);
+      setTransaction(created);
+      onProductChange({ ...p, status: 'RESERVED' });
+    } catch (err) {
+      setError(err instanceof ApiError
+        ? err.status === 401
+          ? 'Tu sesión expiró. Vuelve a ingresar para iniciar la transacción.'
+          : err.message
+        : 'No pudimos iniciar la transacción. Inténtalo de nuevo.');
+      if (err instanceof ApiError && (err.status === 409 || err.status === 404)) {
+        // Otro comprador pudo reservarlo desde que se abrió el detalle.
+        await productApi.get(p.id).then(onProductChange).catch(() => undefined);
+      }
+    } finally {
+      inFlight.current = false;
+      setSending(false);
+    }
+  }
+
+  if (loading) return <p role="status">Comprobando sesión…</p>;
+  if (!user || !token) return <Alert tone="info"><Link to="/ingresar">Ingresa a tu cuenta</Link> para iniciar una compra o un trueque.</Alert>;
+  if (user.id === p.seller.id) return <Alert tone="info">Esta es tu publicación. No puedes iniciar una compra de tu propio producto.</Alert>;
+
+  return (
+    <section className="transaction-start" aria-label="Iniciar una transacción">
+      <h2 className="detail-h">{p.acceptsBarter ? 'Comprar o proponer un trueque' : 'Iniciar compra'}</h2>
+      {error && <Alert tone="error">{error}</Alert>}
+      {transaction ? (
+        <Alert tone="success">
+          Transacción iniciada en estado PENDING (pendiente) con {p.seller.fullName}.
+          {' '}El producto quedó reservado. Referencia: {transaction.id}.
+        </Alert>
+      ) : p.status !== 'AVAILABLE' ? (
+        <Alert tone="info">Este producto ya no está disponible para iniciar una transacción.</Alert>
+      ) : (
+        <form onSubmit={iniciar} aria-busy={sending}>
+          <div className="field">
+            <label htmlFor="transaction-message">Mensaje para el vendedor (opcional)</label>
+            <textarea
+              id="transaction-message"
+              className="transaction-message"
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              maxLength={500}
+              rows={3}
+              disabled={sending}
+              aria-describedby="transaction-message-hint"
+              placeholder={p.acceptsBarter ? 'Cuéntale si quieres comprar o qué propones intercambiar.' : 'Cuéntale que te interesa su producto.'}
+            />
+            <p id="transaction-message-hint" className="field-hint">{message.length}/500 caracteres</p>
+          </div>
+          <button type="submit" className="btn btn-primary" disabled={sending}>
+            {sending ? 'Iniciando…' : p.acceptsBarter ? 'Iniciar compra o trueque' : 'Iniciar compra'}
+          </button>
+        </form>
+      )}
+    </section>
   );
 }
