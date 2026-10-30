@@ -45,3 +45,15 @@ export const iniciales = (n: string) =>
 
 export const fecha = (iso: string) =>
   new Date(iso).toLocaleDateString('es-CO', { dateStyle: 'long' });
+
+export const ESTADO_TRANSACCION: Record<string, { label: string; tone: string }> = {
+  PENDING: { label: 'Pendiente', tone: 'orange' },
+  AGREED_POINT: { label: 'Punto acordado', tone: 'blue' },
+  COMPLETED: { label: 'Completada', tone: 'green' },
+  CANCELLED: { label: 'Cancelada', tone: 'gray' },
+};
+
+export const fechaHora = (iso: string) => {
+  const t = new Date(iso).toLocaleString('es-CO', { dateStyle: 'full', timeStyle: 'short' });
+  return t.charAt(0).toUpperCase() + t.slice(1);
+};

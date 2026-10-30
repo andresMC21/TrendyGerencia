@@ -111,13 +111,26 @@ export const productApi = {
   get: (id: string) => apiRequest<ProductDetail>(`/products/${encodeURIComponent(id)}`),
 };
 
+export type TransactionStatus = 'PENDING' | 'AGREED_POINT' | 'COMPLETED' | 'CANCELLED';
+
+export type TransactionUser = { id: string; fullName: string };
+
 export type Transaction = {
   id: string;
   productId: string;
   buyerId: string;
   sellerId: string;
-  status: 'PENDING' | 'AGREED_POINT' | 'COMPLETED' | 'CANCELLED';
+  status: TransactionStatus;
   message: string | null;
+  /** HU-16 · punto seguro acordado (null mientras no se defina). */
+  safePointId?: string | null;
+  /** HU-16 · fecha y hora ISO del encuentro (null mientras no se defina). */
+  scheduledTime?: string | null;
+  product?: Product;
+  buyer?: TransactionUser;
+  seller?: TransactionUser;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 /** HU-15 · El servidor obtiene comprador del JWT y vendedor del producto. */
@@ -127,5 +140,20 @@ export const transactionApi = {
       method: 'POST',
       token,
       body: { productId, ...(message ? { message } : {}) },
+    }),
+  /** Transacciones donde el usuario es comprador o vendedor. */
+  list: (token: string) => apiRequest<Transaction[]>('/transactions', { token }),
+  /** Solo los participantes pueden consultarla (403 para terceros). */
+  get: (token: string, id: string) =>
+    apiRequest<Transaction>(`/transactions/${encodeURIComponent(id)}`, { token }),
+  /**
+   * HU-16 · Registrar punto seguro y horario. El servidor valida que el usuario
+   * participe (403) y que la transacción esté PENDING (409); al guardar pasa a AGREED_POINT.
+   */
+  confirmPoint: (token: string, id: string, safePointId: string, scheduledTime: string) =>
+    apiRequest<Transaction>(`/transactions/${encodeURIComponent(id)}/confirm-point`, {
+      method: 'POST',
+      token,
+      body: { safePointId, scheduledTime },
     }),
 };
