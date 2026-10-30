@@ -19,6 +19,17 @@ export const CONDICION: Record<string, string> = {
   USADO: 'Usado',
 };
 
+export const CATEGORIA: Record<string, string> = {
+  hogar: 'Hogar',
+  tecnologia: 'Tecnología',
+  ropa: 'Ropa y accesorios',
+  libros: 'Libros',
+  deportes: 'Deportes',
+  muebles: 'Muebles',
+  juguetes: 'Juguetes',
+  otros: 'Otros',
+};
+
 export const ESTADO_PRODUCTO: Record<string, { label: string; tone: string }> = {
   AVAILABLE: { label: 'Disponible', tone: 'green' },
   RESERVED: { label: 'Reservado', tone: 'orange' },

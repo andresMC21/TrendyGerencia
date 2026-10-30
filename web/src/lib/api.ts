@@ -69,6 +69,22 @@ export type RegisterBody = { fullName: string; email: string; password: string }
 export type RegisterResponse = UserProfile & { token: string };
 export type LoginResponse = { id: string; email: string; token: string };
 
+export type GeoPoint = { lat: number; lng: number };
+
+export type ProductCondition = 'NUEVO' | 'COMO_NUEVO' | 'USADO';
+
+/** HU-08 · Cuerpo de POST /products (vendedor y estado los fija el servidor). */
+export type CreateProductBody = {
+  title: string;
+  description: string;
+  category: string;
+  condition: ProductCondition;
+  location: GeoPoint;
+  neighborhoodId: string;
+  price?: number;
+  acceptsBarter?: boolean;
+};
+
 export type Product = {
   id: string;
   sellerId?: string;
@@ -80,6 +96,7 @@ export type Product = {
   condition: string;
   status?: 'AVAILABLE' | 'RESERVED' | 'SOLD' | 'REMOVED';
   neighborhoodId: string;
+  location?: GeoPoint;
   favoritesCount?: number;
   viewsCount?: number;
   createdAt?: string;
@@ -109,6 +126,9 @@ export const productApi = {
   feed: () => apiRequest<{ items: Product[]; total: number }>('/products?limit=12'),
   /** HU-11 · detalle de un producto (público, no requiere token). */
   get: (id: string) => apiRequest<ProductDetail>(`/products/${encodeURIComponent(id)}`),
+  /** HU-08 · publicar un producto (requiere token). */
+  create: (token: string, body: CreateProductBody) =>
+    apiRequest<Product>('/products', { method: 'POST', token, body }),
 };
 
 export type Transaction = {

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsLatitude, IsLongitude } from 'class-validator';
+import { IsLatitude, IsLongitude, IsNumber } from 'class-validator';
 import { GeoPoint } from '../interfaces/geo.interface';
 
 export class GeoPointDto implements GeoPoint {
@@ -10,6 +10,8 @@ export class GeoPointDto implements GeoPoint {
     maximum: 90,
     description: 'Latitud en grados, entre -90 y 90.',
   })
+  // IsLatitude/IsLongitude también aceptan strings; se exige un número real.
+  @IsNumber({ allowNaN: false, allowInfinity: false })
   @IsLatitude()
   lat: number;
 
@@ -20,6 +22,7 @@ export class GeoPointDto implements GeoPoint {
     maximum: 180,
     description: 'Longitud en grados, entre -180 y 180.',
   })
+  @IsNumber({ allowNaN: false, allowInfinity: false })
   @IsLongitude()
   lng: number;
 }

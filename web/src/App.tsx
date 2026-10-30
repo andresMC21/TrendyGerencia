@@ -6,6 +6,7 @@ import Inicio from './pages/Inicio';
 import Landing from './pages/Landing';
 import Perfil from './pages/Perfil';
 import Producto from './pages/Producto';
+import Publicar from './pages/Publicar';
 import Registro from './pages/Registro';
 
 function SoloInvitados({ children }: { children: ReactNode }) {
@@ -53,6 +54,14 @@ export default function App() {
         element={
           <SoloUsuarios>
             <Perfil />
+          </SoloUsuarios>
+        }
+      />
+      <Route
+        path="/publicar"
+        element={
+          <SoloUsuarios>
+            <Publicar />
           </SoloUsuarios>
         }
       />
