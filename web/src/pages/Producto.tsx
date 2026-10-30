@@ -177,7 +177,8 @@ function IniciarTransaccion({ p, onProductChange }: {
       {transaction ? (
         <Alert tone="success">
           Transacción iniciada en estado PENDING (pendiente) con {p.seller.fullName}.
-          {' '}El producto quedó reservado. Referencia: {transaction.id}.
+          {' '}El producto quedó reservado. Referencia: {transaction.id}.{' '}
+          <Link to={`/transacciones/${transaction.id}`}>Acordar punto seguro y horario</Link>
         </Alert>
       ) : p.status !== 'AVAILABLE' ? (
         <Alert tone="info">Este producto ya no está disponible para iniciar una transacción.</Alert>

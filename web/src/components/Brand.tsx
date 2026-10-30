@@ -36,6 +36,9 @@ export function Header() {
               <Link to="/inicio" className="nav-link">
                 Mi Trendy
               </Link>
+              <Link to="/transacciones" className="nav-link">
+                Transacciones
+              </Link>
               <Link to="/perfil" className="nav-link">
                 Mi perfil
               </Link>

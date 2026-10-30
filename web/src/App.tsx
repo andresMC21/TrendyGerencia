@@ -7,6 +7,8 @@ import Landing from './pages/Landing';
 import Perfil from './pages/Perfil';
 import Producto from './pages/Producto';
 import Registro from './pages/Registro';
+import Transaccion from './pages/Transaccion';
+import Transacciones from './pages/Transacciones';
 
 function SoloInvitados({ children }: { children: ReactNode }) {
   const { user, loading } = useSession();
@@ -53,6 +55,22 @@ export default function App() {
         element={
           <SoloUsuarios>
             <Perfil />
+          </SoloUsuarios>
+        }
+      />
+      <Route
+        path="/transacciones"
+        element={
+          <SoloUsuarios>
+            <Transacciones />
+          </SoloUsuarios>
+        }
+      />
+      <Route
+        path="/transacciones/:id"
+        element={
+          <SoloUsuarios>
+            <Transaccion />
           </SoloUsuarios>
         }
       />
