@@ -1,4 +1,11 @@
-import { useId, useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import {
+  useId,
+  useState,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
+} from 'react';
 
 export function Field({
   label,
@@ -32,6 +39,51 @@ export function Field({
             {visible ? 'Ocultar' : 'Ver'}
           </button>
         )}
+      </div>
+      <p id={`${id}-msg`} className={error ? 'field-error' : 'field-hint'}>
+        {error ?? hint ?? ' '}
+      </p>
+    </div>
+  );
+}
+
+/** Igual que Field, para textos largos. */
+export function TextAreaField({
+  label,
+  error,
+  hint,
+  ...props
+}: TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string; error?: string; hint?: ReactNode }) {
+  const id = useId();
+  return (
+    <div className={`field${error ? ' field--error' : ''}`}>
+      <label htmlFor={id}>{label}</label>
+      <div className="field-box">
+        <textarea id={id} aria-invalid={!!error} aria-describedby={`${id}-msg`} {...props} />
+      </div>
+      <p id={`${id}-msg`} className={error ? 'field-error' : 'field-hint'}>
+        {error ?? hint ?? ' '}
+      </p>
+    </div>
+  );
+}
+
+/** Igual que Field, para elegir de una lista. */
+export function SelectField({
+  label,
+  error,
+  hint,
+  children,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement> & { label: string; error?: string; hint?: ReactNode }) {
+  const id = useId();
+  return (
+    <div className={`field${error ? ' field--error' : ''}`}>
+      <label htmlFor={id}>{label}</label>
+      <div className="field-box">
+        <select id={id} aria-invalid={!!error} aria-describedby={`${id}-msg`} {...props}>
+          {children}
+        </select>
       </div>
       <p id={`${id}-msg`} className={error ? 'field-error' : 'field-hint'}>
         {error ?? hint ?? ' '}

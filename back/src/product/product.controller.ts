@@ -175,7 +175,7 @@ export class ProductController {
   @ApiOperation({
     summary: 'Publicar un producto',
     description:
-      'Requiere JWT. El vendedor se toma del usuario autenticado; el producto inicia en estado AVAILABLE. Si no se especifican price y acceptsBarter, se usan 0 y false.',
+      'HU-08. Requiere JWT (sin token o con un token inválido responde 401). El vendedor se toma del usuario autenticado y el producto inicia en estado AVAILABLE; el cuerpo no admite sellerId ni status. Título, descripción, categoría, condición, ubicación y barrio son obligatorios; los textos se recortan y la categoría y el barrio se normalizan a minúsculas. Si no se especifican price y acceptsBarter, se usan 0 y false.',
   })
   @ApiBody({
     type: CreateProductDto,
@@ -183,11 +183,12 @@ export class ProductController {
   })
   @ApiCreatedResponse({
     type: ProductDto,
-    description: 'El producto se creó en estado AVAILABLE.',
+    description:
+      'El producto se creó en estado AVAILABLE y vinculado al vendedor autenticado (sellerId).',
   })
   @ApiBadRequestResponse({
     description:
-      'El cuerpo contiene campos no permitidos o valores que no cumplen las validaciones.',
+      'El cuerpo contiene campos no permitidos (por ejemplo sellerId o status), faltan campos obligatorios o hay valores que no cumplen las validaciones.',
   })
   @ApiInternalServerErrorResponse({
     description: 'Error inesperado al crear el producto.',

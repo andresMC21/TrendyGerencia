@@ -519,8 +519,29 @@ h3 {
   font: inherit;
   color: var(--text);
 }
-.field input::placeholder {
+.field input::placeholder,
+.field textarea::placeholder {
   color: #a3acc2;
+}
+/* HU-08 · textarea y select con el mismo aspecto que los inputs */
+.field textarea,
+.field select {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+}
+.field textarea {
+  min-height: 112px;
+  padding: 12px 14px;
+  resize: vertical;
+}
+.field select {
+  height: 48px;
+  padding: 0 14px;
+  cursor: pointer;
 }
 .field-toggle {
   border: 0;
@@ -839,6 +860,51 @@ h3 {
   color: var(--muted);
 }
 
+/* ---------- HU-08 · Publicar un producto ---------- */
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  color: var(--navy);
+  margin: 0 0 18px;
+  cursor: pointer;
+}
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--navy);
+}
+.location-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--panel-soft);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: -2px 0 6px;
+  font-size: 14px;
+  color: var(--navy);
+}
+.location-msg {
+  margin: 0 0 14px;
+  min-height: 20px;
+  font-size: 13px;
+}
+.publish-actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
   .test-cards,
@@ -849,6 +915,11 @@ h3 {
   }
   .auth-grid .learning-card {
     order: 2;
+  }
+}
+@media (max-width: 520px) {
+  .form-row {
+    grid-template-columns: 1fr;
   }
 }
 @media (max-width: 600px) {

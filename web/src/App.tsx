@@ -6,6 +6,7 @@ import Inicio from './pages/Inicio';
 import Landing from './pages/Landing';
 import Perfil from './pages/Perfil';
 import Producto from './pages/Producto';
+import Publicar from './pages/Publicar';
 import Registro from './pages/Registro';
 import Transaccion from './pages/Transaccion';
 import Transacciones from './pages/Transacciones';
@@ -59,18 +60,10 @@ export default function App() {
         }
       />
       <Route
-        path="/transacciones"
+        path="/publicar"
         element={
           <SoloUsuarios>
-            <Transacciones />
-          </SoloUsuarios>
-        }
-      />
-      <Route
-        path="/transacciones/:id"
-        element={
-          <SoloUsuarios>
-            <Transaccion />
+            <Publicar />
           </SoloUsuarios>
         }
       />

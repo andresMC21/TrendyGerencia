@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
@@ -207,19 +208,40 @@ export class ProductService {
 
   // ───────────────────────── Escritura ─────────────────────────
 
-  /** POST /products */
+  /**
+   * POST /products — HU-08 · Publicar un producto.
+   * Los campos se copian uno a uno (no se esparce el DTO) para que nada ajeno
+   * al contrato, como id, status o viewsCount, llegue a la entidad aunque el
+   * servicio se invoque sin el ValidationPipe. El vendedor viene del JWT.
+   */
   async create(sellerId: string, dto: CreateProductDto): Promise<ProductDto> {
-    const { location, ...rest } = dto;
     const product = this.productRepository.create({
-      ...rest,
+      title: dto.title,
+      description: dto.description,
+      category: dto.category,
+      condition: dto.condition,
+      neighborhoodId: dto.neighborhoodId,
       price: dto.price ?? 0,
       acceptsBarter: dto.acceptsBarter ?? false,
       estimatedWeightKg: dto.estimatedWeightKg ?? null,
       sellerId,
       status: ProductStatus.AVAILABLE,
-      location: toGeoJson(location),
+      location: toGeoJson(dto.location),
     });
-    const saved = await this.productRepository.save(product);
+
+    let saved: Product;
+    try {
+      saved = await this.productRepository.save(product);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo publicar el producto del vendedor ${sellerId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new InternalServerErrorException(
+        'No se pudo publicar el producto. Inténtalo de nuevo más tarde.',
+      );
+    }
+
     await this.invalidateFeedCache(saved.neighborhoodId);
     return ProductDto.fromEntity(saved);
   }

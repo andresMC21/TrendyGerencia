@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -123,6 +124,62 @@ describe('ProductService', () => {
 
       // Assert
       expect(spy).toHaveBeenCalledWith('granada');
+    });
+
+    it('HU-08: vincula al vendedor del JWT y fuerza AVAILABLE aunque el DTO traiga campos ajenos', async () => {
+      // Arrange: simula un DTO que llegó sin pasar por el ValidationPipe.
+      const dto = {
+        title: 'Bici', description: 'd', category: 'deportes',
+        condition: ProductCondition.USED, neighborhoodId: 'granada',
+        location: { lat: 3.4, lng: -76.5 }, price: 1000, acceptsBarter: true,
+        estimatedWeightKg: 12,
+        sellerId: 'intruso', status: ProductStatus.SOLD, id: 'p-falso', viewsCount: 99,
+      } as unknown as Parameters<ProductService['create']>[1];
+
+      // Act
+      const result = await service.create('seller-1', dto);
+
+      // Assert
+      const created = productRepo.create.mock.calls[0][0];
+      expect(created).toEqual({
+        title: 'Bici',
+        description: 'd',
+        category: 'deportes',
+        condition: ProductCondition.USED,
+        neighborhoodId: 'granada',
+        price: 1000,
+        acceptsBarter: true,
+        estimatedWeightKg: 12,
+        sellerId: 'seller-1',
+        status: ProductStatus.AVAILABLE,
+        location: { type: 'Point', coordinates: [-76.5, 3.4] },
+      });
+      expect(result).toMatchObject({
+        id: 'p1',
+        sellerId: 'seller-1',
+        status: ProductStatus.AVAILABLE,
+        favoritesCount: 0,
+        viewsCount: 0,
+      });
+    });
+
+    it('HU-08: si falla el guardado responde 500 controlado y no invalida el caché', async () => {
+      // Arrange
+      productRepo.save.mockRejectedValueOnce(new Error('db caída'));
+      const spy = jest.spyOn(service, 'invalidateFeedCache');
+      const logSpy = jest
+        .spyOn((service as any).logger, 'error')
+        .mockImplementation(() => undefined);
+
+      // Act / Assert
+      await expect(
+        service.create('s', {
+          title: 'Bici', description: 'd', category: 'c', condition: ProductCondition.NEW,
+          neighborhoodId: 'granada', location: { lat: 1, lng: 1 },
+        }),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
+      expect(spy).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalled();
     });
   });
 
