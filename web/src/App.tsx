@@ -8,6 +8,8 @@ import Perfil from './pages/Perfil';
 import Producto from './pages/Producto';
 import Publicar from './pages/Publicar';
 import Registro from './pages/Registro';
+import Transaccion from './pages/Transaccion';
+import Transacciones from './pages/Transacciones';
 
 function SoloInvitados({ children }: { children: ReactNode }) {
   const { user, loading } = useSession();
