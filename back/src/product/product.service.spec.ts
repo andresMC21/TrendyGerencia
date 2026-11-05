@@ -616,6 +616,43 @@ describe('ProductService', () => {
     });
   });
 
+  describe('updateStatus dentro de una transacción de base de datos (HU-17)', () => {
+    const makeManager = (product: unknown) => {
+      const repo = {
+        findOne: jest.fn().mockResolvedValue(product),
+        findOneBy: jest.fn(),
+        update: jest.fn(),
+      };
+      return { repo, manager: { getRepository: jest.fn().mockReturnValue(repo) } as any };
+    };
+
+    it('usa el manager recibido y bloquea la fila del producto', async () => {
+      // Arrange
+      const { repo, manager } = makeManager(makeProduct({ status: ProductStatus.RESERVED }));
+
+      // Act
+      await service.updateStatus('p1', ProductStatus.SOLD, manager);
+
+      // Assert
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      expect(repo.update).toHaveBeenCalledWith({ id: 'p1' }, { status: ProductStatus.SOLD });
+      expect(productRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('404 si el producto no existe dentro de la transacción', async () => {
+      // Arrange
+      const { manager } = makeManager(null);
+
+      // Act / Assert
+      await expect(
+        service.updateStatus('p1', ProductStatus.AVAILABLE, manager),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
   describe('assertOwnership', () => {
     it('no lanza para el dueño y lanza 403 para otro', () => {
       // Arrange

@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { GeoPoint, toGeoJson } from './interfaces/geo.interface';
 import { PaginatedResult } from './interfaces/paginated-result.interface';
 import { ValidRoles } from '../user/enums/valid-roles.enum';
@@ -329,9 +329,28 @@ export class ProductService {
     return { isFavorite: true };
   }
 
-  /** Lo usa TransactionService: reserva (RESERVED), venta (SOLD) o liberación (AVAILABLE). */
-  async updateStatus(id: string, status: ProductStatus): Promise<void> {
-    const product = await this.findById(id);
+  /**
+   * Lo usa TransactionService: reserva (RESERVED), venta (SOLD) o liberación (AVAILABLE).
+   *
+   * Con `manager` el cambio se hace dentro de la transacción de base de datos
+   * del llamador y bloquea la fila del producto (SELECT ... FOR UPDATE), para
+   * que transacción y producto se guarden juntos o no se guarde ninguno (HU-17).
+   */
+  async updateStatus(
+    id: string,
+    status: ProductStatus,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const repository = manager
+      ? manager.getRepository(Product)
+      : this.productRepository;
+    const product = manager
+      ? await repository.findOne({
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+        })
+      : await repository.findOneBy({ id });
+    if (!product) throw new NotFoundException(`Product with id ${id} not found`);
     if (product.status === status) return;
 
     if (!ALLOWED_STATUS_TRANSITIONS[product.status].includes(status)) {
@@ -339,7 +358,7 @@ export class ProductService {
         `Transición de estado inválida: ${product.status} → ${status}`,
       );
     }
-    await this.productRepository.update({ id }, { status });
+    await repository.update({ id }, { status });
     await this.invalidateFeedCache(product.neighborhoodId);
   }
 

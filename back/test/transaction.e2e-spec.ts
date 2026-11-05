@@ -254,4 +254,157 @@ describe('Transactions (e2e)', () => {
       .set(auth(tokenOther))
       .send({ productId })
       .expect(409));
+
+  describe('HU-17 · finalizar o cancelar el intercambio', () => {
+    let tokenBuyer2: string;
+
+    const newProduct = async () => {
+      const res = await http
+        .post('/api/products')
+        .set(auth(tokenSeller))
+        .send(productBody({ title: `Producto HU-17 ${Math.random()}` }))
+        .expect(201);
+      return res.body.id as string;
+    };
+    const reserve = async (id: string, token = tokenBuyer) => {
+      const res = await http
+        .post('/api/transactions')
+        .set(auth(token))
+        .send({ productId: id })
+        .expect(201);
+      return res.body.id as string;
+    };
+    const agreePoint = (txId: string) =>
+      http
+        .post(`/api/transactions/${txId}/confirm-point`)
+        .set(auth(tokenBuyer))
+        .send({ safePointId: 'sp-1', scheduledTime: '2030-10-05T15:00:00Z' })
+        .expect(200);
+    const setStatus = (txId: string, status: string, token: string) =>
+      http
+        .put(`/api/transactions/${txId}/status`)
+        .set(auth(token))
+        .send({ status });
+    const productStatus = async (id: string) =>
+      (await http.get(`/api/products/${id}`).expect(200)).body.status;
+    const txStatus = async (txId: string) =>
+      (await http.get(`/api/transactions/${txId}`).set(auth(tokenSeller)).expect(200))
+        .body.status;
+
+    beforeAll(async () => {
+      tokenBuyer2 = await newUser('buyer2');
+    });
+
+    it('criterio 1: el comprador completa, la transaccion queda COMPLETED y el producto SOLD', async () => {
+      // Arrange
+      const product = await newProduct();
+      const tx = await reserve(product);
+      await agreePoint(tx);
+
+      // Act
+      const res = await setStatus(tx, 'COMPLETED', tokenBuyer).expect(200);
+
+      // Assert
+      expect(res.body.status).toBe('COMPLETED');
+      expect(res.body.product.status).toBe('SOLD');
+      expect(await productStatus(product)).toBe('SOLD');
+    });
+
+    it('criterio 2: cancelar una PENDING la deja CANCELLED y libera el producto para otro comprador', async () => {
+      // Arrange
+      const product = await newProduct();
+      const tx = await reserve(product);
+      expect(await productStatus(product)).toBe('RESERVED');
+
+      // Act
+      const res = await setStatus(tx, 'CANCELLED', tokenSeller).expect(200);
+
+      // Assert
+      expect(res.body.status).toBe('CANCELLED');
+      expect(res.body.product.status).toBe('AVAILABLE');
+      expect(await productStatus(product)).toBe('AVAILABLE');
+      await reserve(product, tokenBuyer2);
+      expect(await productStatus(product)).toBe('RESERVED');
+    });
+
+    it('criterio 2: cancelar con punto acordado tambien libera el producto', async () => {
+      // Arrange
+      const product = await newProduct();
+      const tx = await reserve(product);
+      await agreePoint(tx);
+
+      // Act
+      await setStatus(tx, 'CANCELLED', tokenBuyer).expect(200);
+
+      // Assert
+      expect(await txStatus(tx)).toBe('CANCELLED');
+      expect(await productStatus(product)).toBe('AVAILABLE');
+    });
+
+    it('criterio 3: solo comprador y vendedor pueden cambiar el estado', async () => {
+      // Arrange
+      const product = await newProduct();
+      const tx = await reserve(product);
+      await agreePoint(tx);
+
+      // Act / Assert
+      await http
+        .put(`/api/transactions/${tx}/status`)
+        .send({ status: 'CANCELLED' })
+        .expect(401);
+      await setStatus(tx, 'CANCELLED', tokenOther).expect(403);
+      await setStatus(tx, 'COMPLETED', tokenOther).expect(403);
+      expect(await txStatus(tx)).toBe('AGREED_POINT');
+      expect(await productStatus(product)).toBe('RESERVED');
+    });
+
+    it('repetir «cancelar» no libera el producto que otra persona reservo despues', async () => {
+      // Arrange
+      const product = await newProduct();
+      const oldTx = await reserve(product);
+      await setStatus(oldTx, 'CANCELLED', tokenBuyer).expect(200);
+      await reserve(product, tokenBuyer2);
+
+      // Act
+      const res = await setStatus(oldTx, 'CANCELLED', tokenBuyer).expect(200);
+
+      // Assert
+      expect(res.body.status).toBe('CANCELLED');
+      expect(await productStatus(product)).toBe('RESERVED');
+    });
+
+    it('no permite completar sin punto acordado ni reabrir una transaccion terminada', async () => {
+      // Arrange
+      const product = await newProduct();
+      const tx = await reserve(product);
+
+      // Act / Assert
+      await setStatus(tx, 'COMPLETED', tokenSeller).expect(409);
+      expect(await productStatus(product)).toBe('RESERVED');
+      await setStatus(tx, 'CANCELLED', tokenSeller).expect(200);
+      await setStatus(tx, 'COMPLETED', tokenSeller).expect(409);
+      await setStatus(tx, 'PENDING', tokenSeller).expect(409);
+      expect(await productStatus(product)).toBe('AVAILABLE');
+    });
+
+    it('si comprador y vendedor responden a la vez, gana uno y el producto queda coherente', async () => {
+      // Arrange
+      const product = await newProduct();
+      const tx = await reserve(product);
+      await agreePoint(tx);
+
+      // Act
+      const [complete, cancel] = await Promise.all([
+        setStatus(tx, 'COMPLETED', tokenSeller),
+        setStatus(tx, 'CANCELLED', tokenBuyer),
+      ]);
+
+      // Assert
+      expect([complete.status, cancel.status].sort()).toEqual([200, 409]);
+      const final = await txStatus(tx);
+      expect(await productStatus(product)).toBe(
+        final === 'COMPLETED' ? 'SOLD' : 'AVAILABLE',
+      );
+    });
+  });
 });

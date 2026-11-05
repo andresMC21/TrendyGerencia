@@ -134,9 +134,11 @@ export class TransactionController {
   @Put(':id/status')
   @Auth()
   @ApiOperation({
-    summary: 'Actualizar estado de la transacción',
+    summary: 'Finalizar o cancelar la transacción (HU-17)',
     description:
-      'Requiere JWT y participación en la transacción. Transiciones válidas: PENDING → AGREED_POINT/CANCELLED y AGREED_POINT → COMPLETED/CANCELLED. Para pasar a AGREED_POINT deben existir un punto seguro y un horario confirmados.',
+      'Solo el comprador o el vendedor pueden cambiar el estado. Transiciones válidas: PENDING → AGREED_POINT/CANCELLED y AGREED_POINT → COMPLETED/CANCELLED. ' +
+      'COMPLETED deja el producto en SOLD y CANCELLED lo libera (vuelve a AVAILABLE); transacción y producto se guardan juntos. ' +
+      'Para pasar a AGREED_POINT deben existir un punto seguro y un horario confirmados. Pedir el estado que la transacción ya tiene no cambia nada.',
   })
   @ApiParam({
     name: 'id',
@@ -161,11 +163,12 @@ export class TransactionController {
     description: 'No existe una transacción con ese identificador.',
   })
   @ApiForbiddenResponse({
-    description: 'El usuario autenticado no participa en la transacción.',
+    description:
+      'El usuario autenticado no es el comprador ni el vendedor de la transacción.',
   })
   @ApiConflictResponse({
     description:
-      'La transición solicitada no está permitida desde el estado actual.',
+      'La transición no está permitida desde el estado actual (por ejemplo, cancelar una transacción ya completada o completar una que aún no acordó punto).',
   })
   @ApiInternalServerErrorResponse({
     description: 'Error inesperado al actualizar la transacción.',

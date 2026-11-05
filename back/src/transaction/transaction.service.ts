@@ -5,8 +5,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { ProductStatus } from '../product/enums/product-status.enum';
 import { ProductService } from '../product/product.service';
 import { ConfirmPointDto } from './dto/confirm-point.dto';
@@ -37,12 +37,21 @@ const ALLOWED_STATUS_TRANSITIONS: Record<
   [TransactionStatus.CANCELLED]: [],
 };
 
+/** Estado del producto según el resultado de la transacción (HU-17). */
+const PRODUCT_STATUS_AFTER: Partial<Record<TransactionStatus, ProductStatus>> =
+  {
+    [TransactionStatus.COMPLETED]: ProductStatus.SOLD,
+    [TransactionStatus.CANCELLED]: ProductStatus.AVAILABLE,
+  };
+
 @Injectable()
 export class TransactionService {
   constructor(
     @InjectRepository(Transaction)
     private readonly transactionRepository: Repository<Transaction>,
     private readonly productService: ProductService,
+    @InjectDataSource()
+    private readonly dataSource: DataSource,
   ) { }
 
   async create(
@@ -119,41 +128,74 @@ export class TransactionService {
     return TransactionDto.fromEntity(transaction);
   }
 
+  /**
+   * HU-17 · Finalizar o cancelar el intercambio (y el paso a AGREED_POINT).
+   *
+   * - Solo comprador o vendedor pueden cambiar el estado (403 para cualquier
+   *   otra persona, también administradores).
+   * - COMPLETED deja el producto en SOLD; CANCELLED libera el producto
+   *   reservado (vuelve a AVAILABLE).
+   * - Transacción y producto se actualizan en una sola transacción de base de
+   *   datos y con las filas bloqueadas: o cambian los dos o ninguno, y dos
+   *   peticiones simultáneas no pueden pisarse.
+   * - Pedir el estado que ya tiene no hace nada (no vuelve a tocar el
+   *   producto): repetir «cancelar» no libera un producto que otra persona
+   *   haya reservado después.
+   */
   async update(
     id: string,
     userId: string,
     updateTransactionDto: UpdateTransactionDto,
   ): Promise<TransactionDto> {
-    const transaction = await this.findEntity(id);
-    this.assertParticipant(transaction, userId);
-    this.assertTransition(transaction.status, updateTransactionDto.status);
+    const target = updateTransactionDto.status;
 
-    if (
-      updateTransactionDto.status === TransactionStatus.AGREED_POINT &&
-      (!transaction.safePointId || !transaction.scheduledTime)
-    ) {
-      throw new BadRequestException(
-        'Confirma un punto seguro antes de pasar a AGREED_POINT',
+    const changedProductId = await this.dataSource.transaction(
+      async (manager) => {
+        // Bloqueo sin relaciones: Postgres no permite FOR UPDATE sobre un LEFT JOIN.
+        const transaction = await manager.findOne(Transaction, {
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!transaction) {
+          throw new NotFoundException(`Transaction with id ${id} not found`);
+        }
+        this.assertParticipant(transaction, userId);
+
+        if (transaction.status === target) return null;
+        this.assertTransition(transaction.status, target);
+
+        if (
+          target === TransactionStatus.AGREED_POINT &&
+          (!transaction.safePointId || !transaction.scheduledTime)
+        ) {
+          throw new BadRequestException(
+            'Confirma un punto seguro antes de pasar a AGREED_POINT',
+          );
+        }
+
+        transaction.status = target;
+        await manager.save(transaction);
+
+        const productStatus = PRODUCT_STATUS_AFTER[target];
+        if (productStatus) {
+          await this.productService.updateStatus(
+            transaction.productId,
+            productStatus,
+            manager,
+          );
+        }
+        return transaction.productId;
+      },
+    );
+
+    // Se recarga después del commit para devolver el estado real del producto.
+    const updated = await this.findEntity(id);
+    if (changedProductId && updated.product) {
+      await this.productService.invalidateFeedCache(
+        updated.product.neighborhoodId,
       );
     }
-
-    transaction.status = updateTransactionDto.status;
-    const saved = await this.transactionRepository.save(transaction);
-
-    if (saved.status === TransactionStatus.COMPLETED) {
-      await this.productService.updateStatus(
-        saved.productId,
-        ProductStatus.SOLD,
-      );
-    }
-    if (saved.status === TransactionStatus.CANCELLED) {
-      await this.productService.updateStatus(
-        saved.productId,
-        ProductStatus.AVAILABLE,
-      );
-    }
-
-    return TransactionDto.fromEntity(saved);
+    return TransactionDto.fromEntity(updated);
   }
 
   async confirmPoint(

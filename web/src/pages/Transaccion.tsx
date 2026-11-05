@@ -14,7 +14,7 @@ type Estado =
   | { tipo: 'no-existe' }
   | { tipo: 'error' };
 
-/** HU-16 · Detalle de una transacción y registro del punto seguro y horario. */
+/** HU-16 · Detalle y punto seguro. HU-17 · Finalizar o cancelar el intercambio. */
 export default function Transaccion() {
   const { id = '' } = useParams();
   return <TransaccionPagina key={id} id={id} />;
@@ -77,6 +77,8 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
   const { user } = useSession();
   const e = ESTADO_TRANSACCION[tx.status] ?? { label: tx.status, tone: 'gray' };
   const soyComprador = tx.buyerId === user?.id;
+  // HU-17 · aviso que debe sobrevivir aunque la sección de acciones desaparezca.
+  const [aviso, setAviso] = useState('');
 
   return (
     <article className="product-detail">
@@ -129,7 +131,153 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
       ) : (
         <Alert tone="info">Esta transacción no tiene un punto de encuentro registrado.</Alert>
       )}
+
+      <h2 className="detail-h">Resultado del intercambio</h2>
+      {aviso && <Alert tone="error">{aviso}</Alert>}
+      {tx.status === 'COMPLETED' && (
+        <div data-testid="resultado-final">
+          <Alert tone="success">
+            <strong>Intercambio completado.</strong> El producto quedó marcado como vendido.
+          </Alert>
+        </div>
+      )}
+      {tx.status === 'CANCELLED' && (
+        <div data-testid="resultado-final">
+          <Alert tone="info">
+            <strong>Transacción cancelada.</strong> El producto se liberó y volvió a estar
+            disponible para otros compradores.
+          </Alert>
+        </div>
+      )}
+      {(tx.status === 'PENDING' || tx.status === 'AGREED_POINT') && (
+        <CerrarIntercambio tx={tx} onChange={onChange} onAviso={setAviso} />
+      )}
     </article>
+  );
+}
+
+type Accion = 'COMPLETED' | 'CANCELLED';
+
+const CONFIRMACION: Record<Accion, { pregunta: string; detalle: string; boton: string }> = {
+  COMPLETED: {
+    pregunta: '¿Ya se encontraron y se hizo el intercambio?',
+    detalle: 'La transacción quedará completada y el producto pasará a vendido. No se puede deshacer.',
+    boton: 'Sí, completar',
+  },
+  CANCELLED: {
+    pregunta: '¿Seguro que quieres cancelar esta transacción?',
+    detalle: 'El producto volverá a estar disponible para otros compradores. No se puede deshacer.',
+    boton: 'Sí, cancelar',
+  },
+};
+
+/** HU-17 · Comprador o vendedor completan o cancelan la transacción. */
+function CerrarIntercambio({
+  tx,
+  onChange,
+  onAviso,
+}: {
+  tx: Tx;
+  onChange: (tx: Tx) => void;
+  onAviso: (mensaje: string) => void;
+}) {
+  const { token } = useSession();
+  const [pendiente, setPendiente] = useState<Accion | null>(null);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const inFlight = useRef(false);
+  const puedeCompletar = tx.status === 'AGREED_POINT';
+
+  async function enviar(accion: Accion) {
+    if (!token || inFlight.current) return;
+    inFlight.current = true;
+    setSending(true);
+    setError('');
+    onAviso('');
+    try {
+      const updated = await transactionApi.updateStatus(token, tx.id, accion);
+      onChange({ ...tx, ...updated });
+    } catch (err) {
+      setPendiente(null);
+      if (err instanceof ApiError && err.status === 401) {
+        setError('Tu sesión expiró. Vuelve a ingresar para actualizar la transacción.');
+      } else if (err instanceof ApiError && err.status === 403) {
+        setError('Solo el comprador y el vendedor pueden completar o cancelar esta transacción.');
+      } else if (err instanceof ApiError && err.status === 409) {
+        // La otra persona ya la completó o canceló: se avisa y se muestra el estado real.
+        onAviso('La transacción cambió de estado mientras tanto. Te mostramos su estado actual.');
+        await transactionApi.get(token, tx.id).then(onChange).catch(() => undefined);
+      } else {
+        setError(err instanceof ApiError ? err.message : 'No pudimos actualizar la transacción. Inténtalo de nuevo.');
+      }
+    } finally {
+      inFlight.current = false;
+      setSending(false);
+    }
+  }
+
+  if (pendiente) {
+    const c = CONFIRMACION[pendiente];
+    return (
+      <section
+        className={`tx-confirm tx-confirm--${pendiente === 'CANCELLED' ? 'danger' : 'ok'}`}
+        role="alertdialog"
+        aria-labelledby="tx-confirm-q"
+        aria-describedby="tx-confirm-d"
+      >
+        <strong id="tx-confirm-q">{c.pregunta}</strong>
+        <p id="tx-confirm-d">{c.detalle}</p>
+        <div className="tx-actions">
+          <button
+            type="button"
+            className={`btn ${pendiente === 'CANCELLED' ? 'btn-danger' : 'btn-primary'}`}
+            onClick={() => enviar(pendiente)}
+            disabled={sending}
+            data-testid="btn-confirmar"
+          >
+            {sending ? 'Guardando…' : c.boton}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={() => setPendiente(null)}
+            disabled={sending}
+          >
+            No, volver
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="tx-close" aria-label="Finalizar o cancelar el intercambio">
+      {error && <Alert tone="error">{error}</Alert>}
+      <p className="field-hint">
+        {puedeCompletar
+          ? 'Cuando se encuentren y hagan el intercambio, márcalo como completado. Si no se va a dar, cancélalo para liberar el producto.'
+          : 'Para marcarla como completada, primero acuerden el punto seguro y el horario. Si ya no se va a dar, puedes cancelarla.'}
+      </p>
+      <div className="tx-actions">
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => setPendiente('COMPLETED')}
+          disabled={!puedeCompletar}
+          data-testid="btn-completar"
+        >
+          Marcar como completada
+        </button>
+        <button
+          type="button"
+          className="btn btn-danger-outline"
+          onClick={() => setPendiente('CANCELLED')}
+          data-testid="btn-cancelar"
+        >
+          Cancelar transacción
+        </button>
+      </div>
+    </section>
   );
 }
 

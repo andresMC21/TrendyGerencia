@@ -176,4 +176,14 @@ export const transactionApi = {
       token,
       body: { safePointId, scheduledTime },
     }),
+  /**
+   * HU-17 · Finalizar (COMPLETED → producto SOLD) o cancelar (CANCELLED → producto
+   * AVAILABLE). Solo comprador o vendedor (403); 409 si la transición no aplica.
+   */
+  updateStatus: (token: string, id: string, status: 'COMPLETED' | 'CANCELLED') =>
+    apiRequest<Transaction>(`/transactions/${encodeURIComponent(id)}/status`, {
+      method: 'PUT',
+      token,
+      body: { status },
+    }),
 };
