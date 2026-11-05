@@ -67,6 +67,22 @@ export default function App() {
           </SoloUsuarios>
         }
       />
+      <Route
+        path="/transacciones"
+        element={
+          <SoloUsuarios>
+            <Transacciones />
+          </SoloUsuarios>
+        }
+      />
+      <Route
+        path="/transacciones/:id"
+        element={
+          <SoloUsuarios>
+            <Transaccion />
+          </SoloUsuarios>
+        }
+      />
       <Route path="/producto/:id" element={<Producto />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

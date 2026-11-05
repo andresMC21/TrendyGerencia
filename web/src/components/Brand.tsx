@@ -39,6 +39,9 @@ export function Header() {
               <Link to="/publicar" className="nav-link">
                 Publicar
               </Link>
+              <Link to="/transacciones" className="nav-link">
+                Transacciones
+              </Link>
               <Link to="/perfil" className="nav-link">
                 Mi perfil
               </Link>
