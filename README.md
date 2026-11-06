@@ -219,21 +219,20 @@ npm run test:cov    # unitarias + cobertura
 
 | Tipo | Herramienta | Resultado |
 |---|---|---|
-| Unitarias | Jest | 25 suites, 268 pruebas pasan |
-| Cobertura | Jest | Sentencias 91.64 % · Ramas 80.28 % · Funciones 86.98 % · Líneas 91.26 % (umbral exigido: 80 %) |
-| Integración | Jest + Supertest + PostGIS | 4 suites, 54 pruebas pasan (health, usuarios, productos, transacciones) |
-| Manuales / regresión | Postman (Newman) | 179 requests, 260 aserciones, 0 fallos |
+| Unitarias | Jest | 25 suites, 273 pruebas pasan |
+| Cobertura | Jest | Sentencias 91.3 % · Ramas 80.4 % · Funciones 86.0 % · Líneas 90.9 % (umbral exigido: 80 %) |
+| Integración | Jest + Supertest + PostGIS | 4 suites, 59 pruebas pasan (health, usuarios, productos, transacciones) |
+| Manuales / regresión | Postman (Newman) | 150 requests, 422 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
 
 ### Pruebas de integración
 
-Las pruebas de integración levantan la aplicación completa contra una base PostgreSQL + PostGIS real. Se ejecutan automáticamente en GitHub Actions (workflow `tests`) en cada push y pull request a `main` y `develop`: el workflow crea el servicio de base de datos, aplica las migraciones y corre `test:cov` y `test:e2e`.
+Las pruebas de integración levantan la aplicación completa contra una base PostgreSQL + PostGIS real. Se ejecutan automáticamente en GitHub Actions (workflow `tests`) en cada push y pull request a `main` y `develop`: el workflow crea el servicio de base de datos, aplica las migraciones y corre `test:cov` y `test:e2e`. El detalle de qué prueba cubre cada criterio de aceptación está en [`doc/historias-de-usuario.md`](doc/historias-de-usuario.md).
 
 ## CI/CD y despliegue
 
 | Workflow | Cuándo | Qué hace |
 |---|---|---|
-| `tests` (`.github/workflows/tests.yml`) | push y PR a `main` / `develop` | Levanta Postgres + PostGIS, aplica migraciones, ejecuta lint, pruebas unitarias con cobertura, pruebas de integración y compila |
-| `PROD-CI` (`.github/workflows/prod-ci.yml`) | push y PR a `main` / `develop` | Lint, pruebas unitarias y compilación; en `main` dispara el despliegue en Render (secreto `RENDER_DEPLOY_HOOK_URL`) |
+| `tests` (`.github/workflows/tests.yml`) | push y PR a `main` / `develop` | API: levanta Postgres + PostGIS, aplica migraciones, lint, pruebas unitarias con cobertura, pruebas de integración y compilación. Web: lint y compilación |
 
 **Despliegue:** Render (web service + PostgreSQL) definido en `render.yml`. Al arrancar ejecuta `npm run migration:run:prod` y luego `npm run start:prod`; el health check usa `/api/health`.
 

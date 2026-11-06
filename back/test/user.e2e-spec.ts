@@ -2,6 +2,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 
@@ -213,6 +214,56 @@ describe('Users (e2e)', () => {
         password: 'WrongPass1',
       })
       .expect(401);
+  });
+
+  describe('HU-02 · Iniciar sesión', () => {
+    const decode = (jwt: string) =>
+      JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString()) as {
+        iat: number;
+        exp: number;
+      };
+
+    it('criterio 1: con credenciales correctas entrega un JWT de 1 hora', async () => {
+      const res = await http
+        .post('/api/user/login')
+        .send({ email: userEmail, password })
+        .expect(200);
+
+      const { iat, exp } = decode(res.body.token);
+      expect(exp - iat).toBe(3600);
+    });
+
+    it('criterio 2: correo inexistente, contraseña errónea o cuenta inactiva devuelven 401', async () => {
+      const user = newUser('hu02-inactiva');
+      await http.post('/api/user/register').send(user).expect(201);
+      await dataSource.query('UPDATE "user" SET "isActive" = false WHERE email = $1', [
+        user.email,
+      ]);
+
+      await http
+        .post('/api/user/login')
+        .send({ email: `${emailPrefix}no-existe@trendy.test`, password })
+        .expect(401);
+      await http
+        .post('/api/user/login')
+        .send({ email: userEmail, password: 'Incorrecta1' })
+        .expect(401);
+      await http
+        .post('/api/user/login')
+        .send({ email: user.email, password })
+        .expect(401);
+    });
+
+    it('criterio 3: sin JWT, con JWT inválido o vencido, la ruta protegida devuelve 401', async () => {
+      const expired = app
+        .get(JwtService)
+        .sign({ id: userId, email: userEmail, tokenVersion: 0 }, { expiresIn: '1s' });
+      await new Promise((resolve) => setTimeout(resolve, 2100));
+
+      await http.get('/api/user/me').expect(401);
+      await http.get('/api/user/me').set(auth('no.es.un.jwt')).expect(401);
+      await http.get('/api/user/me').set(auth(expired)).expect(401);
+    });
   });
 
   it('GET /user/me requiere autenticación', async () => {
