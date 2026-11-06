@@ -90,6 +90,22 @@ function MetaAcuerdo({ tx, userId, otro }: { tx: Transaction; userId?: string; o
   }
   switch (etapaAcuerdo(tx, userId)) {
     case 'sin-propuesta':
+      if (tx.rejectedById && tx.rejectedById !== userId) {
+        return (
+          <span className="tx-meta tx-meta--todo">
+            {otro ?? 'La otra persona'} rechazó tu propuesta
+            {tx.buyerId === userId ? ' · Propón otro punto u horario' : ''}
+          </span>
+        );
+      }
+      if (tx.rejectedById === userId) {
+        return (
+          <span className="tx-meta">
+            Rechazaste la propuesta
+            {tx.buyerId === userId ? ' · Propón otro punto u horario' : ` · Esperando otra de ${otro ?? 'el comprador'}`}
+          </span>
+        );
+      }
       return tx.buyerId === userId ? (
         <span className="tx-meta tx-meta--todo">Propón el punto y la hora de entrega</span>
       ) : (

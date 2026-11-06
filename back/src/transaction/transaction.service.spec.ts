@@ -43,6 +43,10 @@ const makeTransaction = (over: Partial<Transaction> = {}) =>
     scheduledTime: null,
     proposedById: null,
     agreedAt: null,
+    rejectedById: null,
+    rejectedAt: null,
+    rejectedSafePointId: null,
+    rejectedScheduledTime: null,
     product: makeProduct(),
     buyer: { id: 'buyer-1', fullName: 'Buyer' },
     seller: { id: 'seller-1', fullName: 'Seller' },
@@ -529,7 +533,7 @@ describe('TransactionService', () => {
     });
 
     describe('rejectMeeting · rechazar la propuesta', () => {
-      it('la contraparte rechaza: se borra la propuesta y sigue PENDING', async () => {
+      it('la contraparte rechaza: se borra la propuesta, sigue PENDING y queda el aviso', async () => {
         // Arrange
         manager.findOne.mockResolvedValue(conPropuesta('buyer-1'));
 
@@ -543,6 +547,35 @@ describe('TransactionService', () => {
             scheduledTime: null,
             proposedById: null,
             status: TransactionStatus.PENDING,
+            rejectedById: 'seller-1',
+            rejectedAt: expect.any(Date),
+            rejectedSafePointId: 'sp-1',
+            rejectedScheduledTime: new Date(FUTURO),
+          }),
+        );
+      });
+
+      it('una propuesta nueva limpia el aviso de rechazo', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(
+          makeTransaction({
+            rejectedById: 'seller-1',
+            rejectedAt: new Date(),
+            rejectedSafePointId: 'sp-1',
+            rejectedScheduledTime: new Date(FUTURO),
+          }),
+        );
+
+        // Act
+        await service.proposeMeeting('t1', 'buyer-1', propuesta);
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            rejectedById: null,
+            rejectedAt: null,
+            rejectedSafePointId: null,
+            rejectedScheduledTime: null,
           }),
         );
       });

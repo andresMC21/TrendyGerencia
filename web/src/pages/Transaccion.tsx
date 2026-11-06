@@ -335,7 +335,14 @@ function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void
   const [editando, setEditando] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [aviso, setAviso] = useState('');
+  // El aviso queda atado a la propuesta para la que se dio: si la otra persona
+  // responde (rechaza, contrapropone), deja de mostrarse.
+  const [aviso, setAvisoState] = useState<{ texto: string; clave: string } | null>(null);
+  const claveActual = `${etapa}|${tx.proposedById ?? ''}`;
+  const setAviso = (texto: string) =>
+    setAvisoState(texto ? { texto, clave: `esperando|${user?.id ?? ''}` } : null);
+  const avisoVigente =
+    aviso && claveActual === aviso.clave ? aviso.texto : '';
   const inFlight = useRef(false);
 
   async function recargar() {
@@ -353,13 +360,8 @@ function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void
         accion === 'aceptar'
           ? await transactionApi.acceptMeeting(token, tx.id, tx.safePointId, tx.scheduledTime)
           : await transactionApi.rejectMeeting(token, tx.id);
-      setAviso(
-        accion === 'aceptar'
-          ? '¡Listo! Los dos quedaron de acuerdo en el punto y el horario.'
-          : soyComprador
-            ? `Rechazaste la propuesta. Puedes proponer otro punto u horario a ${otro}.`
-            : `Rechazaste la propuesta. ${otro} puede proponer otro punto u horario.`,
-      );
+      // Aceptar lleva a «Acordado por los dos» y el rechazo se muestra desde los datos
+      // de la transacción, así que ambos lados lo ven sin un aviso local.
       onChange({ ...tx, ...updated });
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
@@ -393,8 +395,10 @@ function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void
           : `Paso 2 de 2 · ${etapa === 'por-responder' ? 'Te toca responder' : `${otro} debe responder`}`}
       </p>
 
-      {aviso && <Alert tone="success">{aviso}</Alert>}
+      {avisoVigente && <Alert tone="success">{avisoVigente}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
+
+      {etapa === 'sin-propuesta' && <AvisoRechazo tx={tx} otro={otro} />}
 
       {etapa === 'sin-propuesta' && !soyComprador && (
         <p className="agreement-status" data-testid="estado-acuerdo">
@@ -495,6 +499,38 @@ function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * HU-16 · Aviso del último rechazo. Lo ven los dos: quien propuso se entera de que
+ * la otra persona no aceptó, y quien rechazó ve qué rechazó. Desaparece cuando
+ * llega una propuesta nueva.
+ */
+function AvisoRechazo({ tx, otro }: { tx: Tx; otro: string }) {
+  const { user } = useSession();
+  if (!tx.rejectedById || !tx.rejectedSafePointId || !tx.rejectedScheduledTime) return null;
+  const rechaceYo = tx.rejectedById === user?.id;
+  const soyComprador = tx.buyerId === user?.id;
+  const propuesta = `${nombrePunto(tx.rejectedSafePointId)}, ${fechaHora(tx.rejectedScheduledTime)}`;
+  return (
+    <div data-testid="aviso-rechazo">
+      <Alert tone={rechaceYo ? 'info' : 'error'}>
+        {rechaceYo ? (
+          <>
+            <strong>Rechazaste la propuesta de {otro}</strong> ({propuesta}).{' '}
+            {soyComprador ? 'Propón otro punto u horario.' : `Esperando que ${otro} proponga otra.`}
+          </>
+        ) : (
+          <>
+            <strong>{otro} rechazó tu propuesta</strong> ({propuesta}).{' '}
+            {soyComprador
+              ? 'Propón otro punto u horario.'
+              : `Esperando que ${otro} proponga otro punto u horario.`}
+          </>
+        )}
+      </Alert>
+    </div>
   );
 }
 
