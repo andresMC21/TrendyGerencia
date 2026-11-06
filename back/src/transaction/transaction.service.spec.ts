@@ -262,57 +262,102 @@ describe('TransactionService', () => {
     expect(result).toHaveLength(1);
   });
 
-  it('confirmPoint guarda punto, horario y cambia a AGREED_POINT', async () => {
-    // Arrange
-    const transaction = makeTransaction();
-    transactionRepository.findOne.mockResolvedValue(transaction);
-    transactionRepository.save.mockImplementation(async (value) => value);
+  describe('confirmPoint (HU-16 · acordar una entrega)', () => {
+    const FUTURO = '2099-10-05T15:00:00Z';
 
-    // Act
-    const result = await service.confirmPoint('t1', 'buyer-1', {
-      safePointId: 'sp-1',
-      scheduledTime: '2026-10-05T15:00:00Z',
+    it('guarda punto y horario y cambia a AGREED_POINT (criterios 1 y 2)', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction());
+      transactionRepository.findOne.mockResolvedValue(
+        makeTransaction({
+          status: TransactionStatus.AGREED_POINT,
+          safePointId: 'sp-1',
+          scheduledTime: new Date(FUTURO),
+        }),
+      );
+
+      // Act
+      const result = await service.confirmPoint('t1', 'buyer-1', {
+        safePointId: 'sp-1',
+        scheduledTime: FUTURO,
+      });
+
+      // Assert
+      expect(manager.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          safePointId: 'sp-1',
+          scheduledTime: new Date(FUTURO),
+          status: TransactionStatus.AGREED_POINT,
+        }),
+      );
+      expect(result.status).toBe(TransactionStatus.AGREED_POINT);
+      expect(result.safePointId).toBe('sp-1');
     });
 
-    // Assert
-    expect(transactionRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        safePointId: 'sp-1',
-        status: TransactionStatus.AGREED_POINT,
-      }),
-    );
-    expect(result.status).toBe(TransactionStatus.AGREED_POINT);
-    expect(result.safePointId).toBe('sp-1');
-  });
+    it('bloquea la fila de la transaccion', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction());
+      transactionRepository.findOne.mockResolvedValue(makeTransaction());
 
-  it('confirmPoint rechaza fechas invalidas, no participantes y estados no pendientes', async () => {
-    // Arrange
-    transactionRepository.findOne.mockResolvedValue(makeTransaction());
+      // Act
+      await service.confirmPoint('t1', 'seller-1', { safePointId: 'sp-1', scheduledTime: FUTURO });
 
-    // Act / Assert
-    await expect(
-      service.confirmPoint('t1', 'otro', {
-        safePointId: 'sp-1',
-        scheduledTime: '2026-10-05T15:00:00Z',
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+      // Assert
+      expect(manager.findOne).toHaveBeenCalledWith(Transaction, {
+        where: { id: 't1' },
+        lock: { mode: 'pessimistic_write' },
+      });
+    });
 
-    await expect(
-      service.confirmPoint('t1', 'buyer-1', {
-        safePointId: 'sp-1',
-        scheduledTime: 'fecha-mala',
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    it('rechaza con 403 a una persona ajena (criterio 3)', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction());
 
-    transactionRepository.findOne.mockResolvedValue(
-      makeTransaction({ status: TransactionStatus.AGREED_POINT }),
-    );
-    await expect(
-      service.confirmPoint('t1', 'buyer-1', {
-        safePointId: 'sp-1',
-        scheduledTime: '2026-10-05T15:00:00Z',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
+      // Act / Assert
+      await expect(
+        service.confirmPoint('t1', 'otro', { safePointId: 'sp-1', scheduledTime: FUTURO }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['una fecha invalida', 'fecha-mala'],
+      ['un horario en el pasado', '2020-01-01T10:00:00Z'],
+    ])('rechaza con 400 %s', async (_label, scheduledTime) => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction());
+
+      // Act / Assert
+      await expect(
+        service.confirmPoint('t1', 'buyer-1', { safePointId: 'sp-1', scheduledTime }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      TransactionStatus.AGREED_POINT,
+      TransactionStatus.CANCELLED,
+      TransactionStatus.COMPLETED,
+    ])('rechaza con 409 si la transaccion esta %s', async (status) => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction({ status }));
+
+      // Act / Assert
+      await expect(
+        service.confirmPoint('t1', 'buyer-1', { safePointId: 'sp-1', scheduledTime: FUTURO }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it('404 si la transaccion no existe', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(null);
+
+      // Act / Assert
+      await expect(
+        service.confirmPoint('t1', 'buyer-1', { safePointId: 'sp-1', scheduledTime: FUTURO }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
   });
 
   describe('update (HU-17 · finalizar o cancelar)', () => {
