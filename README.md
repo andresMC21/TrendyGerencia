@@ -13,6 +13,7 @@ Los usuarios publican productos, los encuentran por barrio o cercanía geográfi
 | Aplicación desplegada (Render) | https://trendy-app-web-un9c.onrender.com/api |
 | Documentación Swagger | https://trendy-app-web-un9c.onrender.com/api/docs |
 | Health check | https://trendy-app-web-un9c.onrender.com/api/health |
+| Página web (Render, sitio estático `trendy-web`) | La URL que asigna Render al sincronizar `render.yml` (ver *CI/CD y despliegue*) |
 
 > El plan gratuito de Render duerme el servicio tras un rato sin tráfico: la primera petición puede tardar ~1 minuto.
 
@@ -235,7 +236,21 @@ Las pruebas de integración levantan la aplicación completa contra una base Pos
 | `tests` (`.github/workflows/tests.yml`) | push y PR a `main` / `develop` | Levanta Postgres + PostGIS, aplica migraciones, ejecuta lint, pruebas unitarias con cobertura, pruebas de integración y compila |
 | `PROD-CI` (`.github/workflows/prod-ci.yml`) | push y PR a `main` / `develop` | Lint, pruebas unitarias y compilación; en `main` dispara el despliegue en Render (secreto `RENDER_DEPLOY_HOOK_URL`) |
 
-**Despliegue:** Render (web service + PostgreSQL) definido en `render.yml`. Al arrancar ejecuta `npm run migration:run:prod` y luego `npm run start:prod`; el health check usa `/api/health`.
+**Despliegue:** Render, definido en `render.yml` (Blueprint), con tres piezas:
+
+| Servicio | Tipo | Qué hace |
+|---|---|---|
+| `trendy-app-db` | PostgreSQL | Base de datos (TypeORM crea `postgis` y `uuid-ossp` si faltan). |
+| `trendy-app-web` | Web service (Node, `back/`) | API: aplica las migraciones y arranca (`/api/health` como health check). `JWT_SECRET` lo genera Render. |
+| `trendy-web` | Sitio estático (`web/`) | Página web; `VITE_API_URL` apunta a la API desplegada y todas las rutas sirven `index.html`. |
+
+Render despliega la rama **`main`**. Para publicar lo que está en `develop`:
+
+1. Abrir un PR `develop → main`, revisarlo y hacer merge.
+2. En Render: *Blueprints* → el blueprint de Trendy → *Sync* (crea `trendy-web` la primera vez y aplica los cambios de `render.yml`).
+3. Comprobar `https://trendy-app-web-un9c.onrender.com/api/health` y abrir la URL del sitio `trendy-web` que muestra Render.
+
+En producción **no** se ejecuta el seed, porque crearía cuentas con contraseñas públicas. Para una demostración, se puede correr `npm run seed` desde el *Shell* del servicio de la API y luego cambiar esas contraseñas.
 
 ## Estructura del proyecto
 
