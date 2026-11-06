@@ -70,6 +70,30 @@ export class Transaction {
   })
   proposedBy?: User | null;
 
+  /**
+   * HU-16 · Último rechazo de una propuesta: quién la rechazó, cuándo y qué
+   * punto y horario rechazó. Se conserva hasta que llegue una propuesta nueva,
+   * para que quien propuso se entere.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  rejectedById: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({
+    name: 'rejectedById',
+    foreignKeyConstraintName: 'FK_transaction_rejected_by',
+  })
+  rejectedBy?: User | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  rejectedAt: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  rejectedSafePointId: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  rejectedScheduledTime: Date | null;
+
   /** HU-16 · Momento en que la otra persona aceptó la propuesta. */
   @Column({ type: 'timestamptz', nullable: true })
   agreedAt: Date | null;

@@ -178,6 +178,12 @@ export type Transaction = {
   proposedById?: string | null;
   /** HU-16 · cuándo quedaron de acuerdo los dos (null mientras no haya acuerdo). */
   agreedAt?: string | null;
+  /** HU-16 · quién rechazó la última propuesta (null si no hay rechazo pendiente de ver). */
+  rejectedById?: string | null;
+  rejectedAt?: string | null;
+  /** HU-16 · punto y horario de la propuesta rechazada. */
+  rejectedSafePointId?: string | null;
+  rejectedScheduledTime?: string | null;
   product?: Product;
   buyer?: TransactionUser;
   seller?: TransactionUser;

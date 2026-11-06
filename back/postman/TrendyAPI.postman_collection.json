@@ -4968,7 +4968,8 @@
                 "exec": [
                   "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
                   "const t = pm.response.json();",
-                  "pm.test(\"Propuesta borrada, sigue PENDING\", function () { pm.expect(t.status).to.eql(\"PENDING\"); pm.expect(t.safePointId).to.eql(null); pm.expect(t.proposedById).to.eql(null); });"
+                  "pm.test(\"Propuesta borrada, sigue PENDING\", function () { pm.expect(t.status).to.eql(\"PENDING\"); pm.expect(t.safePointId).to.eql(null); pm.expect(t.proposedById).to.eql(null); });",
+                  "pm.test(\"Queda registrado quién rechazó y qué propuesta\", function () { pm.expect(t.rejectedById).to.eql(t.buyerId); pm.expect(t.rejectedSafePointId).to.eql(\"sp-2\"); pm.expect(t.rejectedAt).to.be.a(\"string\"); });"
                 ]
               }
             }

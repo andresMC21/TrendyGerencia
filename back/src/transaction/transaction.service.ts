@@ -251,6 +251,7 @@ export class TransactionService {
       transaction.scheduledTime = scheduledTime;
       transaction.proposedById = userId;
       transaction.agreedAt = null;
+      this.clearRejection(transaction);
       await manager.save(transaction);
     });
 
@@ -305,14 +306,19 @@ export class TransactionService {
   /**
    * HU-16 · Rechazar la propuesta de la otra persona.
    *
-   * Se borra la propuesta y la transacción sigue en PENDING: cualquiera de los
-   * dos puede proponer otro punto u horario.
+   * Se borra la propuesta y la transacción sigue en PENDING. Queda registrado
+   * quién rechazó, cuándo y qué punto y horario, para que quien propuso lo vea
+   * hasta que haya una propuesta nueva.
    */
   async rejectMeeting(id: string, userId: string): Promise<TransactionDto> {
     await this.dataSource.transaction(async (manager) => {
       const transaction = await this.lockForMeeting(manager, id, userId);
       this.assertCounterpartOfProposal(transaction, userId);
 
+      transaction.rejectedById = userId;
+      transaction.rejectedAt = new Date();
+      transaction.rejectedSafePointId = transaction.safePointId;
+      transaction.rejectedScheduledTime = transaction.scheduledTime;
       transaction.safePointId = null;
       transaction.scheduledTime = null;
       transaction.proposedById = null;
@@ -320,6 +326,13 @@ export class TransactionService {
     });
 
     return TransactionDto.fromEntity(await this.findEntity(id));
+  }
+
+  private clearRejection(transaction: Transaction): void {
+    transaction.rejectedById = null;
+    transaction.rejectedAt = null;
+    transaction.rejectedSafePointId = null;
+    transaction.rejectedScheduledTime = null;
   }
 
   /** Bloquea la transacción y valida participante y estado PENDING. */
