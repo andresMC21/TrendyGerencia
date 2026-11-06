@@ -194,6 +194,7 @@ La colección `postman/trendy-api.postman_collection.json` cubre todos los endpo
 | Administrar usuarios y **roles** | `/admin/users` (listar, editar, `/role`, `/active`, `DELETE`) | `admin` (el `moderador` solo lee) |
 | Probar que un `USER` no accede a rutas admin (403) | `GET /admin/users` | `ana` |
 | Publicar y editar productos | `POST /products`, `PUT /products/:id` | `ana` |
+| Retirar una publicación (HU-13, borrado lógico → `REMOVED`) y ver mis publicaciones | `DELETE /products/:id`, `GET /products/mine` · web: `/mis-publicaciones` | dueño (`ana`); otro `USER` recibe 403 |
 | Feed por barrio / cercanía / filtros | `GET /products?neighborhoodId=…&lat=…&lng=…&radius=…` | público |
 | Favoritos | `POST /products/:id/favorite` | cualquiera autenticado |
 | Compra: reservar → acordar punto → completar | `POST /transactions`, `POST /transactions/:id/confirm-point`, `PUT /transactions/:id/status` | `carlos` compra, `ana` vende |

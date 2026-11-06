@@ -144,6 +144,14 @@ export const productApi = {
   /** HU-08 · publicar un producto (requiere token). */
   create: (token: string, body: CreateProductBody) =>
     apiRequest<Product>('/products', { method: 'POST', token, body }),
+  /** HU-13 · publicaciones propias en cualquier estado, incluidas las retiradas. */
+  mine: (token: string) => apiRequest<Product[]>('/products/mine', { token }),
+  /**
+   * HU-13 · retirar una publicación (borrado lógico: pasa a REMOVED).
+   * 403 si no es del usuario; 409 si está reservada o vendida.
+   */
+  remove: (token: string, id: string) =>
+    apiRequest<void>(`/products/${encodeURIComponent(id)}`, { method: 'DELETE', token }),
 };
 
 export type TransactionStatus = 'PENDING' | 'AGREED_POINT' | 'COMPLETED' | 'CANCELLED';

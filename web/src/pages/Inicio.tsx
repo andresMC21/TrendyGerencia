@@ -81,6 +81,9 @@ export default function Inicio() {
               <Link to="/perfil" className="btn btn-outline btn-block profile-link">
                 Ver mi perfil
               </Link>
+              <Link to="/mis-publicaciones" className="btn btn-outline btn-block profile-link">
+                Mis publicaciones
+              </Link>
             </aside>
 
             <section>

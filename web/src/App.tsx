@@ -5,6 +5,7 @@ import Explorar from './pages/Explorar';
 import Ingresar from './pages/Ingresar';
 import Inicio from './pages/Inicio';
 import Landing from './pages/Landing';
+import MisPublicaciones from './pages/MisPublicaciones';
 import Perfil from './pages/Perfil';
 import Producto from './pages/Producto';
 import Publicar from './pages/Publicar';
@@ -65,6 +66,14 @@ export default function App() {
         element={
           <SoloUsuarios>
             <Publicar />
+          </SoloUsuarios>
+        }
+      />
+      <Route
+        path="/mis-publicaciones"
+        element={
+          <SoloUsuarios>
+            <MisPublicaciones />
           </SoloUsuarios>
         }
       />

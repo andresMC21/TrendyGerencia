@@ -79,7 +79,7 @@ describe('ProductService', () => {
       save: jest.fn(async (x) => ({ id: 'p1', viewsCount: 0, createdAt: new Date(), updatedAt: new Date(), ...x })),
       findOne: jest.fn(),
       findOneBy: jest.fn(),
-      update: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
       increment: jest.fn().mockResolvedValue(undefined),
     });
     await build();
@@ -566,24 +566,47 @@ describe('ProductService', () => {
       // Assert
       await expect(service.remove('p1', 'otro', [ValidRoles.USER])).rejects.toBeInstanceOf(ForbiddenException);
     });
-    it('409 si está reservado o vendido', async () => {
+    it.each([ProductStatus.RESERVED, ProductStatus.SOLD])('409 si está %s', async (status) => {
+      // Arrange
+      productRepo.findOneBy.mockResolvedValue(makeProduct({ status }));
+
+      // Act / Assert
+      await expect(service.remove('p1', 'seller-1')).rejects.toBeInstanceOf(ConflictException);
+      expect(productRepo.update).not.toHaveBeenCalled();
+    });
+    it('el 409 de un producto reservado explica que hay que cancelar la transacción', async () => {
       // Arrange
       productRepo.findOneBy.mockResolvedValue(makeProduct({ status: ProductStatus.RESERVED }));
 
-      // Act
-
-      // Assert
-      await expect(service.remove('p1', 'seller-1')).rejects.toBeInstanceOf(ConflictException);
+      // Act / Assert
+      await expect(service.remove('p1', 'seller-1')).rejects.toThrow(/cancela la transacción/);
     });
-    it('borrado lógico por el dueño', async () => {
+    it('HU-13 · borrado lógico por el dueño: UPDATE condicional a AVAILABLE e invalida la caché', async () => {
       // Arrange
       productRepo.findOneBy.mockResolvedValue(makeProduct());
+      const invalidate = jest.spyOn(service, 'invalidateFeedCache');
 
       // Act
       await service.remove('p1', 'seller-1');
 
       // Assert
-      expect(productRepo.update).toHaveBeenCalledWith({ id: 'p1' }, { status: ProductStatus.REMOVED });
+      expect(productRepo.update).toHaveBeenCalledWith(
+        { id: 'p1', status: ProductStatus.AVAILABLE },
+        { status: ProductStatus.REMOVED },
+      );
+      expect(invalidate).toHaveBeenCalledWith('granada');
+    });
+    it('HU-13 · si lo reservaron entre la lectura y el UPDATE, responde 409 y no lo retira', async () => {
+      // Arrange
+      productRepo.findOneBy
+        .mockResolvedValueOnce(makeProduct())
+        .mockResolvedValueOnce(makeProduct({ status: ProductStatus.RESERVED }));
+      productRepo.update.mockResolvedValueOnce({ affected: 0 });
+      const invalidate = jest.spyOn(service, 'invalidateFeedCache');
+
+      // Act / Assert
+      await expect(service.remove('p1', 'seller-1')).rejects.toThrow(/reservado/);
+      expect(invalidate).not.toHaveBeenCalled();
     });
     it.each([ValidRoles.ADMIN, ValidRoles.MODERATOR])('%s puede eliminar productos ajenos', async (role) => {
       // Arrange
@@ -594,6 +617,29 @@ describe('ProductService', () => {
 
       // Assert
       expect(productRepo.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('findMine (HU-13)', () => {
+    it('devuelve las publicaciones del vendedor en cualquier estado, las más recientes primero', async () => {
+      // Arrange
+      productRepo.find = jest.fn().mockResolvedValue([
+        makeProduct({ id: 'p2', status: ProductStatus.REMOVED }),
+        makeProduct({ id: 'p1', status: ProductStatus.AVAILABLE }),
+      ]);
+
+      // Act
+      const result = await service.findMine('seller-1');
+
+      // Assert
+      expect(productRepo.find).toHaveBeenCalledWith({
+        where: { sellerId: 'seller-1' },
+        order: { createdAt: 'DESC' },
+      });
+      expect(result.map((p) => [p.id, p.status])).toEqual([
+        ['p2', ProductStatus.REMOVED],
+        ['p1', ProductStatus.AVAILABLE],
+      ]);
     });
   });
 
@@ -668,7 +714,19 @@ describe('ProductService', () => {
       await service.updateStatus('p1', to);
 
       // Assert
-      expect(productRepo.update).toHaveBeenCalledWith({ id: 'p1' }, { status: to });
+      expect(productRepo.update).toHaveBeenCalledWith({ id: 'p1', status: from }, { status: to });
+    });
+    it('409 si el estado cambió entre la lectura y la escritura (no lo sobrescribe)', async () => {
+      // Arrange: se leyó AVAILABLE, pero alguien lo retiró antes del UPDATE
+      productRepo.findOneBy.mockResolvedValue(makeProduct({ status: ProductStatus.AVAILABLE }));
+      productRepo.update.mockResolvedValueOnce({ affected: 0 });
+      const invalidate = jest.spyOn(service, 'invalidateFeedCache');
+
+      // Act / Assert
+      await expect(service.updateStatus('p1', ProductStatus.RESERVED)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(invalidate).not.toHaveBeenCalled();
     });
     it.each([
       [ProductStatus.SOLD, ProductStatus.AVAILABLE],
@@ -690,7 +748,7 @@ describe('ProductService', () => {
       const repo = {
         findOne: jest.fn().mockResolvedValue(product),
         findOneBy: jest.fn(),
-        update: jest.fn(),
+        update: jest.fn().mockResolvedValue({ affected: 1 }),
       };
       return { repo, manager: { getRepository: jest.fn().mockReturnValue(repo) } as any };
     };
@@ -707,7 +765,10 @@ describe('ProductService', () => {
         where: { id: 'p1' },
         lock: { mode: 'pessimistic_write' },
       });
-      expect(repo.update).toHaveBeenCalledWith({ id: 'p1' }, { status: ProductStatus.SOLD });
+      expect(repo.update).toHaveBeenCalledWith(
+        { id: 'p1', status: ProductStatus.RESERVED },
+        { status: ProductStatus.SOLD },
+      );
       expect(productRepo.update).not.toHaveBeenCalled();
     });
 
