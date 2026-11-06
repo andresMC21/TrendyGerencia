@@ -315,6 +315,78 @@ describe('Transactions (e2e)', () => {
     });
   });
 
+  describe('HU-16 · acordar una entrega', () => {
+    it('rechaza un horario en el pasado', async () => {
+      // Arrange
+      const product = await http
+        .post('/api/products')
+        .set(auth(tokenSeller))
+        .send(productBody({ title: 'Producto HU-16 pasado' }))
+        .expect(201);
+      const tx = await http
+        .post('/api/transactions')
+        .set(auth(tokenBuyer))
+        .send({ productId: product.body.id })
+        .expect(201);
+
+      // Act / Assert
+      await http
+        .post(`/api/transactions/${tx.body.id}/confirm-point`)
+        .set(auth(tokenBuyer))
+        .send({ safePointId: 'cai-granada', scheduledTime: '2020-01-01T10:00:00Z' })
+        .expect(400);
+      const detail = await http
+        .get(`/api/transactions/${tx.body.id}`)
+        .set(auth(tokenBuyer))
+        .expect(200);
+      expect(detail.body.status).toBe('PENDING');
+    });
+
+    it('si una parte acuerda el punto y la otra cancela a la vez, el resultado es coherente', async () => {
+      for (let i = 0; i < 5; i++) {
+        // Arrange
+        const product = await http
+          .post('/api/products')
+          .set(auth(tokenSeller))
+          .send(productBody({ title: `Producto HU-16 carrera ${i}` }))
+          .expect(201);
+        const tx = await http
+          .post('/api/transactions')
+          .set(auth(tokenBuyer))
+          .send({ productId: product.body.id })
+          .expect(201);
+
+        // Act
+        const [cancel, confirm] = await Promise.all([
+          http
+            .put(`/api/transactions/${tx.body.id}/status`)
+            .set(auth(tokenSeller))
+            .send({ status: 'CANCELLED' }),
+          http
+            .post(`/api/transactions/${tx.body.id}/confirm-point`)
+            .set(auth(tokenBuyer))
+            .send({ safePointId: 'cai-granada', scheduledTime: '2099-11-10T15:00:00Z' }),
+        ]);
+
+        // Assert: o quedó cancelada con el producto libre, o acordada y reservada
+        const status = (
+          await http.get(`/api/transactions/${tx.body.id}`).set(auth(tokenBuyer)).expect(200)
+        ).body.status;
+        const productStatus = (
+          await http.get(`/api/products/${product.body.id}`).expect(200)
+        ).body.status;
+        expect(cancel.status).toBe(200);
+        if (status === 'CANCELLED') {
+          expect(productStatus).toBe('AVAILABLE');
+        } else {
+          expect(status).toBe('AGREED_POINT');
+          expect(productStatus).toBe('RESERVED');
+        }
+        expect([200, 409]).toContain(confirm.status);
+      }
+    });
+  });
+
   describe('HU-17 · finalizar o cancelar el intercambio', () => {
     let tokenBuyer2: string;
 

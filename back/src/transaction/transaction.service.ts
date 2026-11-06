@@ -218,20 +218,21 @@ export class TransactionService {
     return TransactionDto.fromEntity(updated);
   }
 
+  /**
+   * HU-16 · Acordar una entrega: punto seguro y horario.
+   *
+   * - Solo comprador o vendedor (403 para cualquier otra persona).
+   * - La transacción debe estar PENDING y pasa a AGREED_POINT.
+   * - El horario debe ser futuro (400 si ya pasó).
+   * - Se hace con la fila bloqueada, igual que HU-17: si la otra persona
+   *   cancela al mismo tiempo, gana una de las dos operaciones y la otra recibe
+   *   409, en lugar de que «acordar» sobrescriba una cancelación.
+   */
   async confirmPoint(
     id: string,
     userId: string,
     confirmPointDto: ConfirmPointDto,
   ): Promise<TransactionDto> {
-    const transaction = await this.findEntity(id);
-    this.assertParticipant(transaction, userId);
-
-    if (transaction.status !== TransactionStatus.PENDING) {
-      throw new ConflictException(
-        'Solo transacciones PENDING pueden confirmar punto',
-      );
-    }
-
     const scheduledTime = new Date(confirmPointDto.scheduledTime);
     if (Number.isNaN(scheduledTime.getTime())) {
       throw new BadRequestException(
@@ -239,12 +240,34 @@ export class TransactionService {
       );
     }
 
-    transaction.safePointId = confirmPointDto.safePointId;
-    transaction.scheduledTime = scheduledTime;
-    transaction.status = TransactionStatus.AGREED_POINT;
+    await this.dataSource.transaction(async (manager) => {
+      const transaction = await manager.findOne(Transaction, {
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!transaction) {
+        throw new NotFoundException(`Transaction with id ${id} not found`);
+      }
+      this.assertParticipant(transaction, userId);
 
-    const saved = await this.transactionRepository.save(transaction);
-    return TransactionDto.fromEntity(saved);
+      if (transaction.status !== TransactionStatus.PENDING) {
+        throw new ConflictException(
+          'Solo transacciones PENDING pueden confirmar punto',
+        );
+      }
+      if (scheduledTime.getTime() <= Date.now()) {
+        throw new BadRequestException(
+          'scheduledTime debe ser una fecha y hora futura',
+        );
+      }
+
+      transaction.safePointId = confirmPointDto.safePointId;
+      transaction.scheduledTime = scheduledTime;
+      transaction.status = TransactionStatus.AGREED_POINT;
+      await manager.save(transaction);
+    });
+
+    return TransactionDto.fromEntity(await this.findEntity(id));
   }
 
   private async findEntity(id: string): Promise<Transaction> {
