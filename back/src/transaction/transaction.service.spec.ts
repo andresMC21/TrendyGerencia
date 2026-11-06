@@ -300,6 +300,30 @@ describe('TransactionService', () => {
         );
       });
 
+      it('409 si el vendedor intenta proponer antes que el comprador', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(makeTransaction());
+
+        // Act / Assert
+        await expect(
+          service.proposeMeeting('t1', 'seller-1', propuesta),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(manager.save).not.toHaveBeenCalled();
+      });
+
+      it('el vendedor puede cambiar su propia contrapropuesta', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(conPropuesta('seller-1'));
+
+        // Act
+        await service.proposeMeeting('t1', 'seller-1', propuesta);
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({ proposedById: 'seller-1' }),
+        );
+      });
+
       it('una contrapropuesta del vendedor reemplaza la del comprador', async () => {
         // Arrange
         manager.findOne.mockResolvedValue(conPropuesta('buyer-1'));
@@ -325,7 +349,7 @@ describe('TransactionService', () => {
         manager.findOne.mockResolvedValue(makeTransaction());
 
         // Act
-        await service.proposeMeeting('t1', 'seller-1', propuesta);
+        await service.proposeMeeting('t1', 'buyer-1', propuesta);
 
         // Assert
         expect(manager.findOne).toHaveBeenCalledWith(Transaction, {

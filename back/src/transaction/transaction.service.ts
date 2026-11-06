@@ -22,6 +22,9 @@ const ACTIVE_TRANSACTION_MESSAGE = 'El producto ya tiene una transaccion activa'
 const AGREEMENT_NEEDS_OTHER_PARTY =
   'El punto se acuerda cuando la otra persona acepta la propuesta de encuentro';
 
+const BUYER_PROPOSES_FIRST_MESSAGE =
+  'El comprador propone primero el punto y el horario; el vendedor responde';
+
 const PROPOSAL_CHANGED_MESSAGE =
   'La propuesta de encuentro cambio; revisa la nueva antes de aceptar';
 
@@ -223,9 +226,12 @@ export class TransactionService {
    * - Solo comprador o vendedor (403 para cualquier otra persona).
    * - La transacción debe estar PENDING (409 si ya hay acuerdo o se cerró).
    * - El horario debe ser futuro (400 si ya pasó).
+   * - El comprador propone primero. El vendedor responde: acepta, rechaza o,
+   *   si ya hay una propuesta, contrapropone (409 si intenta abrir la
+   *   negociación sin propuesta del comprador).
    * - La transacción sigue en PENDING: queda registrada la propuesta y quién
-   *   la hizo, y la otra persona debe aceptarla. Una nueva propuesta de
-   *   cualquiera de los dos reemplaza a la anterior (contrapropuesta).
+   *   la hizo, y la otra persona debe aceptarla. Una nueva propuesta reemplaza
+   *   a la anterior (contrapropuesta).
    * - Fila bloqueada: si la otra persona acepta o cancela al mismo tiempo, las
    *   operaciones se atienden de a una.
    */
@@ -238,6 +244,9 @@ export class TransactionService {
 
     await this.dataSource.transaction(async (manager) => {
       const transaction = await this.lockForMeeting(manager, id, userId);
+      if (userId === transaction.sellerId && !transaction.proposedById) {
+        throw new ConflictException(BUYER_PROPOSES_FIRST_MESSAGE);
+      }
       transaction.safePointId = proposal.safePointId;
       transaction.scheduledTime = scheduledTime;
       transaction.proposedById = userId;

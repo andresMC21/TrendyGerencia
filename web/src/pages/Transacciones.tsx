@@ -90,7 +90,11 @@ function MetaAcuerdo({ tx, userId, otro }: { tx: Transaction; userId?: string; o
   }
   switch (etapaAcuerdo(tx, userId)) {
     case 'sin-propuesta':
-      return <span className="tx-meta tx-meta--todo">Falta proponer punto y horario</span>;
+      return tx.buyerId === userId ? (
+        <span className="tx-meta tx-meta--todo">Propón el punto y la hora de entrega</span>
+      ) : (
+        <span className="tx-meta">Esperando que {otro ?? 'el comprador'} proponga la entrega</span>
+      );
     case 'esperando':
       return (
         <span className="tx-meta">
@@ -100,7 +104,7 @@ function MetaAcuerdo({ tx, userId, otro }: { tx: Transaction; userId?: string; o
     case 'por-responder':
       return (
         <span className="tx-meta tx-meta--todo">
-          {otro ?? 'La otra persona'} propone {lugar} · Te toca responder
+          {otro ?? 'La otra persona'} propone {lugar} · Acepta o rechaza la entrega
         </span>
       );
     default:

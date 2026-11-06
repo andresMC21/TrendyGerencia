@@ -356,7 +356,9 @@ function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void
       setAviso(
         accion === 'aceptar'
           ? '¡Listo! Los dos quedaron de acuerdo en el punto y el horario.'
-          : `Rechazaste la propuesta. Puedes proponer otro punto u horario a ${otro}.`,
+          : soyComprador
+            ? `Rechazaste la propuesta. Puedes proponer otro punto u horario a ${otro}.`
+            : `Rechazaste la propuesta. ${otro} puede proponer otro punto u horario.`,
       );
       onChange({ ...tx, ...updated });
     } catch (err) {
@@ -385,18 +387,23 @@ function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void
 
   return (
     <section className="meeting-agreement" aria-label="Acordar punto seguro y horario">
-      <ol className="agreement-steps" aria-label="Pasos del acuerdo">
-        <li className="agreement-step agreement-step--done">Proponer</li>
-        <li className={`agreement-step${etapa !== 'sin-propuesta' ? ' agreement-step--done' : ''}`}>
-          Responder
-        </li>
-        <li className="agreement-step">Acuerdo</li>
-      </ol>
+      <p className="agreement-progress" data-testid="paso-acuerdo">
+        {etapa === 'sin-propuesta'
+          ? `Paso 1 de 2 · ${soyComprador ? 'Propón' : `${otro} propone`} el punto y la hora de entrega`
+          : `Paso 2 de 2 · ${etapa === 'por-responder' ? 'Te toca responder' : `${otro} debe responder`}`}
+      </p>
 
       {aviso && <Alert tone="success">{aviso}</Alert>}
       {error && <Alert tone="error">{error}</Alert>}
 
-      {etapa === 'sin-propuesta' && (
+      {etapa === 'sin-propuesta' && !soyComprador && (
+        <p className="agreement-status" data-testid="estado-acuerdo">
+          Esperando que {otro} proponga el punto seguro y la hora de entrega. Cuando lo haga, aquí
+          podrás aceptarla o rechazarla.
+        </p>
+      )}
+
+      {etapa === 'sin-propuesta' && soyComprador && (
         <>
           <p className="field-hint">
             Propón un lugar público y vigilado y una hora. {otro} tendrá que aceptarlo para que quede
@@ -438,7 +445,9 @@ function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void
         <>
           {propuesta}
           <p className="agreement-status agreement-status--todo" data-testid="estado-acuerdo">
-            {otro} propone este punto y horario. ¿Te sirve?
+            {soyComprador
+              ? `${otro} propone otro punto u horario. ¿Te sirve?`
+              : `${otro} quiere recibir su compra aquí. ¿Aceptas la entrega?`}
           </p>
           {editando ? (
             <ProponerEncuentro
@@ -451,35 +460,37 @@ function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void
               }}
             />
           ) : (
-            <div className="tx-actions">
+            <>
+              <div className="tx-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => responder('aceptar')}
+                  disabled={sending}
+                  data-testid="btn-aceptar-propuesta"
+                >
+                  {sending ? 'Guardando…' : soyComprador ? 'Aceptar' : 'Aceptar entrega'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger-outline"
+                  onClick={() => responder('rechazar')}
+                  disabled={sending}
+                  data-testid="btn-rechazar-propuesta"
+                >
+                  Rechazar
+                </button>
+              </div>
               <button
                 type="button"
-                className="btn btn-primary"
-                onClick={() => responder('aceptar')}
-                disabled={sending}
-                data-testid="btn-aceptar-propuesta"
-              >
-                {sending ? 'Guardando…' : 'Aceptar propuesta'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline"
+                className="link-button agreement-alt"
                 onClick={() => setEditando(true)}
                 disabled={sending}
                 data-testid="btn-contraproponer"
               >
-                Proponer otro punto u hora
+                ¿Ni sí ni no? Propón otro punto u hora
               </button>
-              <button
-                type="button"
-                className="btn btn-danger-outline"
-                onClick={() => responder('rechazar')}
-                disabled={sending}
-                data-testid="btn-rechazar-propuesta"
-              >
-                Rechazar
-              </button>
-            </div>
+            </>
           )}
         </>
       )}

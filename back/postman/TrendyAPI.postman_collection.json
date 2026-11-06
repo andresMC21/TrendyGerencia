@@ -4629,6 +4629,60 @@
           "response": []
         },
         {
+          "name": "POST /transactions/:id/meeting-proposal: el vendedor no propone primero → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenSeller}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"safePointId\": \"sp-1\",\n  \"scheduledTime\": \"2030-10-05T15:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/meeting-proposal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "meeting-proposal"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "POST /transactions/:id/meeting-proposal: el comprador propone (sigue PENDING)",
           "event": [
             {
@@ -4948,7 +5002,7 @@
           "response": []
         },
         {
-          "name": "POST /transactions/:id/meeting-proposal: el vendedor propone de nuevo",
+          "name": "POST /transactions/:id/meeting-proposal: el comprador propone de nuevo",
           "event": [
             {
               "listen": "test",
@@ -4966,7 +5020,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{tokenSeller}}",
+                  "value": "{{tokenBuyer}}",
                   "type": "string"
                 }
               ]
@@ -5002,7 +5056,7 @@
           "response": []
         },
         {
-          "name": "POST /transactions/:id/meeting-proposal/accept: el comprador acepta → AGREED_POINT",
+          "name": "POST /transactions/:id/meeting-proposal/accept: el vendedor acepta → AGREED_POINT",
           "event": [
             {
               "listen": "test",
@@ -5022,7 +5076,7 @@
               "bearer": [
                 {
                   "key": "token",
-                  "value": "{{tokenBuyer}}",
+                  "value": "{{tokenSeller}}",
                   "type": "string"
                 }
               ]

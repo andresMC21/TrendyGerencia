@@ -1100,27 +1100,17 @@ h3 {
   text-transform: uppercase;
   color: var(--muted);
 }
-.agreement-steps {
-  list-style: none;
+.agreement-progress {
   margin: 0;
-  padding: 0;
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.agreement-step {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--muted);
-  background: #fff;
-  border: 1.5px solid var(--line);
-  border-radius: 999px;
-  padding: 4px 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--slate);
 }
-.agreement-step--done {
-  color: var(--navy);
-  border-color: var(--slate);
-  background: var(--panel-soft);
+.agreement-alt {
+  justify-self: start;
+  font-size: 14px;
 }
 .agreement-status {
   margin: 0;
