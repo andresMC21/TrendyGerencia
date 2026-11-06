@@ -202,6 +202,9 @@ describe('Transactions (e2e)', () => {
       .send({ safePointId: '', scheduledTime: 'fecha-mala' })
       .expect(400);
 
+    // El vendedor no abre la negociación: responde a lo que propone el comprador
+    await http.post(proposal(transactionId)).set(auth(tokenSeller)).send(P1).expect(409);
+
     // El comprador propone: queda PENDING esperando al vendedor
     const proposed = await http
       .post(proposal(transactionId))
@@ -269,11 +272,14 @@ describe('Transactions (e2e)', () => {
       .send(P2)
       .expect(409);
 
-    // El vendedor vuelve a proponer y el comprador acepta
-    await http.post(proposal(transactionId)).set(auth(tokenSeller)).send(P2).expect(200);
+    // Sin propuesta, el vendedor vuelve a esperar al comprador
+    await http.post(proposal(transactionId)).set(auth(tokenSeller)).send(P2).expect(409);
+
+    // El comprador propone de nuevo y el vendedor acepta
+    await http.post(proposal(transactionId)).set(auth(tokenBuyer)).send(P2).expect(200);
     const agreed = await http
       .post(`${proposal(transactionId)}/accept`)
-      .set(auth(tokenBuyer))
+      .set(auth(tokenSeller))
       .send(P2)
       .expect(200);
     expect(agreed.body).toMatchObject({
@@ -430,7 +436,7 @@ describe('Transactions (e2e)', () => {
         const { productId: pid, txId } = await reservedTx(`Producto HU-16 carrera ${i}`);
         await http
           .post(`/api/transactions/${txId}/meeting-proposal`)
-          .set(auth(tokenSeller))
+          .set(auth(tokenBuyer))
           .send(P1)
           .expect(200);
 
@@ -438,11 +444,11 @@ describe('Transactions (e2e)', () => {
         const [cancel, accept] = await Promise.all([
           http
             .put(`/api/transactions/${txId}/status`)
-            .set(auth(tokenSeller))
+            .set(auth(tokenBuyer))
             .send({ status: 'CANCELLED' }),
           http
             .post(`/api/transactions/${txId}/meeting-proposal/accept`)
-            .set(auth(tokenBuyer))
+            .set(auth(tokenSeller))
             .send(P1),
         ]);
 
@@ -463,13 +469,13 @@ describe('Transactions (e2e)', () => {
       }
     });
 
-    it('si el comprador acepta mientras el vendedor cambia la propuesta, nunca acepta algo que no vio', async () => {
+    it('si el vendedor acepta mientras el comprador cambia la propuesta, nunca acepta algo que no vio', async () => {
       for (let i = 0; i < 5; i++) {
         // Arrange
         const { txId } = await reservedTx(`Producto HU-16 contrapropuesta ${i}`);
         await http
           .post(`/api/transactions/${txId}/meeting-proposal`)
-          .set(auth(tokenSeller))
+          .set(auth(tokenBuyer))
           .send(P1)
           .expect(200);
 
@@ -477,11 +483,11 @@ describe('Transactions (e2e)', () => {
         const [accept, change] = await Promise.all([
           http
             .post(`/api/transactions/${txId}/meeting-proposal/accept`)
-            .set(auth(tokenBuyer))
+            .set(auth(tokenSeller))
             .send(P1),
           http
             .post(`/api/transactions/${txId}/meeting-proposal`)
-            .set(auth(tokenSeller))
+            .set(auth(tokenBuyer))
             .send(P2),
         ]);
 

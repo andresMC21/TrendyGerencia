@@ -187,7 +187,7 @@ export class TransactionController {
   @ApiOperation({
     summary: 'Proponer o contraproponer punto seguro y horario (HU-16)',
     description:
-      'Requiere JWT y participación en la transacción, que debe estar PENDING. Guarda la propuesta y quién la hizo; la transacción sigue en PENDING hasta que la otra persona la acepte. Una nueva propuesta de cualquiera de los dos reemplaza a la anterior.',
+      'Requiere JWT y participación en la transacción, que debe estar PENDING. El comprador propone primero; el vendedor solo puede contraproponer cuando ya existe una propuesta. Guarda la propuesta y quién la hizo; la transacción sigue en PENDING hasta que la otra persona la acepte. Una nueva propuesta reemplaza a la anterior.',
   })
   @ApiParam({
     name: 'id',
@@ -210,7 +210,7 @@ export class TransactionController {
       'El identificador, el punto seguro o la fecha no son válidos, o la fecha ya pasó.',
   })
   @ApiConflictResponse({
-    description: 'La transacción no está en estado PENDING.',
+    description: 'La transacción no está en estado PENDING, o el vendedor intenta proponer sin una propuesta previa del comprador.',
   })
   @ApiNotFoundResponse({
     description: 'No existe una transacción con ese identificador.',
