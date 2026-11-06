@@ -124,6 +124,23 @@ describe('Products (e2e)', () => {
     expect(res.body.items[0].id).toBe(productId);
   });
 
+  it('HU-09 · GET /products filtra por neighborhoodId sin token y sin distinguir mayúsculas', async () => {
+    const res = await http
+      .get('/api/products')
+      .query({ neighborhoodId: ` ${hood.toUpperCase()} ` })
+      .expect(200);
+
+    expect(res.body.total).toBe(1);
+    expect(res.body.items[0].id).toBe(productId);
+
+    const otro = await http
+      .get('/api/products')
+      .query({ neighborhoodId: `otro-${hood}` })
+      .expect(200);
+
+    expect(otro.body.total).toBe(0);
+  });
+
   it('GET /products con lat/lng/radius usa PostGIS', async () => {
     const near = await http
       .get('/api/products')
@@ -233,5 +250,12 @@ describe('Products (e2e)', () => {
       .expect(200);
 
     expect(list.body.total).toBe(0);
+
+    const byId = await http
+      .get('/api/products')
+      .query({ neighborhoodId: hood })
+      .expect(200);
+
+    expect(byId.body.total).toBe(0);
   });
 });

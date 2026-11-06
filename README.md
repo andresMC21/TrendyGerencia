@@ -13,6 +13,7 @@ Los usuarios publican productos, los encuentran por barrio o cercanía geográfi
 | Aplicación desplegada (Render) | https://trendy-app-web-un9c.onrender.com/api |
 | Documentación Swagger | https://trendy-app-web-un9c.onrender.com/api/docs |
 | Health check | https://trendy-app-web-un9c.onrender.com/api/health |
+| Página web (Render, sitio estático `trendy-web`) | La URL que asigna Render al sincronizar `render.yml` (ver *CI/CD y despliegue*) |
 
 > El plan gratuito de Render duerme el servicio tras un rato sin tráfico: la primera petición puede tardar ~1 minuto.
 
@@ -38,15 +39,100 @@ NestJS 12 · TypeScript · TypeORM · PostgreSQL 16 + PostGIS · Passport JWT ·
 
 ## Requisitos
 
-- **Node.js 24** (el proyecto y el CI usan Node 24)
-- **Docker** (para levantar PostgreSQL con PostGIS) o un PostgreSQL con la extensión PostGIS instalada
+- **Node.js 24** (`node -v` debe mostrar v24 o superior; con nvm: `nvm install 24`)
+- **Docker Desktop** abierto (para la base de datos PostgreSQL + PostGIS)
 - npm
 
+## Cómo ejecutar Trendy (paso a paso)
 
+El proyecto tiene tres piezas que se ejecutan en este orden:
 
-La API queda en **http://localhost:3000/api** y Swagger en **http://localhost:3000/api/docs**.
+| Pieza | Carpeta | Dirección |
+|---|---|---|
+| Base de datos PostgreSQL + PostGIS | servicio `db` de `docker-compose.yml` (contenedor `trendy-db`) | `localhost:5433` (base `trendy`, usuario `trendy`, clave `trendy`) |
+| API (NestJS) | `back/` | http://localhost:3000/api · Swagger en http://localhost:3000/api/docs |
+| Página web (React + Vite) | `web/` | http://localhost:5173 |
 
+### Opción A · Un solo clic (macOS)
 
+1. Abre Docker Desktop y espera a que diga *Engine running*.
+2. En Finder, abre la carpeta del repositorio y haz doble clic en **`iniciar-trendy.command`**.
+   (Si macOS lo bloquea la primera vez: clic derecho → *Abrir* → *Abrir*.)
+3. El script levanta la base de datos con `docker compose`, crea `back/.env` si no existe, aplica las migraciones, carga el seed (incluido el usuario fijo), levanta la API y abre la web en el navegador.
+4. Para detener todo, presiona `Ctrl + C` en la ventana de Terminal. La base de datos sigue en Docker con tus datos.
+
+Los registros quedan en `.trendy-logs/` (`iniciar.log` y `api.log`).
+
+### Opción B · Todo con Docker (Windows, Linux o Mac, sin instalar Node)
+
+Solo necesitas Docker Desktop. Desde la raíz del repositorio:
+
+```bash
+docker compose --profile completo up -d --build
+```
+
+Esto levanta la base de datos, la API (aplica migraciones y carga el seed con el usuario fijo) y la web:
+
+- Web: http://localhost:5173
+- API: http://localhost:3000/api · Swagger: http://localhost:3000/api/docs
+
+Para apagar: `docker compose --profile completo down` (los datos se conservan en el volumen `trendy_trendy-db-data`; con `down -v` se borran).
+
+### Opción C · Base de datos en Docker + API y web con npm (para desarrollar)
+
+**1. Base de datos**
+
+```bash
+docker compose up -d db      # crea y enciende el contenedor trendy-db (PostGIS) en el puerto 5433
+```
+
+**2. API**
+
+```bash
+cd back
+npm install
+cp .env.example .env         # ya trae los datos de conexión de docker-compose.yml
+npm run migration:run        # crea las tablas
+npm run seed                 # datos de ejemplo + usuario fijo
+npm run start:dev            # http://localhost:3000/api
+```
+
+**3. Página web** (en otra terminal)
+
+```bash
+cd web
+npm install
+npm run dev                  # http://localhost:5173
+```
+
+Para usar la API desplegada en vez de la local: `VITE_API_URL=https://trendy-app-web-un9c.onrender.com/api npm run dev`.
+
+### Archivos de configuración
+
+| Archivo | Para qué sirve |
+|---|---|
+| `docker-compose.yml` | Define `db` (PostGIS) y, con el perfil `completo`, `api` y `web`. |
+| `.env.example` (raíz) | Variables opcionales de docker compose (puertos, usuario y clave de la base). Cópialo como `.env` solo si quieres cambiarlas. |
+| `back/.env.example` | Configuración de la API cuando corre con npm. Cópialo como `back/.env`. |
+| `web/.env.example` | URL de la API para la web (opcional). |
+| `back/Dockerfile`, `web/Dockerfile` | Imágenes de la API y de la web que usa el perfil `completo`. |
+
+Los archivos `.env` reales no se suben al repositorio (están en `.gitignore`); los `.env.example` traen valores que funcionan tal cual para desarrollo local.
+
+### Usuario fijo
+
+| Correo | Contraseña |
+|---|---|
+| `demo@trendy.local` | `Trendy123` |
+
+- **Dónde se define:** `back/src/seed/seed-data.ts` (lista `seedUsers`, último elemento, id `55555555-5555-4555-8555-555555555555`).
+- **Dónde se guarda:** en la tabla `"user"` de la base `trendy` (contenedor `trendy-db`). Lo crea `npm run seed`, que se puede ejecutar varias veces sin duplicarlo.
+- **Verlo en la base de datos:**
+
+  ```bash
+  docker exec -it trendy-db psql -U trendy -d trendy \
+    -c 'SELECT email, "fullName", role, "isActive" FROM "user";'
+  ```
 
 ### Scripts (`npm run`)
 
@@ -72,6 +158,7 @@ La API queda en **http://localhost:3000/api** y Swagger en **http://localhost:30
 | `moderador@trendy.local` | `Mod12345` | MODERATOR | Revisa verificaciones |
 | `ana@trendy.local` | `Ana12345` | USER | Verificada; vende 2 productos |
 | `carlos@trendy.local` | `Carlos12` | USER | Sin verificar; vende 1 producto y compró uno de Ana |
+| `demo@trendy.local` | `Trendy123` | USER | Usuario fijo para probar la página web |
 
 El seed también crea 3 productos, 1 transacción completada y 1 reseña de ejemplo. Se puede ejecutar varias veces.
 
@@ -108,10 +195,22 @@ La colección `postman/trendy-api.postman_collection.json` cubre todos los endpo
 | Administrar usuarios y **roles** | `/admin/users` (listar, editar, `/role`, `/active`, `DELETE`) | `admin` (el `moderador` solo lee) |
 | Probar que un `USER` no accede a rutas admin (403) | `GET /admin/users` | `ana` |
 | Publicar y editar productos | `POST /products`, `PUT /products/:id` | `ana` |
-| Feed por barrio / cercanía / filtros | `GET /products?neighborhood=…&lat=…&lng=…&radius=…` | público |
+| Retirar una publicación (HU-13, borrado lógico → `REMOVED`) y ver mis publicaciones | `DELETE /products/:id`, `GET /products/mine` · web: `/mis-publicaciones` | dueño (`ana`); otro `USER` recibe 403 |
+| Feed por barrio / cercanía / filtros | `GET /products?neighborhoodId=…&lat=…&lng=…&radius=…` | público |
 | Favoritos | `POST /products/:id/favorite` | cualquiera autenticado |
 | Compra: reservar → acordar punto → completar | `POST /transactions`, `POST /transactions/:id/confirm-point`, `PUT /transactions/:id/status` | `carlos` compra, `ana` vende |
 | Reseñas tras una compra completada | `POST /review`, `GET /review` | comprador y vendedor |
+
+### Explorar el barrio (HU-09)
+
+La página pública **`/explorar`** (http://localhost:5173/explorar) permite consultar los productos sin iniciar sesión. Se llega desde el enlace **Explorar** del encabezado y desde el botón **Explorar productos** de la portada.
+
+- **Filtros:** barrio, categoría y condición, con paginación de 12 en 12. Quedan en la URL, así que se pueden compartir: `/explorar?barrio=granada&categoria=hogar&condicion=USADO&pagina=2`.
+- **En `/inicio`:** la sección «Todos los productos» muestra lo más reciente de toda Cali. **Ver todos los productos** abre la lista completa y **Productos de mi barrio** abre el último barrio elegido.
+- **En la API:** `GET /products?neighborhoodId=granada` filtra por barrio y no distingue mayúsculas. `neighborhood` sigue funcionando como alias obsoleto; si se envían ambos, manda `neighborhoodId`.
+- **Publicaciones retiradas:** el feed solo devuelve productos `AVAILABLE`, así que las `REMOVED` nunca aparecen.
+
+Más detalle en [`docs/HU-09.md`](docs/HU-09.md).
 
 ## Pruebas automatizadas
 
@@ -122,23 +221,36 @@ npm run test:cov    # unitarias + cobertura
 
 | Tipo | Herramienta | Resultado |
 |---|---|---|
-| Unitarias | Jest | 21 suites, 168 pruebas pasan |
-| Cobertura | Jest | Sentencias 91.75 % · Ramas 80.98 % · Funciones 86.25 % · Líneas 91.37 % (umbral exigido: 80 %) |
-| Integración | Jest + Supertest + PostGIS | 4 suites, 38 pruebas pasan (health, usuarios, productos, transacciones) |
-| Manuales / regresión | Postman (Newman) | 179 requests, 260 aserciones, 0 fallos |
+| Unitarias | Jest | 25 suites, 298 pruebas pasan |
+| Cobertura | Jest | Sentencias 91.2 % · Ramas 80.5 % · Funciones 85.6 % · Líneas 90.8 % (umbral exigido: 80 %) |
+| Integración | Jest + Supertest + PostGIS | 4 suites, 70 pruebas pasan (health, usuarios, productos, transacciones) |
+| Manuales / regresión | Postman (Newman) | 150 requests, 422 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
 
 ### Pruebas de integración
 
-Las pruebas de integración levantan la aplicación completa contra una base PostgreSQL + PostGIS real. Se ejecutan automáticamente en GitHub Actions (workflow `tests`) en cada push y pull request a `main` y `develop`: el workflow crea el servicio de base de datos, aplica las migraciones y corre `test:cov` y `test:e2e`.
+Las pruebas de integración levantan la aplicación completa contra una base PostgreSQL + PostGIS real. Se ejecutan automáticamente en GitHub Actions (workflow `tests`) en cada push y pull request a `main` y `develop`: el workflow crea el servicio de base de datos, aplica las migraciones y corre `test:cov` y `test:e2e`. El detalle de qué prueba cubre cada criterio de aceptación está en [`docs/historias-de-usuario.md`](docs/historias-de-usuario.md).
 
 ## CI/CD y despliegue
 
 | Workflow | Cuándo | Qué hace |
 |---|---|---|
-| `tests` (`.github/workflows/tests.yml`) | push y PR a `main` / `develop` | Levanta Postgres + PostGIS, aplica migraciones, ejecuta lint, pruebas unitarias con cobertura, pruebas de integración y compila |
-| `PROD-CI` (`.github/workflows/prod-ci.yml`) | push y PR a `main` / `develop` | Lint, pruebas unitarias y compilación; en `main` dispara el despliegue en Render (secreto `RENDER_DEPLOY_HOOK_URL`) |
+| `tests` (`.github/workflows/tests.yml`) | push y PR a `main` / `develop` | API: levanta Postgres + PostGIS, aplica migraciones, lint, pruebas unitarias con cobertura, pruebas de integración y compilación. Web: lint y compilación |
 
-**Despliegue:** Render (web service + PostgreSQL) definido en `render.yml`. Al arrancar ejecuta `npm run migration:run:prod` y luego `npm run start:prod`; el health check usa `/api/health`.
+**Despliegue:** Render, definido en `render.yml` (Blueprint), con tres piezas:
+
+| Servicio | Tipo | Qué hace |
+|---|---|---|
+| `trendy-app-db` | PostgreSQL | Base de datos (TypeORM crea `postgis` y `uuid-ossp` si faltan). |
+| `trendy-app-web` | Web service (Node, `back/`) | API: aplica las migraciones y arranca (`/api/health` como health check). `JWT_SECRET` lo genera Render. |
+| `trendy-web` | Sitio estático (`web/`) | Página web; `VITE_API_URL` apunta a la API desplegada y todas las rutas sirven `index.html`. |
+
+Render despliega la rama **`main`**. Para publicar lo que está en `develop`:
+
+1. Abrir un PR `develop → main`, revisarlo y hacer merge.
+2. En Render: *Blueprints* → el blueprint de Trendy → *Sync* (crea `trendy-web` la primera vez y aplica los cambios de `render.yml`).
+3. Comprobar `https://trendy-app-web-un9c.onrender.com/api/health` y abrir la URL del sitio `trendy-web` que muestra Render.
+
+En producción **no** se ejecuta el seed, porque crearía cuentas con contraseñas públicas. Para una demostración, se puede correr `npm run seed` desde el *Shell* del servicio de la API y luego cambiar esas contraseñas.
 
 ## Estructura del proyecto
 
@@ -160,7 +272,9 @@ src/
 ├── transaction/             # Compra/trueque y máquina de estados
 └── review/                  # Reseñas y promedio de calificación
 test/                        # Pruebas de integración (Supertest)
+web/                         # Página web (React + Vite): portada, explorar, registro, ingreso, Mi Trendy
 postman/                     # Colección de Postman
+docs/                        # Documentación: una ficha por HU, matriz de historias e informe técnico (PDF)
 ```
 
 ## Documentación adicional
@@ -173,4 +287,5 @@ postman/                     # Colección de Postman
 - La sesión es JWT sin estado (1 h de vigencia): cerrar sesión consiste en descartar el token en el cliente; no hay lista de revocación ni *refresh token*.
 - **No** hay autenticación de dos factores (2FA).
 - El feed de productos usa una **caché en memoria** (no Redis), por lo que no se comparte entre varias instancias.
+- La cuenta no guarda un barrio: «Productos de mi barrio» usa el último barrio elegido en `/explorar`, recordado solo en ese dispositivo.
 - `reason` en la resolución de verificaciones se registra en logs, no se guarda en el perfil.

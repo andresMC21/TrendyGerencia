@@ -1,0 +1,67 @@
+# Trendy · entorno local con Docker
+#
+#   Solo la base de datos (para desarrollar con npm en tu equipo):
+#     docker compose up -d db
+#
+#   Todo el proyecto (base de datos + API + página web), sin instalar Node:
+#     docker compose --profile completo up -d --build
+#
+# Los valores por defecto sirven para desarrollo local. Para cambiarlos,
+# copia .env.example como .env en esta carpeta y edítalo.
+name: trendy
+
+services:
+  db:
+    # La imagen oficial de PostGIS solo se publica para amd64; en Mac con chip M
+    # Docker la ejecuta con emulación (funciona, un poco más lento).
+    image: postgis/postgis:16-3.4
+    platform: linux/amd64
+    container_name: trendy-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-trendy}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-trendy}
+      POSTGRES_DB: ${DB_NAME:-trendy}
+    ports:
+      - '${DB_PORT:-5433}:5432'
+    volumes:
+      - trendy-db-data:/var/lib/postgresql/data
+    healthcheck:
+      # -h 127.0.0.1: durante la inicialización Postgres solo escucha por socket
+      # interno; por TCP solo responde cuando el servidor definitivo está listo.
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  api:
+    profiles: [completo]
+    build: ./back
+    container_name: trendy-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${DB_USER:-trendy}:${DB_PASSWORD:-trendy}@db:5432/${DB_NAME:-trendy}
+      DB_SSL: 'false'
+      JWT_SECRET: ${JWT_SECRET:-trendy-local-dev-secret}
+      PORT: '3000'
+      NODE_ENV: development
+    ports:
+      - '${API_PORT:-3000}:3000'
+
+  web:
+    profiles: [completo]
+    build:
+      context: ./web
+      args:
+        VITE_API_URL: http://localhost:${API_PORT:-3000}/api
+    container_name: trendy-web
+    depends_on:
+      - api
+    ports:
+      - '${WEB_PORT:-5173}:5173'
+
+volumes:
+  trendy-db-data:

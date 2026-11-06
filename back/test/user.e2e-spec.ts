@@ -2,6 +2,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../src/app.module';
 
@@ -119,6 +120,74 @@ describe('Users (e2e)', () => {
       .expect(400);
   });
 
+  describe('HU-01 · Crear una cuenta', () => {
+    it('crea un USER activo y entrega un JWT válido', async () => {
+      const user = newUser('hu01-ok');
+
+      const res = await http.post('/api/user/register').send(user).expect(201);
+
+      expect(res.body).toMatchObject({
+        email: user.email,
+        fullName: user.fullName,
+        role: ['USER'],
+        isActive: true,
+        verificationStatus: 'UNVERIFIED',
+      });
+      expect(typeof res.body.token).toBe('string');
+      expect(res.body.password).toBeUndefined();
+      expect(res.body.tokenVersion).toBeUndefined();
+
+      // El JWT entregado sirve para acceder a rutas protegidas.
+      const me = await http
+        .get('/api/user/me')
+        .set(auth(res.body.token))
+        .expect(200);
+      expect(me.body.id).toBe(res.body.id);
+    });
+
+    it('devuelve 409 si el correo ya existe, sin importar mayúsculas, y no duplica la cuenta', async () => {
+      const user = newUser('hu01-dup');
+      await http.post('/api/user/register').send(user).expect(201);
+
+      await http
+        .post('/api/user/register')
+        .send({ ...user, email: `  ${user.email.toUpperCase()} ` })
+        .expect(409);
+
+      const [{ count }] = await dataSource.query(
+        'SELECT COUNT(*)::int AS count FROM "user" WHERE email = $1',
+        [user.email],
+      );
+      expect(count).toBe(1);
+    });
+
+    it.each([
+      ['role', { role: ['ADMIN'] }],
+      ['isActive', { isActive: false }],
+      ['verificationStatus', { verificationStatus: 'VERIFIED' }],
+    ])('devuelve 400 si intenta asignar %s y no crea la cuenta', async (field, extra) => {
+      const user = newUser(`hu01-${field.toLowerCase()}`);
+
+      await http
+        .post('/api/user/register')
+        .send({ ...user, ...extra })
+        .expect(400);
+
+      const [{ count }] = await dataSource.query(
+        'SELECT COUNT(*)::int AS count FROM "user" WHERE email = $1',
+        [user.email],
+      );
+      expect(count).toBe(0);
+    });
+
+    it('devuelve 400 con un nombre vacío', async () => {
+      await http
+        .post('/api/user/register')
+        .send({ ...newUser('hu01-noname'), fullName: '   ' })
+        .expect(400);
+    });
+  });
+
   it('POST /user/login inicia sesión con credenciales válidas', async () => {
     const res = await http
       .post('/api/user/login')
@@ -145,6 +214,56 @@ describe('Users (e2e)', () => {
         password: 'WrongPass1',
       })
       .expect(401);
+  });
+
+  describe('HU-02 · Iniciar sesión', () => {
+    const decode = (jwt: string) =>
+      JSON.parse(Buffer.from(jwt.split('.')[1], 'base64url').toString()) as {
+        iat: number;
+        exp: number;
+      };
+
+    it('criterio 1: con credenciales correctas entrega un JWT de 1 hora', async () => {
+      const res = await http
+        .post('/api/user/login')
+        .send({ email: userEmail, password })
+        .expect(200);
+
+      const { iat, exp } = decode(res.body.token);
+      expect(exp - iat).toBe(3600);
+    });
+
+    it('criterio 2: correo inexistente, contraseña errónea o cuenta inactiva devuelven 401', async () => {
+      const user = newUser('hu02-inactiva');
+      await http.post('/api/user/register').send(user).expect(201);
+      await dataSource.query('UPDATE "user" SET "isActive" = false WHERE email = $1', [
+        user.email,
+      ]);
+
+      await http
+        .post('/api/user/login')
+        .send({ email: `${emailPrefix}no-existe@trendy.test`, password })
+        .expect(401);
+      await http
+        .post('/api/user/login')
+        .send({ email: userEmail, password: 'Incorrecta1' })
+        .expect(401);
+      await http
+        .post('/api/user/login')
+        .send({ email: user.email, password })
+        .expect(401);
+    });
+
+    it('criterio 3: sin JWT, con JWT inválido o vencido, la ruta protegida devuelve 401', async () => {
+      const expired = app
+        .get(JwtService)
+        .sign({ id: userId, email: userEmail, tokenVersion: 0 }, { expiresIn: '1s' });
+      await new Promise((resolve) => setTimeout(resolve, 2100));
+
+      await http.get('/api/user/me').expect(401);
+      await http.get('/api/user/me').set(auth('no.es.un.jwt')).expect(401);
+      await http.get('/api/user/me').set(auth(expired)).expect(401);
+    });
   });
 
   it('GET /user/me requiere autenticación', async () => {
@@ -190,6 +309,42 @@ describe('Users (e2e)', () => {
         extra: 'campo no permitido',
       })
       .expect(400);
+  });
+
+  describe('HU-03 · Consultar mi perfil', () => {
+    it('incluye nombre, correo, foto, verificación y reputación, sin la contraseña', async () => {
+      const res = await http.get('/api/user/me').set(auth(token)).expect(200);
+
+      expect(res.body).toEqual(
+        expect.objectContaining({
+          fullName: expect.any(String),
+          email: userEmail,
+          photoUrl: null,
+          verificationStatus: 'UNVERIFIED',
+          ratingAverage: expect.any(Number),
+          reviewsCount: expect.any(Number),
+        }),
+      );
+      expect(JSON.stringify(res.body)).not.toMatch(/password|\$2[aby]\$/);
+    });
+
+    it('la foto se puede definir y quitar, y se refleja en el perfil', async () => {
+      const url = 'https://images.example.com/fotos/perfil.jpg';
+      await http.patch('/api/user/me').set(auth(token)).send({ photoUrl: url }).expect(200);
+      expect((await http.get('/api/user/me').set(auth(token)).expect(200)).body.photoUrl).toBe(url);
+      expect((await http.get(`/api/user/${userId}`).expect(200)).body.photoUrl).toBe(url);
+
+      await http.patch('/api/user/me').set(auth(token)).send({ photoUrl: null }).expect(200);
+      expect((await http.get('/api/user/me').set(auth(token)).expect(200)).body.photoUrl).toBeNull();
+    });
+
+    it('rechaza una foto que no es una URL http(s)', async () => {
+      await http
+        .patch('/api/user/me')
+        .set(auth(token))
+        .send({ photoUrl: 'javascript:alert(1)' })
+        .expect(400);
+    });
   });
 
   it('PATCH /user/me/password cambia la contraseña con la actual correcta', async () => {

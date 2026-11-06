@@ -1,11 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { Product } from '../product/entities/product.entity';
 import { ProductStatus } from '../product/enums/product-status.enum';
 import { ProductService } from '../product/product.service';
 import { Transaction } from './entities/transaction.entity';
@@ -59,6 +60,18 @@ describe('TransactionService', () => {
   const productService = {
     findById: jest.fn(),
     updateStatus: jest.fn(),
+    invalidateFeedCache: jest.fn(),
+  };
+  // EntityManager de la transacción de base de datos usada en update (HU-17).
+  const manager = {
+    findOne: jest.fn(),
+    create: jest.fn((_entity: unknown, value: object) => ({ id: 't1', ...value })),
+    save: jest.fn(async (value: unknown) => value),
+  };
+  const dataSource = {
+    transaction: jest.fn(async (work: (m: typeof manager) => unknown) =>
+      work(manager),
+    ),
   };
 
   beforeEach(async () => {
@@ -71,6 +84,7 @@ describe('TransactionService', () => {
           useValue: transactionRepository,
         },
         { provide: ProductService, useValue: productService },
+        { provide: getDataSourceToken(), useValue: dataSource },
       ],
     }).compile();
 
@@ -82,102 +96,128 @@ describe('TransactionService', () => {
     expect(service).toBeDefined();
   });
 
-  it('create reserva el producto y guarda la transaccion', async () => {
-    // Arrange
-    const product = makeProduct();
-    const transaction = makeTransaction({ product });
-    productService.findById.mockResolvedValue(product);
-    transactionRepository.findOne.mockResolvedValue(null);
-    transactionRepository.create.mockReturnValue(transaction);
-    transactionRepository.save.mockResolvedValue(transaction);
+  describe('create (HU-15 · reserva sin carreras)', () => {
+    /** manager.findOne devuelve el producto o la transacción activa según la entidad. */
+    const givenRows = (product: unknown, active: unknown = null) =>
+      manager.findOne.mockImplementation(async (entity: unknown) =>
+        entity === Transaction ? active : product,
+      );
 
-    // Act
-    const result = await service.create('buyer-1', { productId: 'p1' });
+    it('reserva el producto y guarda la transaccion en la misma transaccion de base de datos', async () => {
+      // Arrange
+      givenRows(makeProduct());
 
-    // Assert
-    expect(productService.updateStatus).toHaveBeenCalledWith(
-      'p1',
-      ProductStatus.RESERVED,
-    );
-    expect(transactionRepository.create).toHaveBeenCalledWith({
-      productId: 'p1',
-      message: null,
-      buyerId: 'buyer-1',
-      sellerId: 'seller-1',
-      status: TransactionStatus.PENDING,
+      // Act
+      const result = await service.create('buyer-1', { productId: 'p1' });
+
+      // Assert
+      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+      expect(manager.create).toHaveBeenCalledWith(Transaction, {
+        productId: 'p1',
+        message: null,
+        buyerId: 'buyer-1',
+        sellerId: 'seller-1',
+        status: TransactionStatus.PENDING,
+      });
+      expect(productService.updateStatus).toHaveBeenCalledWith(
+        'p1',
+        ProductStatus.RESERVED,
+        manager,
+      );
+      expect(productService.invalidateFeedCache).toHaveBeenCalledWith('granada');
+      expect(result).toMatchObject({
+        id: 't1',
+        productId: 'p1',
+        buyerId: 'buyer-1',
+        sellerId: 'seller-1',
+        status: TransactionStatus.PENDING,
+        product: expect.objectContaining({ status: ProductStatus.RESERVED }),
+      });
     });
-    expect(result).toMatchObject({
-      id: 't1',
-      productId: 'p1',
-      buyerId: 'buyer-1',
-      sellerId: 'seller-1',
-      status: TransactionStatus.PENDING,
+
+    it('bloquea la fila del producto (SELECT ... FOR UPDATE)', async () => {
+      // Arrange
+      givenRows(makeProduct());
+
+      // Act
+      await service.create('buyer-1', { productId: 'p1' });
+
+      // Assert
+      expect(manager.findOne).toHaveBeenCalledWith(Product, {
+        where: { id: 'p1' },
+        lock: { mode: 'pessimistic_write' },
+      });
     });
-  });
 
-  it('create rechaza si ya hay transaccion activa', async () => {
-    // Arrange
-    productService.findById.mockResolvedValue(makeProduct());
-    transactionRepository.findOne.mockResolvedValue(makeTransaction());
+    it('404 si el producto no existe', async () => {
+      // Arrange
+      givenRows(null);
 
-    // Act
-    const result = service.create('buyer-1', { productId: 'p1' });
+      // Act / Assert
+      await expect(
+        service.create('buyer-1', { productId: 'p1' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
 
-    // Assert
-    await expect(result).rejects.toBeInstanceOf(ConflictException);
-    expect(productService.updateStatus).not.toHaveBeenCalled();
-  });
+    it('rechaza si ya hay transaccion activa', async () => {
+      // Arrange
+      givenRows(makeProduct(), makeTransaction());
 
-  it('create libera el producto si falla el guardado', async () => {
-    // Arrange
-    productService.findById.mockResolvedValue(makeProduct());
-    transactionRepository.findOne.mockResolvedValue(null);
-    transactionRepository.create.mockReturnValue(makeTransaction());
-    transactionRepository.save.mockRejectedValue(new Error('db'));
+      // Act / Assert
+      await expect(
+        service.create('buyer-1', { productId: 'p1' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(productService.updateStatus).not.toHaveBeenCalled();
+    });
 
-    // Act
-    const result = service.create('buyer-1', { productId: 'p1' });
+    it('convierte la violacion del indice unico (23505) en 409', async () => {
+      // Arrange
+      givenRows(makeProduct());
+      manager.save.mockRejectedValueOnce(Object.assign(new Error('dup'), { code: '23505' }));
 
-    // Assert
-    await expect(result).rejects.toThrow('db');
-    expect(productService.updateStatus).toHaveBeenNthCalledWith(
-      1,
-      'p1',
-      ProductStatus.RESERVED,
+      // Act / Assert
+      await expect(
+        service.create('buyer-1', { productId: 'p1' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(productService.invalidateFeedCache).not.toHaveBeenCalled();
+    });
+
+    it('propaga otros errores sin tocar la cache (la base de datos revierte todo)', async () => {
+      // Arrange
+      givenRows(makeProduct());
+      manager.save.mockRejectedValueOnce(new Error('db'));
+
+      // Act / Assert
+      await expect(service.create('buyer-1', { productId: 'p1' })).rejects.toThrow('db');
+      expect(productService.updateStatus).not.toHaveBeenCalled();
+      expect(productService.invalidateFeedCache).not.toHaveBeenCalled();
+    });
+
+    it('rechaza compras del propio vendedor', async () => {
+      // Arrange
+      givenRows(makeProduct({ sellerId: 'seller-1' }));
+
+      // Act / Assert
+      await expect(
+        service.create('seller-1', { productId: 'p1' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it.each([ProductStatus.RESERVED, ProductStatus.SOLD, ProductStatus.REMOVED])(
+      'rechaza productos en estado %s',
+      async (status) => {
+        // Arrange
+        givenRows(makeProduct({ status }));
+
+        // Act / Assert
+        await expect(
+          service.create('buyer-1', { productId: 'p1' }),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(manager.save).not.toHaveBeenCalled();
+      },
     );
-    expect(productService.updateStatus).toHaveBeenNthCalledWith(
-      2,
-      'p1',
-      ProductStatus.AVAILABLE,
-    );
-  });
-
-  it('create rechaza compras del propio vendedor', async () => {
-    // Arrange
-    productService.findById.mockResolvedValue(
-      makeProduct({ sellerId: 'seller-1' }),
-    );
-
-    // Act
-    const result = service.create('seller-1', { productId: 'p1' });
-
-    // Assert
-    await expect(result).rejects.toBeInstanceOf(ForbiddenException);
-    expect(transactionRepository.save).not.toHaveBeenCalled();
-  });
-
-  it('create rechaza productos que no estan disponibles', async () => {
-    // Arrange
-    productService.findById.mockResolvedValue(
-      makeProduct({ status: ProductStatus.RESERVED }),
-    );
-
-    // Act
-    const result = service.create('buyer-1', { productId: 'p1' });
-
-    // Assert
-    await expect(result).rejects.toBeInstanceOf(ConflictException);
-    expect(transactionRepository.save).not.toHaveBeenCalled();
   });
 
   it('findOne solo permite participantes', async () => {
@@ -222,113 +262,274 @@ describe('TransactionService', () => {
     expect(result).toHaveLength(1);
   });
 
-  it('confirmPoint guarda punto, horario y cambia a AGREED_POINT', async () => {
-    // Arrange
-    const transaction = makeTransaction();
-    transactionRepository.findOne.mockResolvedValue(transaction);
-    transactionRepository.save.mockImplementation(async (value) => value);
+  describe('confirmPoint (HU-16 · acordar una entrega)', () => {
+    const FUTURO = '2099-10-05T15:00:00Z';
 
-    // Act
-    const result = await service.confirmPoint('t1', 'buyer-1', {
-      safePointId: 'sp-1',
-      scheduledTime: '2026-10-05T15:00:00Z',
+    it('guarda punto y horario y cambia a AGREED_POINT (criterios 1 y 2)', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction());
+      transactionRepository.findOne.mockResolvedValue(
+        makeTransaction({
+          status: TransactionStatus.AGREED_POINT,
+          safePointId: 'sp-1',
+          scheduledTime: new Date(FUTURO),
+        }),
+      );
+
+      // Act
+      const result = await service.confirmPoint('t1', 'buyer-1', {
+        safePointId: 'sp-1',
+        scheduledTime: FUTURO,
+      });
+
+      // Assert
+      expect(manager.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          safePointId: 'sp-1',
+          scheduledTime: new Date(FUTURO),
+          status: TransactionStatus.AGREED_POINT,
+        }),
+      );
+      expect(result.status).toBe(TransactionStatus.AGREED_POINT);
+      expect(result.safePointId).toBe('sp-1');
     });
 
-    // Assert
-    expect(transactionRepository.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        safePointId: 'sp-1',
+    it('bloquea la fila de la transaccion', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction());
+      transactionRepository.findOne.mockResolvedValue(makeTransaction());
+
+      // Act
+      await service.confirmPoint('t1', 'seller-1', { safePointId: 'sp-1', scheduledTime: FUTURO });
+
+      // Assert
+      expect(manager.findOne).toHaveBeenCalledWith(Transaction, {
+        where: { id: 't1' },
+        lock: { mode: 'pessimistic_write' },
+      });
+    });
+
+    it('rechaza con 403 a una persona ajena (criterio 3)', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction());
+
+      // Act / Assert
+      await expect(
+        service.confirmPoint('t1', 'otro', { safePointId: 'sp-1', scheduledTime: FUTURO }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['una fecha invalida', 'fecha-mala'],
+      ['un horario en el pasado', '2020-01-01T10:00:00Z'],
+    ])('rechaza con 400 %s', async (_label, scheduledTime) => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction());
+
+      // Act / Assert
+      await expect(
+        service.confirmPoint('t1', 'buyer-1', { safePointId: 'sp-1', scheduledTime }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      TransactionStatus.AGREED_POINT,
+      TransactionStatus.CANCELLED,
+      TransactionStatus.COMPLETED,
+    ])('rechaza con 409 si la transaccion esta %s', async (status) => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction({ status }));
+
+      // Act / Assert
+      await expect(
+        service.confirmPoint('t1', 'buyer-1', { safePointId: 'sp-1', scheduledTime: FUTURO }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it('404 si la transaccion no existe', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(null);
+
+      // Act / Assert
+      await expect(
+        service.confirmPoint('t1', 'buyer-1', { safePointId: 'sp-1', scheduledTime: FUTURO }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe('update (HU-17 · finalizar o cancelar)', () => {
+    const agreed = (over: Partial<Transaction> = {}) =>
+      makeTransaction({
         status: TransactionStatus.AGREED_POINT,
-      }),
-    );
-    expect(result.status).toBe(TransactionStatus.AGREED_POINT);
-    expect(result.safePointId).toBe('sp-1');
-  });
-
-  it('confirmPoint rechaza fechas invalidas, no participantes y estados no pendientes', async () => {
-    // Arrange
-    transactionRepository.findOne.mockResolvedValue(makeTransaction());
-
-    // Act / Assert
-    await expect(
-      service.confirmPoint('t1', 'otro', {
         safePointId: 'sp-1',
-        scheduledTime: '2026-10-05T15:00:00Z',
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+        scheduledTime: new Date('2026-10-05T15:00:00Z'),
+        ...over,
+      });
 
-    await expect(
-      service.confirmPoint('t1', 'buyer-1', {
-        safePointId: 'sp-1',
-        scheduledTime: 'fecha-mala',
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
+    /** Simula la recarga posterior al commit, con el producto ya actualizado. */
+    const reloadAs = (status: TransactionStatus, productStatus: ProductStatus) =>
+      transactionRepository.findOne.mockResolvedValue(
+        makeTransaction({
+          status,
+          product: makeProduct({ status: productStatus }) as any,
+        }),
+      );
 
-    transactionRepository.findOne.mockResolvedValue(
-      makeTransaction({ status: TransactionStatus.AGREED_POINT }),
-    );
-    await expect(
-      service.confirmPoint('t1', 'buyer-1', {
-        safePointId: 'sp-1',
-        scheduledTime: '2026-10-05T15:00:00Z',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
-  });
+    it('completa: la transaccion queda COMPLETED y el producto pasa a SOLD (criterio 1)', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(agreed());
+      reloadAs(TransactionStatus.COMPLETED, ProductStatus.SOLD);
 
-  it('update rechaza transiciones invalidas y AGREED_POINT sin punto confirmado', async () => {
-    // Arrange
-    transactionRepository.findOne.mockResolvedValue(makeTransaction());
+      // Act
+      const result = await service.update('t1', 'seller-1', {
+        status: TransactionStatus.COMPLETED,
+      });
 
-    // Act / Assert
-    await expect(
-      service.update('t1', 'buyer-1', { status: TransactionStatus.COMPLETED }),
-    ).rejects.toBeInstanceOf(ConflictException);
-    await expect(
-      service.update('t1', 'buyer-1', {
-        status: TransactionStatus.AGREED_POINT,
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-  });
-
-  it('update a COMPLETED marca el producto como SOLD', async () => {
-    // Arrange
-    const transaction = makeTransaction({
-      status: TransactionStatus.AGREED_POINT,
-      safePointId: 'sp-1',
-      scheduledTime: new Date('2026-10-05T15:00:00Z'),
-    });
-    transactionRepository.findOne.mockResolvedValue(transaction);
-    transactionRepository.save.mockImplementation(async (value) => value);
-
-    // Act
-    const result = await service.update('t1', 'seller-1', {
-      status: TransactionStatus.COMPLETED,
+      // Assert
+      expect(manager.save).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 't1', status: TransactionStatus.COMPLETED }),
+      );
+      expect(productService.updateStatus).toHaveBeenCalledWith(
+        'p1',
+        ProductStatus.SOLD,
+        manager,
+      );
+      expect(result.status).toBe(TransactionStatus.COMPLETED);
+      expect(result.product?.status).toBe(ProductStatus.SOLD);
+      expect(productService.invalidateFeedCache).toHaveBeenCalledWith('granada');
     });
 
-    // Assert
-    expect(productService.updateStatus).toHaveBeenCalledWith(
-      'p1',
-      ProductStatus.SOLD,
+    it.each([
+      ['PENDING', makeTransaction()],
+      ['AGREED_POINT', agreed()],
+    ])(
+      'cancela desde %s: queda CANCELLED y libera el producto (criterio 2)',
+      async (_from, transaction) => {
+        // Arrange
+        manager.findOne.mockResolvedValue(transaction);
+        reloadAs(TransactionStatus.CANCELLED, ProductStatus.AVAILABLE);
+
+        // Act
+        const result = await service.update('t1', 'buyer-1', {
+          status: TransactionStatus.CANCELLED,
+        });
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({ status: TransactionStatus.CANCELLED }),
+        );
+        expect(productService.updateStatus).toHaveBeenCalledWith(
+          'p1',
+          ProductStatus.AVAILABLE,
+          manager,
+        );
+        expect(result.status).toBe(TransactionStatus.CANCELLED);
+        expect(result.product?.status).toBe(ProductStatus.AVAILABLE);
+      },
     );
-    expect(result.status).toBe(TransactionStatus.COMPLETED);
-  });
 
-  it('update a CANCELLED libera el producto', async () => {
-    // Arrange
-    const transaction = makeTransaction();
-    transactionRepository.findOne.mockResolvedValue(transaction);
-    transactionRepository.save.mockImplementation(async (value) => value);
+    it.each([TransactionStatus.COMPLETED, TransactionStatus.CANCELLED])(
+      'rechaza con 403 a quien no es comprador ni vendedor al pedir %s (criterio 3)',
+      async (status) => {
+        // Arrange
+        manager.findOne.mockResolvedValue(agreed());
 
-    // Act
-    const result = await service.update('t1', 'buyer-1', {
-      status: TransactionStatus.CANCELLED,
+        // Act / Assert
+        await expect(
+          service.update('t1', 'intruso', { status }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(manager.save).not.toHaveBeenCalled();
+        expect(productService.updateStatus).not.toHaveBeenCalled();
+      },
+    );
+
+    it('bloquea la fila de la transaccion dentro de una transaccion de base de datos', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(agreed());
+      reloadAs(TransactionStatus.COMPLETED, ProductStatus.SOLD);
+
+      // Act
+      await service.update('t1', 'buyer-1', { status: TransactionStatus.COMPLETED });
+
+      // Assert
+      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+      expect(manager.findOne).toHaveBeenCalledWith(Transaction, {
+        where: { id: 't1' },
+        lock: { mode: 'pessimistic_write' },
+      });
     });
 
-    // Assert
-    expect(productService.updateStatus).toHaveBeenCalledWith(
-      'p1',
-      ProductStatus.AVAILABLE,
-    );
-    expect(result.status).toBe(TransactionStatus.CANCELLED);
+    it('devuelve 404 si la transaccion no existe', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(null);
+
+      // Act / Assert
+      await expect(
+        service.update('t1', 'buyer-1', { status: TransactionStatus.CANCELLED }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it.each([
+      ['completar sin punto acordado', makeTransaction(), TransactionStatus.COMPLETED],
+      ['cancelar una completada', agreed({ status: TransactionStatus.COMPLETED }), TransactionStatus.CANCELLED],
+      ['completar una cancelada', agreed({ status: TransactionStatus.CANCELLED }), TransactionStatus.COMPLETED],
+      ['volver a PENDING', agreed(), TransactionStatus.PENDING],
+    ])('rechaza con 409: %s', async (_label, transaction, status) => {
+      // Arrange
+      manager.findOne.mockResolvedValue(transaction);
+
+      // Act / Assert
+      await expect(
+        service.update('t1', 'buyer-1', { status }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(productService.updateStatus).not.toHaveBeenCalled();
+    });
+
+    it('rechaza AGREED_POINT sin punto ni horario confirmados', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(makeTransaction());
+
+      // Act / Assert
+      await expect(
+        service.update('t1', 'buyer-1', { status: TransactionStatus.AGREED_POINT }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('pedir el estado que ya tiene no toca el producto (repetir cancelar no libera una nueva reserva)', async () => {
+      // Arrange
+      manager.findOne.mockResolvedValue(
+        makeTransaction({ status: TransactionStatus.CANCELLED }),
+      );
+      reloadAs(TransactionStatus.CANCELLED, ProductStatus.RESERVED);
+
+      // Act
+      const result = await service.update('t1', 'buyer-1', {
+        status: TransactionStatus.CANCELLED,
+      });
+
+      // Assert
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(productService.updateStatus).not.toHaveBeenCalled();
+      expect(productService.invalidateFeedCache).not.toHaveBeenCalled();
+      expect(result.status).toBe(TransactionStatus.CANCELLED);
+    });
+
+    it('si falla el cambio del producto, el error se propaga y no se devuelve la transaccion', async () => {
+      // Arrange: la base de datos revierte la transacción al recibir el error.
+      manager.findOne.mockResolvedValue(agreed());
+      productService.updateStatus.mockRejectedValueOnce(
+        new ConflictException('Transición de estado inválida'),
+      );
+
+      // Act / Assert
+      await expect(
+        service.update('t1', 'seller-1', { status: TransactionStatus.COMPLETED }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(transactionRepository.findOne).not.toHaveBeenCalled();
+    });
   });
 });

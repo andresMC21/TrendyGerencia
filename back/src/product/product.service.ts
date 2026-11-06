@@ -3,12 +3,13 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { GeoPoint, toGeoJson } from './interfaces/geo.interface';
 import { PaginatedResult } from './interfaces/paginated-result.interface';
 import { ValidRoles } from '../user/enums/valid-roles.enum';
@@ -35,6 +36,12 @@ const ALLOWED_STATUS_TRANSITIONS: Record<ProductStatus, ProductStatus[]> = {
   [ProductStatus.SOLD]: [],
   [ProductStatus.REMOVED]: [],
 };
+
+/** Mensaje del 409 al intentar retirar un producto que no está AVAILABLE (HU-13). */
+const removeConflictMessage = (status: ProductStatus) =>
+  status === ProductStatus.RESERVED
+    ? 'No se puede retirar un producto reservado: primero cancela la transacción activa'
+    : `No se puede retirar un producto en estado ${status}`;
 
 const MAX_CACHE_ENTRIES = 500;
 
@@ -70,7 +77,6 @@ export class ProductService {
     query: FindProductsQueryDto,
   ): Promise<PaginatedResult<ProductDto>> {
     const {
-      neighborhood,
       lat,
       lng,
       radius = 5,
@@ -88,6 +94,7 @@ export class ProductService {
     if (sort === ProductSort.DISTANCE && !hasGeo) {
       throw new BadRequestException('sort=distance requiere lat y lng');
     }
+    const neighborhood = this.resolveNeighborhood(query);
 
     const cacheKey = this.buildFeedCacheKey(query);
     const cached = this.feedCache.get(cacheKey);
@@ -207,19 +214,40 @@ export class ProductService {
 
   // ───────────────────────── Escritura ─────────────────────────
 
-  /** POST /products */
+  /**
+   * POST /products — HU-08 · Publicar un producto.
+   * Los campos se copian uno a uno (no se esparce el DTO) para que nada ajeno
+   * al contrato, como id, status o viewsCount, llegue a la entidad aunque el
+   * servicio se invoque sin el ValidationPipe. El vendedor viene del JWT.
+   */
   async create(sellerId: string, dto: CreateProductDto): Promise<ProductDto> {
-    const { location, ...rest } = dto;
     const product = this.productRepository.create({
-      ...rest,
+      title: dto.title,
+      description: dto.description,
+      category: dto.category,
+      condition: dto.condition,
+      neighborhoodId: dto.neighborhoodId,
       price: dto.price ?? 0,
       acceptsBarter: dto.acceptsBarter ?? false,
       estimatedWeightKg: dto.estimatedWeightKg ?? null,
       sellerId,
       status: ProductStatus.AVAILABLE,
-      location: toGeoJson(location),
+      location: toGeoJson(dto.location),
     });
-    const saved = await this.productRepository.save(product);
+
+    let saved: Product;
+    try {
+      saved = await this.productRepository.save(product);
+    } catch (error) {
+      this.logger.error(
+        `No se pudo publicar el producto del vendedor ${sellerId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new InternalServerErrorException(
+        'No se pudo publicar el producto. Inténtalo de nuevo más tarde.',
+      );
+    }
+
     await this.invalidateFeedCache(saved.neighborhoodId);
     return ProductDto.fromEntity(saved);
   }
@@ -254,8 +282,16 @@ export class ProductService {
   }
 
   /**
-   * DELETE /products/:id — borrado lógico (status = REMOVED).
-   * Lo puede hacer el dueño, o un ADMIN/MODERATOR (moderación).
+   * HU-13 · Retirar una publicación: DELETE /products/:id (borrado lógico).
+   *
+   * - Solo el dueño (o un ADMIN/MODERATOR, por moderación) puede retirarla;
+   *   cualquier otro usuario recibe 403.
+   * - El registro se conserva con status = REMOVED: sus transacciones, reseñas
+   *   y favoritos siguen existiendo, pero deja de aparecer en el feed y en el
+   *   detalle público.
+   * - Solo se retira lo que está AVAILABLE. El UPDATE es condicional
+   *   (WHERE status = 'AVAILABLE'), así que si un comprador lo reserva al mismo
+   *   tiempo, gana la reserva y el retiro responde 409.
    */
   async remove(
     id: string,
@@ -269,12 +305,36 @@ export class ProductService {
     if (!this.canModerate(roles)) this.assertOwnership(product, userId);
 
     if (product.status !== ProductStatus.AVAILABLE) {
+      throw new ConflictException(removeConflictMessage(product.status));
+    }
+    const result = await this.productRepository.update(
+      { id, status: ProductStatus.AVAILABLE },
+      { status: ProductStatus.REMOVED },
+    );
+    if (!result.affected) {
+      const current = await this.productRepository.findOneBy({ id });
       throw new ConflictException(
-        `No se puede eliminar un producto en estado ${product.status}`,
+        removeConflictMessage(current?.status ?? ProductStatus.REMOVED),
       );
     }
-    await this.productRepository.update({ id }, { status: ProductStatus.REMOVED });
     await this.invalidateFeedCache(product.neighborhoodId);
+  }
+
+  /**
+   * HU-13 · GET /products/mine: publicaciones del vendedor autenticado en
+   * cualquier estado, incluidas las retiradas (el registro se conserva).
+   */
+  async findMine(sellerId: string): Promise<ProductDto[]> {
+    const products = await this.productRepository.find({
+      where: { sellerId },
+      order: { createdAt: 'DESC' },
+    });
+    const counts = await this.countFavorites(products.map((p) => p.id));
+    return products.map((product) =>
+      ProductDto.fromEntity(product, {
+        favoritesCount: counts.get(product.id) ?? 0,
+      }),
+    );
   }
 
 
@@ -307,9 +367,28 @@ export class ProductService {
     return { isFavorite: true };
   }
 
-  /** Lo usa TransactionService: reserva (RESERVED), venta (SOLD) o liberación (AVAILABLE). */
-  async updateStatus(id: string, status: ProductStatus): Promise<void> {
-    const product = await this.findById(id);
+  /**
+   * Lo usa TransactionService: reserva (RESERVED), venta (SOLD) o liberación (AVAILABLE).
+   *
+   * Con `manager` el cambio se hace dentro de la transacción de base de datos
+   * del llamador y bloquea la fila del producto (SELECT ... FOR UPDATE), para
+   * que transacción y producto se guarden juntos o no se guarde ninguno (HU-17).
+   */
+  async updateStatus(
+    id: string,
+    status: ProductStatus,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const repository = manager
+      ? manager.getRepository(Product)
+      : this.productRepository;
+    const product = manager
+      ? await repository.findOne({
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+        })
+      : await repository.findOneBy({ id });
+    if (!product) throw new NotFoundException(`Product with id ${id} not found`);
     if (product.status === status) return;
 
     if (!ALLOWED_STATUS_TRANSITIONS[product.status].includes(status)) {
@@ -317,7 +396,18 @@ export class ProductService {
         `Transición de estado inválida: ${product.status} → ${status}`,
       );
     }
-    await this.productRepository.update({ id }, { status });
+    // UPDATE condicional: si otro proceso cambió el estado entre la lectura y
+    // la escritura (por ejemplo, lo retiraron mientras se reservaba), no se
+    // sobrescribe y se responde 409.
+    const result = await repository.update(
+      { id, status: product.status },
+      { status },
+    );
+    if (!result.affected) {
+      throw new ConflictException(
+        'El estado del producto cambió mientras tanto; vuelve a intentarlo',
+      );
+    }
     await this.invalidateFeedCache(product.neighborhoodId);
   }
 
@@ -347,7 +437,7 @@ export class ProductService {
       page: query.page ?? 1,
       limit: query.limit ?? 20,
     };
-    return `feed:${query.neighborhood ?? 'all'}:${JSON.stringify(q)}`;
+    return `feed:${this.resolveNeighborhood(query) ?? 'all'}:${JSON.stringify(q)}`;
   }
 
   /**
@@ -372,6 +462,11 @@ export class ProductService {
   }
 
   // ───────────────────────── Helpers ─────────────────────────
+
+  /** `neighborhoodId` manda sobre su alias; un valor vacío equivale a no filtrar. */
+  private resolveNeighborhood(query: FindProductsQueryDto): string | undefined {
+    return query.neighborhoodId || query.neighborhood || undefined;
+  }
 
   private applySort(
     qb: ReturnType<Repository<Product>['createQueryBuilder']>,

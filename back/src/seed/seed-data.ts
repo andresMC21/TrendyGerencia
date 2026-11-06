@@ -41,6 +41,16 @@ export const seedUsers = [
     verificationStatus: VerificationStatus.UNVERIFIED,
     role: [ValidRoles.USER],
   },
+  {
+    // Usuario fijo para probar la app móvil (HU-01): demo@trendy.local / Trendy123
+    id: '55555555-5555-4555-8555-555555555555',
+    email: 'demo@trendy.local',
+    password: 'Trendy123',
+    fullName: 'Usuario Demo',
+    info: 'Cuenta de demostración de la app móvil',
+    verificationStatus: VerificationStatus.UNVERIFIED,
+    role: [ValidRoles.USER],
+  },
 ] as const;
 
 export const seedProducts = [
@@ -83,7 +93,7 @@ export const seedProducts = [
     category: 'hogar',
     condition: ProductCondition.LIKE_NEW,
     status: ProductStatus.AVAILABLE,
-    location: { lat: 3.4695, lng: -76.5225 },
+    location: { lat: 3.4335, lng: -76.5441 },
     neighborhoodId: 'san-fernando',
     estimatedWeightKg: 9,
   },

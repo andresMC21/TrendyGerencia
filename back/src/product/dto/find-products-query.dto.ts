@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
   IsInt,
@@ -13,13 +13,28 @@ import {
 } from 'class-validator';
 import { ProductCondition } from '../enums/product-condition.enum';
 import { ProductSort } from '../enums/product-sort.enum';
+import { trimLowerString } from './create-product.dto';
 
 export class FindProductsQueryDto {
   @ApiPropertyOptional({
     type: String,
     example: '{{neighborhoodId}}',
-    description: 'Filtra por el identificador del barrio.',
+    description:
+      'HU-09 · Filtra por el identificador del barrio; no distingue mayúsculas.',
   })
+  @Transform(trimLowerString)
+  @IsOptional()
+  @IsString()
+  neighborhoodId?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    deprecated: true,
+    example: '{{neighborhoodId}}',
+    description:
+      'Alias de neighborhoodId, que tiene prioridad si se envían ambos.',
+  })
+  @Transform(trimLowerString)
   @IsOptional()
   @IsString()
   neighborhood?: string;

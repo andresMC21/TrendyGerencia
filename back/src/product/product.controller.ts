@@ -55,14 +55,24 @@ export class ProductController {
   @ApiOperation({
     summary: 'Feed de productos',
     description:
-      'Público, no requiere JWT. Devuelve únicamente productos AVAILABLE. lat y lng deben enviarse juntos; radius se interpreta en kilómetros y solo aplica con ambos. sort=distance también requiere coordenadas.',
+      'HU-09. Público, no requiere JWT. Devuelve únicamente productos AVAILABLE, así que los retirados (REMOVED) nunca aparecen. neighborhoodId filtra por barrio. lat y lng deben enviarse juntos; radius se interpreta en kilómetros y solo aplica con ambos. sort=distance también requiere coordenadas.',
+  })
+  @ApiQuery({
+    name: 'neighborhoodId',
+    type: String,
+    required: false,
+    example: '{{neighborhoodId}}',
+    description:
+      'Filtra por el identificador del barrio; no distingue mayúsculas.',
   })
   @ApiQuery({
     name: 'neighborhood',
     type: String,
     required: false,
+    deprecated: true,
     example: '{{neighborhoodId}}',
-    description: 'Filtra por el identificador del barrio.',
+    description:
+      'Alias de neighborhoodId, que tiene prioridad si se envían ambos.',
   })
   @ApiQuery({
     name: 'lat',
@@ -140,6 +150,26 @@ export class ProductController {
     return this.productService.findAll(query);
   }
 
+  // Va antes de ':id' para que «mine» no se interprete como un id.
+  @Get('mine')
+  @Auth()
+  @ApiOperation({
+    summary: 'Mis publicaciones (HU-13)',
+    description:
+      'Requiere JWT. Devuelve los productos del vendedor autenticado en cualquier estado (AVAILABLE, RESERVED, SOLD y REMOVED), del más reciente al más antiguo. Los retirados se conservan como historial.',
+  })
+  @ApiOkResponse({
+    type: ProductDto,
+    isArray: true,
+    description: 'Publicaciones del usuario autenticado.',
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Error inesperado al consultar las publicaciones.',
+  })
+  findMine(@GetUser() user: User): Promise<ProductDto[]> {
+    return this.productService.findMine(user.id);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Detalle de un producto',
@@ -175,7 +205,7 @@ export class ProductController {
   @ApiOperation({
     summary: 'Publicar un producto',
     description:
-      'Requiere JWT. El vendedor se toma del usuario autenticado; el producto inicia en estado AVAILABLE. Si no se especifican price y acceptsBarter, se usan 0 y false.',
+      'HU-08. Requiere JWT (sin token o con un token inválido responde 401). El vendedor se toma del usuario autenticado y el producto inicia en estado AVAILABLE; el cuerpo no admite sellerId ni status. Título, descripción, categoría, condición, ubicación y barrio son obligatorios; los textos se recortan y la categoría y el barrio se normalizan a minúsculas. Si no se especifican price y acceptsBarter, se usan 0 y false.',
   })
   @ApiBody({
     type: CreateProductDto,
@@ -183,11 +213,12 @@ export class ProductController {
   })
   @ApiCreatedResponse({
     type: ProductDto,
-    description: 'El producto se creó en estado AVAILABLE.',
+    description:
+      'El producto se creó en estado AVAILABLE y vinculado al vendedor autenticado (sellerId).',
   })
   @ApiBadRequestResponse({
     description:
-      'El cuerpo contiene campos no permitidos o valores que no cumplen las validaciones.',
+      'El cuerpo contiene campos no permitidos (por ejemplo sellerId o status), faltan campos obligatorios o hay valores que no cumplen las validaciones.',
   })
   @ApiInternalServerErrorResponse({
     description: 'Error inesperado al crear el producto.',
@@ -249,9 +280,9 @@ export class ProductController {
   @Auth()
   @HttpCode(204)
   @ApiOperation({
-    summary: 'Eliminar un producto (borrado lógico)',
+    summary: 'Retirar una publicación (HU-13, borrado lógico)',
     description:
-      'Requiere JWT. El vendedor o un ADMIN/MODERATOR pueden eliminarlo solo mientras esté AVAILABLE. Se conserva el registro y se cambia el estado a REMOVED.',
+      'Requiere JWT. El vendedor o un ADMIN/MODERATOR pueden retirarla solo mientras esté AVAILABLE; cualquier otro usuario recibe 403. El registro se conserva con estado REMOVED (sus transacciones, reseñas y favoritos se mantienen) y deja de aparecer en el feed y en el detalle público. Un producto reservado responde 409 hasta que se cancele su transacción.',
   })
   @ApiParam({
     name: 'id',

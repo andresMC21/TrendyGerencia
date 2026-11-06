@@ -23,6 +23,7 @@ const makeUser = (overrides: Partial<User> = {}): User =>
     fullName: 'Ana Gomez',
     tokenVersion: 0,
     info: 'Vendedora local',
+    photoUrl: 'https://images.example.com/ana.jpg',
     verificationStatus: VerificationStatus.UNVERIFIED,
     ratingAverage: 4.5,
     reviewsCount: 2,
@@ -46,6 +47,7 @@ describe('UserService', () => {
   let service: UserService;
   let qb: ReturnType<typeof makeQb>;
   const userRepository: any = {
+    exists: jest.fn(),
     create: jest.fn(),
     save: jest.fn(),
     findOne: jest.fn(),
@@ -62,6 +64,7 @@ describe('UserService', () => {
     jest.clearAllMocks();
     qb = makeQb();
     Object.assign(userRepository, {
+      exists: jest.fn().mockResolvedValue(false),
       create: jest.fn((value) => ({ id: 'user-1', ...value })),
       save: jest.fn(async (value) => value),
       findOne: jest.fn(),
@@ -119,6 +122,93 @@ describe('UserService', () => {
         token: 'signed-token',
       });
       expect(result).not.toHaveProperty('password');
+    });
+
+    it('crea la cuenta como USER activa y sin verificar (HU-01 · criterio 1)', async () => {
+      // Act
+      const result = await service.create({
+        email: 'nueva@example.com',
+        password: 'Password1',
+        fullName: 'Nueva Persona',
+      });
+
+      // Assert
+      expect(userRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          role: [ValidRoles.USER],
+          isActive: true,
+          verificationStatus: VerificationStatus.UNVERIFIED,
+        }),
+      );
+      expect(result).toMatchObject({
+        role: [ValidRoles.USER],
+        isActive: true,
+        verificationStatus: VerificationStatus.UNVERIFIED,
+        token: 'signed-token',
+      });
+      expect(result).not.toHaveProperty('tokenVersion');
+      expect(jwtService.sign).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'user-1', tokenVersion: 0 }),
+      );
+    });
+
+    it('ignora un rol que llegue al servicio y siempre asigna USER', async () => {
+      // Arrange: el ValidationPipe ya rechaza "role", pero el servicio no
+      // debe confiar en ello (defensa en profundidad).
+      const dto = {
+        email: 'colado@example.com',
+        password: 'Password1',
+        fullName: 'Intento Admin',
+        role: [ValidRoles.ADMIN],
+        isActive: false,
+      } as any;
+
+      // Act
+      const result = await service.create(dto);
+
+      // Assert
+      const created = userRepository.create.mock.calls[0][0];
+      expect(created.role).toEqual([ValidRoles.USER]);
+      expect(created.isActive).toBe(true);
+      expect(result.role).toEqual([ValidRoles.USER]);
+    });
+
+    it('normaliza el correo antes de comprobar si ya existe', async () => {
+      // Act
+      await service.create({
+        email: '  Ana@Example.COM ',
+        password: 'Password1',
+        fullName: '  Ana Gomez  ',
+      });
+
+      // Assert
+      expect(userRepository.exists).toHaveBeenCalledWith({
+        where: { email: 'ana@example.com' },
+      });
+      expect(userRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'ana@example.com',
+          fullName: 'Ana Gomez',
+        }),
+      );
+    });
+
+    it('devuelve 409 y no guarda nada si el correo ya existe (HU-01 · criterio 2)', async () => {
+      // Arrange
+      userRepository.exists.mockResolvedValue(true);
+
+      // Act
+      const result = service.create({
+        email: 'ana@example.com',
+        password: 'Password1',
+        fullName: 'Ana Gomez',
+      });
+
+      // Assert
+      await expect(result).rejects.toBeInstanceOf(ConflictException);
+      expect(userRepository.create).not.toHaveBeenCalled();
+      expect(userRepository.save).not.toHaveBeenCalled();
+      expect(jwtService.sign).not.toHaveBeenCalled();
     });
 
     it('convierte duplicados de base de datos en ConflictException', async () => {
@@ -241,6 +331,43 @@ describe('UserService', () => {
         info: 'Nueva bio',
       });
       expect(result.info).toBe('Nueva bio');
+    });
+
+    it('HU-03 · findMe incluye foto, verificación y reputación', () => {
+      // Act
+      const result = service.findMe(makeUser());
+
+      // Assert
+      expect(result).toMatchObject({
+        fullName: 'Ana Gomez',
+        email: 'ana@example.com',
+        photoUrl: 'https://images.example.com/ana.jpg',
+        verificationStatus: VerificationStatus.UNVERIFIED,
+        ratingAverage: 4.5,
+        reviewsCount: 2,
+      });
+    });
+
+    it('HU-03 · findMe devuelve photoUrl null cuando no hay foto', () => {
+      // Act
+      const result = service.findMe(makeUser({ photoUrl: null }));
+
+      // Assert
+      expect(result.photoUrl).toBeNull();
+    });
+
+    it('HU-03 · updateMe guarda la foto de perfil', async () => {
+      // Act
+      const result = await service.updateMe(makeUser({ photoUrl: null }), {
+        photoUrl: 'https://images.example.com/nueva.jpg',
+      });
+
+      // Assert
+      expect(userRepository.preload).toHaveBeenCalledWith({
+        id: 'user-1',
+        photoUrl: 'https://images.example.com/nueva.jpg',
+      });
+      expect(result.photoUrl).toBe('https://images.example.com/nueva.jpg');
     });
 
     it('updateMe devuelve 404 si preload no encuentra el usuario', async () => {

@@ -1,28 +1,61 @@
+# Despliegue en Render (Blueprint). Render despliega la rama `main`:
+# para publicar el sprint hay que llevar develop a main con un PR.
 databases:
-  - name: trendy-app-db
-    databaseName: trendy_app_db
-    user: tr3ndyd3v
+  - name: trendy-gerencia-db
+    databaseName: trendy
+    user: trendy
     plan: free
     region: oregon
 
 services:
+  # API (NestJS). Al arrancar aplica las migraciones; TypeORM crea las
+  # extensiones uuid-ossp y postgis si faltan.
   - type: web
-    name: trendy-app-web
+    name: trendy-gerencia-api
     runtime: node
+    rootDir: back
     plan: free
     region: oregon
     branch: main
-    buildCommand: npm install --include=dev && npm run build
-    startCommand: npm run migration:run:prod && npm run start:prod && npm run seed
+    autoDeployTrigger: commit
+    buildCommand: npm ci --include=dev && npm run build
+    # No se ejecuta el seed en producción: crearía cuentas con contraseñas
+    # públicas (admin@trendy.local / Admin1234). Para una demo, ejecútalo a mano
+    # desde el Shell de Render con `npm run seed` y cambia esas contraseñas.
+    startCommand: npm run migration:run:prod && npm run start:prod
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
         value: '24'
       - key: DATABASE_URL
         fromDatabase:
-          name: trendy-app-db
+          name: trendy-gerencia-db
           property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
       - key: NODE_ENV
         value: production
+      - key: DB_SSL
+        value: 'false'
       - key: TYPEORM_SYNCHRONIZE
         value: 'false'
+
+  # Página web (React + Vite) como sitio estático.
+  - type: web
+    name: trendy-gerencia-web
+    runtime: static
+    rootDir: web
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    # React Router: cualquier ruta (/producto/:id, /transacciones/:id…) sirve index.html.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: '24'
+      - key: VITE_API_URL
+        value: https://trendy-gerencia-api.onrender.com/api

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -78,7 +79,7 @@ describe('ProductService', () => {
       save: jest.fn(async (x) => ({ id: 'p1', viewsCount: 0, createdAt: new Date(), updatedAt: new Date(), ...x })),
       findOne: jest.fn(),
       findOneBy: jest.fn(),
-      update: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
       increment: jest.fn().mockResolvedValue(undefined),
     });
     await build();
@@ -123,6 +124,62 @@ describe('ProductService', () => {
 
       // Assert
       expect(spy).toHaveBeenCalledWith('granada');
+    });
+
+    it('HU-08: vincula al vendedor del JWT y fuerza AVAILABLE aunque el DTO traiga campos ajenos', async () => {
+      // Arrange: simula un DTO que llegó sin pasar por el ValidationPipe.
+      const dto = {
+        title: 'Bici', description: 'd', category: 'deportes',
+        condition: ProductCondition.USED, neighborhoodId: 'granada',
+        location: { lat: 3.4, lng: -76.5 }, price: 1000, acceptsBarter: true,
+        estimatedWeightKg: 12,
+        sellerId: 'intruso', status: ProductStatus.SOLD, id: 'p-falso', viewsCount: 99,
+      } as unknown as Parameters<ProductService['create']>[1];
+
+      // Act
+      const result = await service.create('seller-1', dto);
+
+      // Assert
+      const created = productRepo.create.mock.calls[0][0];
+      expect(created).toEqual({
+        title: 'Bici',
+        description: 'd',
+        category: 'deportes',
+        condition: ProductCondition.USED,
+        neighborhoodId: 'granada',
+        price: 1000,
+        acceptsBarter: true,
+        estimatedWeightKg: 12,
+        sellerId: 'seller-1',
+        status: ProductStatus.AVAILABLE,
+        location: { type: 'Point', coordinates: [-76.5, 3.4] },
+      });
+      expect(result).toMatchObject({
+        id: 'p1',
+        sellerId: 'seller-1',
+        status: ProductStatus.AVAILABLE,
+        favoritesCount: 0,
+        viewsCount: 0,
+      });
+    });
+
+    it('HU-08: si falla el guardado responde 500 controlado y no invalida el caché', async () => {
+      // Arrange
+      productRepo.save.mockRejectedValueOnce(new Error('db caída'));
+      const spy = jest.spyOn(service, 'invalidateFeedCache');
+      const logSpy = jest
+        .spyOn((service as any).logger, 'error')
+        .mockImplementation(() => undefined);
+
+      // Act / Assert
+      await expect(
+        service.create('s', {
+          title: 'Bici', description: 'd', category: 'c', condition: ProductCondition.NEW,
+          neighborhoodId: 'granada', location: { lat: 1, lng: 1 },
+        }),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
+      expect(spy).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalled();
     });
   });
 
@@ -196,6 +253,68 @@ describe('ProductService', () => {
 
       // Assert
       expect(qb.orderBy).toHaveBeenCalledWith(column, dir);
+    });
+
+    it('HU-09 · filtra por neighborhoodId', async () => {
+      // Act
+      await service.findAll({ neighborhoodId: 'granada' });
+
+      // Assert
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'product.neighborhoodId = :neighborhood',
+        { neighborhood: 'granada' },
+      );
+    });
+
+    it('HU-09 · neighborhood sigue funcionando como alias y neighborhoodId tiene prioridad', async () => {
+      // Act
+      await service.findAll({ neighborhood: 'centro' });
+      await service.findAll({ neighborhoodId: 'granada', neighborhood: 'centro' });
+
+      // Assert
+      expect(qb.andWhere).toHaveBeenNthCalledWith(
+        1,
+        'product.neighborhoodId = :neighborhood',
+        { neighborhood: 'centro' },
+      );
+      expect(qb.andWhere).toHaveBeenNthCalledWith(
+        2,
+        'product.neighborhoodId = :neighborhood',
+        { neighborhood: 'granada' },
+      );
+    });
+
+    it('HU-09 · un barrio vacío no filtra', async () => {
+      // Act
+      await service.findAll({ neighborhoodId: '' });
+
+      // Assert
+      expect(qb.andWhere).not.toHaveBeenCalled();
+    });
+
+    it('HU-09 · solo consulta productos AVAILABLE, con o sin barrio', async () => {
+      // Act
+      await service.findAll({});
+      await service.findAll({ neighborhoodId: 'granada' });
+
+      // Assert
+      expect(qb.where).toHaveBeenCalledTimes(2);
+      for (const call of qb.where.mock.calls) {
+        expect(call).toEqual(['product.status = :status', { status: ProductStatus.AVAILABLE }]);
+      }
+    });
+
+    it('HU-09 · retirar un producto saca del caché el feed de su barrio', async () => {
+      // Arrange
+      productRepo.findOneBy.mockResolvedValue(makeProduct());
+      await service.findAll({ neighborhoodId: 'granada' });
+
+      // Act
+      await service.remove('p1', 'seller-1');
+      await service.findAll({ neighborhoodId: 'granada' });
+
+      // Assert
+      expect(qb.getCount).toHaveBeenCalledTimes(2);
     });
 
     it('devuelve una lista vacía', async () => {
@@ -281,6 +400,13 @@ describe('ProductService', () => {
       // Assert
       expect(service.buildFeedCacheKey({ neighborhood: 'granada' })).toMatch(/^feed:granada:/);
       expect(service.buildFeedCacheKey({})).toMatch(/^feed:all:/);
+    });
+    it('HU-09 · comparte la clave entre neighborhoodId y su alias, y un barrio vacío cuenta como all', () => {
+      // Assert
+      expect(service.buildFeedCacheKey({ neighborhoodId: 'granada' })).toBe(
+        service.buildFeedCacheKey({ neighborhood: 'granada' }),
+      );
+      expect(service.buildFeedCacheKey({ neighborhoodId: '' })).toMatch(/^feed:all:/);
     });
   });
 
@@ -440,24 +566,47 @@ describe('ProductService', () => {
       // Assert
       await expect(service.remove('p1', 'otro', [ValidRoles.USER])).rejects.toBeInstanceOf(ForbiddenException);
     });
-    it('409 si está reservado o vendido', async () => {
+    it.each([ProductStatus.RESERVED, ProductStatus.SOLD])('409 si está %s', async (status) => {
+      // Arrange
+      productRepo.findOneBy.mockResolvedValue(makeProduct({ status }));
+
+      // Act / Assert
+      await expect(service.remove('p1', 'seller-1')).rejects.toBeInstanceOf(ConflictException);
+      expect(productRepo.update).not.toHaveBeenCalled();
+    });
+    it('el 409 de un producto reservado explica que hay que cancelar la transacción', async () => {
       // Arrange
       productRepo.findOneBy.mockResolvedValue(makeProduct({ status: ProductStatus.RESERVED }));
 
-      // Act
-
-      // Assert
-      await expect(service.remove('p1', 'seller-1')).rejects.toBeInstanceOf(ConflictException);
+      // Act / Assert
+      await expect(service.remove('p1', 'seller-1')).rejects.toThrow(/cancela la transacción/);
     });
-    it('borrado lógico por el dueño', async () => {
+    it('HU-13 · borrado lógico por el dueño: UPDATE condicional a AVAILABLE e invalida la caché', async () => {
       // Arrange
       productRepo.findOneBy.mockResolvedValue(makeProduct());
+      const invalidate = jest.spyOn(service, 'invalidateFeedCache');
 
       // Act
       await service.remove('p1', 'seller-1');
 
       // Assert
-      expect(productRepo.update).toHaveBeenCalledWith({ id: 'p1' }, { status: ProductStatus.REMOVED });
+      expect(productRepo.update).toHaveBeenCalledWith(
+        { id: 'p1', status: ProductStatus.AVAILABLE },
+        { status: ProductStatus.REMOVED },
+      );
+      expect(invalidate).toHaveBeenCalledWith('granada');
+    });
+    it('HU-13 · si lo reservaron entre la lectura y el UPDATE, responde 409 y no lo retira', async () => {
+      // Arrange
+      productRepo.findOneBy
+        .mockResolvedValueOnce(makeProduct())
+        .mockResolvedValueOnce(makeProduct({ status: ProductStatus.RESERVED }));
+      productRepo.update.mockResolvedValueOnce({ affected: 0 });
+      const invalidate = jest.spyOn(service, 'invalidateFeedCache');
+
+      // Act / Assert
+      await expect(service.remove('p1', 'seller-1')).rejects.toThrow(/reservado/);
+      expect(invalidate).not.toHaveBeenCalled();
     });
     it.each([ValidRoles.ADMIN, ValidRoles.MODERATOR])('%s puede eliminar productos ajenos', async (role) => {
       // Arrange
@@ -468,6 +617,29 @@ describe('ProductService', () => {
 
       // Assert
       expect(productRepo.update).toHaveBeenCalled();
+    });
+  });
+
+  describe('findMine (HU-13)', () => {
+    it('devuelve las publicaciones del vendedor en cualquier estado, las más recientes primero', async () => {
+      // Arrange
+      productRepo.find = jest.fn().mockResolvedValue([
+        makeProduct({ id: 'p2', status: ProductStatus.REMOVED }),
+        makeProduct({ id: 'p1', status: ProductStatus.AVAILABLE }),
+      ]);
+
+      // Act
+      const result = await service.findMine('seller-1');
+
+      // Assert
+      expect(productRepo.find).toHaveBeenCalledWith({
+        where: { sellerId: 'seller-1' },
+        order: { createdAt: 'DESC' },
+      });
+      expect(result.map((p) => [p.id, p.status])).toEqual([
+        ['p2', ProductStatus.REMOVED],
+        ['p1', ProductStatus.AVAILABLE],
+      ]);
     });
   });
 
@@ -542,7 +714,19 @@ describe('ProductService', () => {
       await service.updateStatus('p1', to);
 
       // Assert
-      expect(productRepo.update).toHaveBeenCalledWith({ id: 'p1' }, { status: to });
+      expect(productRepo.update).toHaveBeenCalledWith({ id: 'p1', status: from }, { status: to });
+    });
+    it('409 si el estado cambió entre la lectura y la escritura (no lo sobrescribe)', async () => {
+      // Arrange: se leyó AVAILABLE, pero alguien lo retiró antes del UPDATE
+      productRepo.findOneBy.mockResolvedValue(makeProduct({ status: ProductStatus.AVAILABLE }));
+      productRepo.update.mockResolvedValueOnce({ affected: 0 });
+      const invalidate = jest.spyOn(service, 'invalidateFeedCache');
+
+      // Act / Assert
+      await expect(service.updateStatus('p1', ProductStatus.RESERVED)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(invalidate).not.toHaveBeenCalled();
     });
     it.each([
       [ProductStatus.SOLD, ProductStatus.AVAILABLE],
@@ -556,6 +740,46 @@ describe('ProductService', () => {
 
       // Assert
       await expect(service.updateStatus('p1', to)).rejects.toBeInstanceOf(ConflictException);
+    });
+  });
+
+  describe('updateStatus dentro de una transacción de base de datos (HU-17)', () => {
+    const makeManager = (product: unknown) => {
+      const repo = {
+        findOne: jest.fn().mockResolvedValue(product),
+        findOneBy: jest.fn(),
+        update: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      return { repo, manager: { getRepository: jest.fn().mockReturnValue(repo) } as any };
+    };
+
+    it('usa el manager recibido y bloquea la fila del producto', async () => {
+      // Arrange
+      const { repo, manager } = makeManager(makeProduct({ status: ProductStatus.RESERVED }));
+
+      // Act
+      await service.updateStatus('p1', ProductStatus.SOLD, manager);
+
+      // Assert
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        lock: { mode: 'pessimistic_write' },
+      });
+      expect(repo.update).toHaveBeenCalledWith(
+        { id: 'p1', status: ProductStatus.RESERVED },
+        { status: ProductStatus.SOLD },
+      );
+      expect(productRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('404 si el producto no existe dentro de la transacción', async () => {
+      // Arrange
+      const { manager } = makeManager(null);
+
+      // Act / Assert
+      await expect(
+        service.updateStatus('p1', ProductStatus.AVAILABLE, manager),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
 

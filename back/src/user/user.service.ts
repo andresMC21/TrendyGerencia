@@ -22,6 +22,7 @@ import { LoginUserDto } from './dto/login.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { UserProfileDto } from './dto/profile.dto';
 import { RegisterUserDto } from './dto/register.dto';
+import { RegisterResponseDto } from './dto/auth-response.dto';
 import { SearchUserDto } from './dto/search.dto';
 import { SetActiveStatus } from './dto/activeStatus.dto';
 import { UpdateUserDto } from './dto/update.dto';
@@ -45,6 +46,8 @@ type UserSort = {
 
 const BCRYPT_ROUNDS = 10;
 
+const EMAIL_ALREADY_REGISTERED = 'User is already registered. Try to login';
+
 /** Mientras la verificación esté en alguno de estos estados, el nombre no se puede cambiar. */
 const NAME_LOCKED_STATUSES: VerificationStatus[] = [
   VerificationStatus.VERIFIED,
@@ -65,28 +68,50 @@ export class UserService {
   // Auth
   // ---------------------------------------------------------------------------
 
-  async create(registerDto: RegisterUserDto) {
-    const { password, ...userDetails } = registerDto;
+  /**
+   * HU-01 · Crear una cuenta.
+   *
+   * - Datos válidos y correo único → cuenta USER activa y JWT (201).
+   * - Correo ya registrado → 409, sin crear un segundo registro.
+   * - El rol, el estado activo y la verificación los fija el servidor; nunca
+   *   se toman del cuerpo de la petición.
+   */
+  async create(registerDto: RegisterUserDto): Promise<RegisterResponseDto> {
+    const email = registerDto.email.toLowerCase().trim();
+    const fullName = registerDto.fullName.trim();
+
+    const alreadyRegistered = await this.userRepository.exists({
+      where: { email },
+    });
+
+    if (alreadyRegistered) {
+      throw new ConflictException(EMAIL_ALREADY_REGISTERED);
+    }
 
     try {
       const user = this.userRepository.create({
-        ...userDetails,
-        password: await this.encryptPassword(password),
+        email,
+        fullName,
+        password: await this.encryptPassword(registerDto.password),
+        role: [ValidRoles.USER],
+        isActive: true,
+        verificationStatus: VerificationStatus.UNVERIFIED,
       });
 
-      await this.userRepository.save(user);
-      const { password: _password, tokenVersion: _tokenVersion, ...safeUser } = user;
+      const saved = await this.userRepository.save(user);
 
       return {
-        ...safeUser,
+        ...UserProfileDto.fromEntity(saved),
         token: this.getJwtToken({
-          id: user.id,
-          email: user.email,
-          tokenVersion: user.tokenVersion,
+          id: saved.id,
+          email: saved.email,
+          tokenVersion: saved.tokenVersion ?? 0,
         }),
       };
     } catch (error) {
-      this.handleException(error);
+      // La restricción UNIQUE de la base de datos cubre el caso de dos
+      // registros simultáneos con el mismo correo (código 23505 → 409).
+      this.handleException(error, EMAIL_ALREADY_REGISTERED);
     }
   }
 
@@ -523,7 +548,7 @@ export class UserService {
 
   private handleException(
     error: unknown,
-    conflictMessage = 'User is already registered. Try to login',
+    conflictMessage = EMAIL_ALREADY_REGISTERED,
   ): never {
     if (error instanceof HttpException) {
       throw error;

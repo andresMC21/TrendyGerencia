@@ -13,6 +13,11 @@ import { User } from '../../user/entities/user.entity';
 import { TransactionStatus } from '../enums/transaction-status.enum';
 
 @Entity()
+// HU-15 · Una sola transacción activa (PENDING o AGREED_POINT) por producto.
+@Index('UQ_transaction_active_product', ['productId'], {
+  unique: true,
+  where: `"status" IN ('PENDING', 'AGREED_POINT')`,
+})
 export class Transaction {
   @PrimaryGeneratedColumn('uuid')
   id: string;
