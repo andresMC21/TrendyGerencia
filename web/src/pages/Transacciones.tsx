@@ -123,7 +123,24 @@ function MetaAcuerdo({ tx, userId, otro }: { tx: Transaction; userId?: string; o
           {otro ?? 'La otra persona'} propone {lugar} · Acepta o rechaza la entrega
         </span>
       );
-    default:
-      return <span className="tx-meta">Acordado: {lugar}</span>;
+    default: {
+      // HU-17 · con el punto acordado, a quién le falta confirmar su parte.
+      const soyVendedor = tx.sellerId === userId;
+      const mia = soyVendedor ? tx.sellerConfirmedAt : tx.buyerConfirmedAt;
+      const suya = soyVendedor ? tx.buyerConfirmedAt : tx.sellerConfirmedAt;
+      const accion = soyVendedor ? 'producto vendido' : 'producto recibido';
+      return (
+        <>
+          <span className="tx-meta">Acordado: {lugar}</span>
+          {!mia ? (
+            <span className="tx-meta tx-meta--todo">
+              {suya ? `${otro ?? 'La otra persona'} ya confirmó · ` : ''}Marca «{accion}» después del encuentro
+            </span>
+          ) : (
+            <span className="tx-meta">Confirmaste tu parte · Falta {otro ?? 'la otra persona'}</span>
+          )}
+        </>
+      );
+    }
   }
 }

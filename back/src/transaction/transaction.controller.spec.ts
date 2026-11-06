@@ -14,6 +14,7 @@ describe('TransactionController', () => {
     proposeMeeting: jest.fn(),
     acceptMeeting: jest.fn(),
     rejectMeeting: jest.fn(),
+    confirmExchange: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -131,5 +132,17 @@ describe('TransactionController', () => {
     // Assert
     expect(result).toBe('rejected');
     expect(transactionService.rejectMeeting).toHaveBeenCalledWith('t1', 'seller-1');
+  });
+  it('confirmExchange delega id y usuario', async () => {
+    // Arrange
+    const user = { id: 'seller-1' } as any;
+    transactionService.confirmExchange.mockResolvedValue('confirmed');
+
+    // Act
+    const result = await controller.confirmExchange('t1', user);
+
+    // Assert
+    expect(result).toBe('confirmed');
+    expect(transactionService.confirmExchange).toHaveBeenCalledWith('t1', 'seller-1');
   });
 });

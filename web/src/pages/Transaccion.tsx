@@ -159,11 +159,15 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
       <h2 className="detail-h">Resultado del intercambio</h2>
       {aviso && <Alert tone="error">{aviso}</Alert>}
       {tx.status === 'COMPLETED' && (
-        <div data-testid="resultado-final">
-          <Alert tone="success">
-            <strong>Intercambio completado.</strong> El producto quedó marcado como vendido.
-          </Alert>
-        </div>
+        <>
+          <Confirmaciones tx={tx} />
+          <div data-testid="resultado-final">
+            <Alert tone="success">
+              <strong>Intercambio completado.</strong> {tx.seller?.fullName ?? 'El vendedor'} marcó
+              el producto como vendido y {tx.buyer?.fullName ?? 'el comprador'} lo recibió.
+            </Alert>
+          </div>
+        </>
       )}
       {tx.status === 'CANCELLED' && (
         <div data-testid="resultado-final">
@@ -182,22 +186,83 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
   );
 }
 
-type Accion = 'COMPLETED' | 'CANCELLED';
+type Accion = 'CONFIRMAR' | 'CANCELLED';
 
-const CONFIRMACION: Record<Accion, { pregunta: string; detalle: string; boton: string }> = {
-  COMPLETED: {
-    pregunta: '¿Ya se encontraron y se hizo el intercambio?',
-    detalle: 'La transacción quedará completada y el producto pasará a vendido. No se puede deshacer.',
-    boton: 'Sí, completar',
-  },
-  CANCELLED: {
-    pregunta: '¿Seguro que quieres cancelar esta transacción?',
-    detalle: 'El producto volverá a estar disponible para otros compradores. No se puede deshacer.',
-    boton: 'Sí, cancelar',
-  },
-};
+/**
+ * HU-17 · Estado de las dos confirmaciones: «producto vendido» del vendedor y
+ * «producto recibido» del comprador. Cada una se pone en verde al confirmarse;
+ * la propia es un botón mientras falte. Con las dos, el intercambio se completa.
+ */
+function Confirmaciones({
+  tx,
+  onConfirmar,
+  disabled,
+}: {
+  tx: Tx;
+  onConfirmar?: () => void;
+  disabled?: boolean;
+}) {
+  const { user } = useSession();
+  const partes = [
+    {
+      key: 'vendedor',
+      label: 'Producto vendido',
+      quien: `${tx.seller?.fullName ?? 'Vendedor'} · vendedor`,
+      mia: tx.sellerId === user?.id,
+      hecha: tx.sellerConfirmedAt,
+    },
+    {
+      key: 'comprador',
+      label: 'Producto recibido',
+      quien: `${tx.buyer?.fullName ?? 'Comprador'} · comprador`,
+      mia: tx.buyerId === user?.id,
+      hecha: tx.buyerConfirmedAt,
+    },
+  ];
+  const abierta = tx.status === 'AGREED_POINT';
 
-/** HU-17 · Comprador o vendedor completan o cancelan la transacción. */
+  return (
+    <div className="exchange-checks" data-testid="confirmaciones">
+      {partes.map((p) => {
+        const contenido = (
+          <>
+            <span className="exchange-check__icon" aria-hidden="true">
+              {p.hecha ? '✓' : ''}
+            </span>
+            <span className="exchange-check__text">
+              <strong>{p.label}</strong>
+              <small>
+                {p.quien} · {p.hecha ? 'confirmado' : p.mia && abierta ? 'pulsa para confirmar' : 'pendiente'}
+              </small>
+            </span>
+          </>
+        );
+        const clase = `exchange-check${p.hecha ? ' exchange-check--ok' : ''}${p.mia ? ' exchange-check--mine' : ''}`;
+        return p.mia && abierta && !p.hecha && onConfirmar ? (
+          <button
+            key={p.key}
+            type="button"
+            className={clase}
+            onClick={onConfirmar}
+            disabled={disabled}
+            data-testid={`confirmar-${p.key}`}
+          >
+            {contenido}
+          </button>
+        ) : (
+          <div key={p.key} className={clase} data-testid={`estado-${p.key}`}>
+            {contenido}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * HU-17 · Cada parte confirma su lado (vendido / recibido) y cualquiera puede
+ * cancelar. El intercambio queda completado cuando confirman los dos.
+ */
 function CerrarIntercambio({
   tx,
   onChange,
@@ -207,12 +272,35 @@ function CerrarIntercambio({
   onChange: (tx: Tx) => void;
   onAviso: (mensaje: string) => void;
 }) {
-  const { token } = useSession();
+  const { token, user } = useSession();
   const [pendiente, setPendiente] = useState<Accion | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const inFlight = useRef(false);
-  const puedeCompletar = tx.status === 'AGREED_POINT';
+  const acordado = tx.status === 'AGREED_POINT';
+  const soyVendedor = tx.sellerId === user?.id;
+  const otro = (soyVendedor ? tx.buyer?.fullName : tx.seller?.fullName) ?? 'la otra persona';
+  const yoConfirme = soyVendedor ? tx.sellerConfirmedAt : tx.buyerConfirmedAt;
+  const otroConfirmo = soyVendedor ? tx.buyerConfirmedAt : tx.sellerConfirmedAt;
+
+  const confirmacion: Record<Accion, { pregunta: string; detalle: string; boton: string }> = {
+    CONFIRMAR: soyVendedor
+      ? {
+          pregunta: `¿Ya le entregaste el producto a ${otro}?`,
+          detalle: `Quedará marcado como vendido de tu parte. Cuando ${otro} marque que lo recibió, el intercambio se completa. No se puede deshacer.`,
+          boton: 'Sí, producto vendido',
+        }
+      : {
+          pregunta: '¿Ya recibiste el producto?',
+          detalle: `Quedará marcado como recibido de tu parte. Cuando ${otro} marque que lo vendió, el intercambio se completa. No se puede deshacer.`,
+          boton: 'Sí, lo recibí',
+        },
+    CANCELLED: {
+      pregunta: '¿Seguro que quieres cancelar esta transacción?',
+      detalle: 'El producto volverá a estar disponible para otros compradores. No se puede deshacer.',
+      boton: 'Sí, cancelar',
+    },
+  };
 
   async function enviar(accion: Accion) {
     if (!token || inFlight.current) return;
@@ -221,16 +309,20 @@ function CerrarIntercambio({
     setError('');
     onAviso('');
     try {
-      const updated = await transactionApi.updateStatus(token, tx.id, accion);
+      const updated =
+        accion === 'CONFIRMAR'
+          ? await transactionApi.confirmExchange(token, tx.id)
+          : await transactionApi.updateStatus(token, tx.id, 'CANCELLED');
+      setPendiente(null);
       onChange({ ...tx, ...updated });
     } catch (err) {
       setPendiente(null);
       if (err instanceof ApiError && err.status === 401) {
         setError('Tu sesión expiró. Vuelve a ingresar para actualizar la transacción.');
       } else if (err instanceof ApiError && err.status === 403) {
-        setError('Solo el comprador y el vendedor pueden completar o cancelar esta transacción.');
+        setError('Solo el comprador y el vendedor pueden confirmar o cancelar esta transacción.');
       } else if (err instanceof ApiError && err.status === 409) {
-        // La otra persona ya la completó o canceló: se avisa y se muestra el estado real.
+        // La otra persona canceló o cambió el estado: se avisa y se muestra el estado real.
         onAviso('La transacción cambió de estado mientras tanto. Te mostramos su estado actual.');
         await transactionApi.get(token, tx.id).then(onChange).catch(() => undefined);
       } else {
@@ -243,7 +335,7 @@ function CerrarIntercambio({
   }
 
   if (pendiente) {
-    const c = CONFIRMACION[pendiente];
+    const c = confirmacion[pendiente];
     return (
       <section
         className={`tx-confirm tx-confirm--${pendiente === 'CANCELLED' ? 'danger' : 'ok'}`}
@@ -256,7 +348,7 @@ function CerrarIntercambio({
         <div className="tx-actions">
           <button
             type="button"
-            className={`btn ${pendiente === 'CANCELLED' ? 'btn-danger' : 'btn-primary'}`}
+            className={`btn ${pendiente === 'CANCELLED' ? 'btn-danger' : 'btn-success'}`}
             onClick={() => enviar(pendiente)}
             disabled={sending}
             data-testid="btn-confirmar"
@@ -277,23 +369,19 @@ function CerrarIntercambio({
   }
 
   return (
-    <section className="tx-close" aria-label="Finalizar o cancelar el intercambio">
+    <section className="tx-close" aria-label="Confirmar o cancelar el intercambio">
       {error && <Alert tone="error">{error}</Alert>}
-      <p className="field-hint">
-        {puedeCompletar
-          ? 'Cuando se encuentren y hagan el intercambio, márcalo como completado. Si no se va a dar, cancélalo para liberar el producto.'
-          : 'Para marcarla como completada, primero los dos deben acordar el punto seguro y el horario. Si ya no se va a dar, puedes cancelarla.'}
+      <p className="field-hint" data-testid="estado-intercambio">
+        {!acordado
+          ? 'Cuando acuerden el punto y la hora, el vendedor marcará «producto vendido» y el comprador «producto recibido».'
+          : yoConfirme && !otroConfirmo
+            ? `Ya confirmaste tu parte. Falta que ${otro} confirme para completar el intercambio.`
+            : otroConfirmo && !yoConfirme
+              ? `${otro} ya confirmó su parte. Confirma la tuya para completar el intercambio.`
+              : `Después del encuentro, cada uno confirma su parte. Con los dos en verde, el intercambio queda completado.`}
       </p>
+      <Confirmaciones tx={tx} onConfirmar={() => setPendiente('CONFIRMAR')} disabled={sending} />
       <div className="tx-actions">
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => setPendiente('COMPLETED')}
-          disabled={!puedeCompletar}
-          data-testid="btn-completar"
-        >
-          Marcar como completada
-        </button>
         <button
           type="button"
           className="btn btn-danger-outline"

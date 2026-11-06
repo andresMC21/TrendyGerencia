@@ -5168,15 +5168,14 @@
           "response": []
         },
         {
-          "name": "PUT /transactions/:id/status: AGREED_POINT → COMPLETED",
+          "name": "PUT /transactions/:id/status: COMPLETED por estado → 409 (deben confirmar los dos)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
-                  "pm.test(\"COMPLETED\", function () { pm.expect(pm.response.json().status).to.eql(\"COMPLETED\"); });"
+                  "pm.test(\"Status 409\", function () { pm.response.to.have.status(409); });"
                 ]
               }
             }
@@ -5217,6 +5216,130 @@
                 "transactions",
                 "{{transactionId}}",
                 "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transactions/:id/confirm-exchange: usuario ajeno → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenTemp}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/confirm-exchange",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "confirm-exchange"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transactions/:id/confirm-exchange: el vendedor marca producto vendido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "const t = pm.response.json();",
+                  "pm.test(\"Falta el comprador: sigue AGREED_POINT\", function () { pm.expect(t.status).to.eql(\"AGREED_POINT\"); pm.expect(t.sellerConfirmedAt).to.be.a(\"string\"); pm.expect(t.buyerConfirmedAt).to.eql(null); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenSeller}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/confirm-exchange",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "confirm-exchange"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transactions/:id/confirm-exchange: el comprador marca producto recibido → COMPLETED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "const t = pm.response.json();",
+                  "pm.test(\"Los dos confirmaron: COMPLETED y producto SOLD\", function () { pm.expect(t.status).to.eql(\"COMPLETED\"); pm.expect(t.buyerConfirmedAt).to.be.a(\"string\"); pm.expect(t.product.status).to.eql(\"SOLD\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenBuyer}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/confirm-exchange",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "confirm-exchange"
               ]
             }
           },

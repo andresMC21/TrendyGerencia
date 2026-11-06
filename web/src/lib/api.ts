@@ -184,6 +184,10 @@ export type Transaction = {
   /** HU-16 · punto y horario de la propuesta rechazada. */
   rejectedSafePointId?: string | null;
   rejectedScheduledTime?: string | null;
+  /** HU-17 · cuándo el vendedor marcó «producto vendido» (null si aún no). */
+  sellerConfirmedAt?: string | null;
+  /** HU-17 · cuándo el comprador marcó «producto recibido» (null si aún no). */
+  buyerConfirmedAt?: string | null;
   product?: Product;
   buyer?: TransactionUser;
   seller?: TransactionUser;
@@ -231,10 +235,19 @@ export const transactionApi = {
       token,
     }),
   /**
-   * HU-17 · Finalizar (COMPLETED → producto SOLD) o cancelar (CANCELLED → producto
-   * AVAILABLE). Solo comprador o vendedor (403); 409 si la transición no aplica.
+   * HU-17 · Confirmar mi parte: el vendedor «producto vendido», el comprador «producto
+   * recibido». Con las dos confirmaciones queda COMPLETED y el producto SOLD.
    */
-  updateStatus: (token: string, id: string, status: 'COMPLETED' | 'CANCELLED') =>
+  confirmExchange: (token: string, id: string) =>
+    apiRequest<Transaction>(`/transactions/${encodeURIComponent(id)}/confirm-exchange`, {
+      method: 'POST',
+      token,
+    }),
+  /**
+   * HU-17 · Cancelar (CANCELLED → producto AVAILABLE). Solo comprador o vendedor (403);
+   * 409 si la transición no aplica.
+   */
+  updateStatus: (token: string, id: string, status: 'CANCELLED') =>
     apiRequest<Transaction>(`/transactions/${encodeURIComponent(id)}/status`, {
       method: 'PUT',
       token,

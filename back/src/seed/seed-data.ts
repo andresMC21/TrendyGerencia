@@ -161,6 +161,9 @@ export const seedTransactions = [
     // HU-16 · el comprador propuso el punto y el vendedor lo aceptó.
     proposedById: seedUsers[3].id,
     agreedAt: '2026-10-14T18:30:00.000Z',
+    // HU-17 · la vendedora marcó «vendido» y el comprador «recibido».
+    sellerConfirmedAt: '2026-10-15T20:20:00.000Z',
+    buyerConfirmedAt: '2026-10-15T20:25:00.000Z',
   },
 ] as const;
 
