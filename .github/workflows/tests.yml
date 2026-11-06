@@ -4,6 +4,9 @@
 # Web: lint y compilación.
 name: tests
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main, develop]
@@ -53,6 +56,69 @@ jobs:
       - run: npm run test:cov
       - run: npm run test:e2e
       - run: npm run build
+
+  deploy:
+    name: Deploy ${{ matrix.service }} to Render
+    needs: [api, web]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            secret: RENDER_API_DEPLOY_HOOK
+          - service: web
+            secret: RENDER_WEB_DEPLOY_HOOK
+    env:
+      SERVICE: ${{ matrix.service }}
+      DEPLOY_HOOK: ${{ secrets[matrix.secret] }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Trigger deployment of the tested main commit
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
+          from urllib.request import Request, urlopen
+
+          service = os.environ['SERVICE']
+          hook = os.environ.get('DEPLOY_HOOK', '')
+          expected_id = {
+              'api': 'srv-dbmvggdg1s2s73c1d5h0',
+              'web': 'srv-dbmvgk95efls738mpj70',
+          }[service]
+          parsed = urlsplit(hook)
+          query = parse_qs(parsed.query)
+          if (parsed.scheme != 'https' or parsed.netloc != 'api.render.com'
+                  or parsed.path != f'/deploy/{expected_id}' or not query.get('key')):
+              sys.exit(f'::error::Configure the RENDER_{service.upper()}_DEPLOY_HOOK repository secret with the correct Render Deploy Hook URL.')
+
+          request = Request(
+              f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/git/ref/heads/main",
+              headers={'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+                       'Accept': 'application/vnd.github+json'},
+          )
+          with urlopen(request, timeout=30) as response:
+              latest_sha = json.load(response)['object']['sha']
+          if latest_sha != os.environ['GITHUB_SHA']:
+              print('A newer commit is already on main; skipping this deployment.')
+              sys.exit(0)
+
+          query['ref'] = [os.environ['GITHUB_SHA']]
+          url = urlunsplit(parsed._replace(query=urlencode(query, doseq=True)))
+          try:
+              with urlopen(Request(url, method='POST'), timeout=60) as response:
+                  if response.status not in (200, 202):
+                      sys.exit('::error::Render did not accept the deployment.')
+                  print(f'Render accepted the {service} deployment for {os.environ["GITHUB_SHA"]} (HTTP {response.status}).')
+          except Exception:
+              sys.exit('::error::Could not trigger Render. Check the Deploy Hook secret and service status in Render.')
+          PY
 
   web:
     name: Web (web/)

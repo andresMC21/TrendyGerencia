@@ -17,7 +17,7 @@ services:
     plan: free
     region: oregon
     branch: main
-    autoDeployTrigger: commit
+    autoDeployTrigger: off
     buildCommand: npm ci --include=dev && npm run build
     # No se ejecuta el seed en producción: crearía cuentas con contraseñas
     # públicas (admin@trendy.local / Admin1234). Para una demo, ejecútalo a mano
@@ -46,7 +46,7 @@ services:
     runtime: static
     rootDir: web
     branch: main
-    autoDeployTrigger: commit
+    autoDeployTrigger: off
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
     # React Router: cualquier ruta (/producto/:id, /transacciones/:id…) sirve index.html.
