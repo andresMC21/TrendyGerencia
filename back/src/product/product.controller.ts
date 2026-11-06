@@ -150,6 +150,26 @@ export class ProductController {
     return this.productService.findAll(query);
   }
 
+  // Va antes de ':id' para que «mine» no se interprete como un id.
+  @Get('mine')
+  @Auth()
+  @ApiOperation({
+    summary: 'Mis publicaciones (HU-13)',
+    description:
+      'Requiere JWT. Devuelve los productos del vendedor autenticado en cualquier estado (AVAILABLE, RESERVED, SOLD y REMOVED), del más reciente al más antiguo. Los retirados se conservan como historial.',
+  })
+  @ApiOkResponse({
+    type: ProductDto,
+    isArray: true,
+    description: 'Publicaciones del usuario autenticado.',
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Error inesperado al consultar las publicaciones.',
+  })
+  findMine(@GetUser() user: User): Promise<ProductDto[]> {
+    return this.productService.findMine(user.id);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Detalle de un producto',
@@ -260,9 +280,9 @@ export class ProductController {
   @Auth()
   @HttpCode(204)
   @ApiOperation({
-    summary: 'Eliminar un producto (borrado lógico)',
+    summary: 'Retirar una publicación (HU-13, borrado lógico)',
     description:
-      'Requiere JWT. El vendedor o un ADMIN/MODERATOR pueden eliminarlo solo mientras esté AVAILABLE. Se conserva el registro y se cambia el estado a REMOVED.',
+      'Requiere JWT. El vendedor o un ADMIN/MODERATOR pueden retirarla solo mientras esté AVAILABLE; cualquier otro usuario recibe 403. El registro se conserva con estado REMOVED (sus transacciones, reseñas y favoritos se mantienen) y deja de aparecer en el feed y en el detalle público. Un producto reservado responde 409 hasta que se cancele su transacción.',
   })
   @ApiParam({
     name: 'id',

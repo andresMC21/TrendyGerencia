@@ -37,6 +37,12 @@ const ALLOWED_STATUS_TRANSITIONS: Record<ProductStatus, ProductStatus[]> = {
   [ProductStatus.REMOVED]: [],
 };
 
+/** Mensaje del 409 al intentar retirar un producto que no está AVAILABLE (HU-13). */
+const removeConflictMessage = (status: ProductStatus) =>
+  status === ProductStatus.RESERVED
+    ? 'No se puede retirar un producto reservado: primero cancela la transacción activa'
+    : `No se puede retirar un producto en estado ${status}`;
+
 const MAX_CACHE_ENTRIES = 500;
 
 interface CacheEntry {
@@ -276,8 +282,16 @@ export class ProductService {
   }
 
   /**
-   * DELETE /products/:id — borrado lógico (status = REMOVED).
-   * Lo puede hacer el dueño, o un ADMIN/MODERATOR (moderación).
+   * HU-13 · Retirar una publicación: DELETE /products/:id (borrado lógico).
+   *
+   * - Solo el dueño (o un ADMIN/MODERATOR, por moderación) puede retirarla;
+   *   cualquier otro usuario recibe 403.
+   * - El registro se conserva con status = REMOVED: sus transacciones, reseñas
+   *   y favoritos siguen existiendo, pero deja de aparecer en el feed y en el
+   *   detalle público.
+   * - Solo se retira lo que está AVAILABLE. El UPDATE es condicional
+   *   (WHERE status = 'AVAILABLE'), así que si un comprador lo reserva al mismo
+   *   tiempo, gana la reserva y el retiro responde 409.
    */
   async remove(
     id: string,
@@ -291,12 +305,36 @@ export class ProductService {
     if (!this.canModerate(roles)) this.assertOwnership(product, userId);
 
     if (product.status !== ProductStatus.AVAILABLE) {
+      throw new ConflictException(removeConflictMessage(product.status));
+    }
+    const result = await this.productRepository.update(
+      { id, status: ProductStatus.AVAILABLE },
+      { status: ProductStatus.REMOVED },
+    );
+    if (!result.affected) {
+      const current = await this.productRepository.findOneBy({ id });
       throw new ConflictException(
-        `No se puede eliminar un producto en estado ${product.status}`,
+        removeConflictMessage(current?.status ?? ProductStatus.REMOVED),
       );
     }
-    await this.productRepository.update({ id }, { status: ProductStatus.REMOVED });
     await this.invalidateFeedCache(product.neighborhoodId);
+  }
+
+  /**
+   * HU-13 · GET /products/mine: publicaciones del vendedor autenticado en
+   * cualquier estado, incluidas las retiradas (el registro se conserva).
+   */
+  async findMine(sellerId: string): Promise<ProductDto[]> {
+    const products = await this.productRepository.find({
+      where: { sellerId },
+      order: { createdAt: 'DESC' },
+    });
+    const counts = await this.countFavorites(products.map((p) => p.id));
+    return products.map((product) =>
+      ProductDto.fromEntity(product, {
+        favoritesCount: counts.get(product.id) ?? 0,
+      }),
+    );
   }
 
 
@@ -358,7 +396,18 @@ export class ProductService {
         `Transición de estado inválida: ${product.status} → ${status}`,
       );
     }
-    await repository.update({ id }, { status });
+    // UPDATE condicional: si otro proceso cambió el estado entre la lectura y
+    // la escritura (por ejemplo, lo retiraron mientras se reservaba), no se
+    // sobrescribe y se responde 409.
+    const result = await repository.update(
+      { id, status: product.status },
+      { status },
+    );
+    if (!result.affected) {
+      throw new ConflictException(
+        'El estado del producto cambió mientras tanto; vuelve a intentarlo',
+      );
+    }
     await this.invalidateFeedCache(product.neighborhoodId);
   }
 

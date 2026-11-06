@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { Footer, Header } from '../components/Brand';
 import { Alert } from '../components/Form';
+import { RetirarPublicacion } from '../components/RetirarPublicacion';
 import { ApiError, productApi, transactionApi, type ProductDetail, type Transaction } from '../lib/api';
 import { useSession } from '../lib/session';
 import { barrio, CONDICION, ESTADO_PRODUCTO, fecha, iniciales, precio } from '../lib/format';
@@ -168,7 +169,7 @@ function IniciarTransaccion({ p, onProductChange }: {
 
   if (loading) return <p role="status">Comprobando sesión…</p>;
   if (!user || !token) return <Alert tone="info"><Link to="/ingresar">Ingresa a tu cuenta</Link> para iniciar una compra o un trueque.</Alert>;
-  if (user.id === p.seller.id) return <Alert tone="info">Esta es tu publicación. No puedes iniciar una compra de tu propio producto.</Alert>;
+  if (user.id === p.seller.id) return <MiProducto p={p} onProductChange={onProductChange} />;
 
   return (
     <section className="transaction-start" aria-label="Iniciar una transacción">
@@ -203,6 +204,48 @@ function IniciarTransaccion({ p, onProductChange }: {
             {sending ? 'Iniciando…' : p.acceptsBarter ? 'Iniciar compra o trueque' : 'Iniciar compra'}
           </button>
         </form>
+      )}
+    </section>
+  );
+}
+
+/** HU-13 · Vista del dueño: en lugar de comprar, puede retirar la publicación. */
+function MiProducto({ p, onProductChange }: {
+  p: ProductDetail;
+  onProductChange: (product: ProductDetail) => void;
+}) {
+  const navigate = useNavigate();
+  const [problema, setProblema] = useState('');
+  return (
+    <section className="transaction-start" aria-label="Tu publicación">
+      <h2 className="detail-h">Tu publicación</h2>
+      {problema && <Alert tone="error">{problema}</Alert>}
+      {p.status === 'AVAILABLE' ? (
+        <>
+          <p className="field-hint">
+            Si ya no quieres ofrecer este artículo, retíralo: dejará de aparecer en Trendy y se
+            conservará en <Link to="/mis-publicaciones">tu historial</Link>.
+          </p>
+          <RetirarPublicacion
+            productId={p.id}
+            title={p.title}
+            onRemoved={() => navigate('/mis-publicaciones', { state: { retirado: p.title } })}
+            onConflict={(mensaje) => {
+              setProblema(mensaje);
+              void productApi.get(p.id).then(onProductChange).catch(() => undefined);
+            }}
+          />
+        </>
+      ) : (
+        <Alert tone="info">
+          {p.status === 'RESERVED'
+            ? 'Está reservada en una transacción. Para retirarla, primero cancela la transacción en '
+            : 'Esta publicación ya no está disponible. Revisa '}
+          <Link to={p.status === 'RESERVED' ? '/transacciones' : '/mis-publicaciones'}>
+            {p.status === 'RESERVED' ? 'Transacciones' : 'Mis publicaciones'}
+          </Link>
+          .
+        </Alert>
       )}
     </section>
   );

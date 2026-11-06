@@ -13,6 +13,7 @@ describe('ProductController', () => {
     create: jest.fn().mockResolvedValue('created'),
     update: jest.fn().mockResolvedValue('updated'),
     remove: jest.fn().mockResolvedValue(undefined),
+    findMine: jest.fn().mockResolvedValue('mine'),
     toggleFavorite: jest.fn().mockResolvedValue({ isFavorite: true }),
   };
   const user = { id: 'u1', role: [ValidRoles.USER] } as User;
@@ -72,6 +73,15 @@ describe('ProductController', () => {
 
     // Assert
     expect(service.update).toHaveBeenCalledWith('p1', 'u1', dto);
+  });
+
+  it('HU-13 · findMine usa el id del usuario autenticado', async () => {
+    // Act
+    const result = await controller.findMine(user);
+
+    // Assert
+    expect(result).toBe('mine');
+    expect(service.findMine).toHaveBeenCalledWith('u1');
   });
 
   it('remove pasa los roles del usuario (moderación)', async () => {

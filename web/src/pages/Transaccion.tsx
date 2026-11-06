@@ -144,8 +144,10 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
       {tx.status === 'CANCELLED' && (
         <div data-testid="resultado-final">
           <Alert tone="info">
-            <strong>Transacción cancelada.</strong> El producto se liberó y volvió a estar
-            disponible para otros compradores.
+            <strong>Transacción cancelada.</strong>{' '}
+            {tx.product?.status === 'REMOVED'
+              ? 'Después, quien vendía retiró la publicación (HU-13), así que ya no está disponible.'
+              : 'El producto se liberó y volvió a estar disponible para otros compradores.'}
           </Alert>
         </div>
       )}
