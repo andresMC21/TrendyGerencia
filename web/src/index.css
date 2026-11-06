@@ -820,6 +820,14 @@ h3 {
   height: 64px;
   font-size: 22px;
 }
+/* HU-03 · Foto de perfil */
+.avatar--photo {
+  object-fit: cover;
+  background: var(--panel-soft);
+}
+.photo-card {
+  margin-top: 24px;
+}
 .profile-link {
   margin-top: 14px;
 }

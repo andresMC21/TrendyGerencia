@@ -57,6 +57,8 @@ export type UserProfile = {
   email: string;
   fullName: string;
   info: string | null;
+  /** HU-03 · URL de la foto de perfil (null si no tiene). */
+  photoUrl?: string | null;
   role: ('USER' | 'ADMIN' | 'MODERATOR')[];
   verificationStatus: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
   isActive: boolean;
@@ -127,6 +129,9 @@ export const authApi = {
   login: (email: string, password: string) =>
     apiRequest<LoginResponse>('/user/login', { method: 'POST', body: { email, password } }),
   me: (token: string) => apiRequest<UserProfile>('/user/me', { token }),
+  /** HU-03 · actualizar datos del perfil propio (por ejemplo, la foto). */
+  updateMe: (token: string, body: { photoUrl?: string | null; info?: string; fullName?: string }) =>
+    apiRequest<UserProfile>('/user/me', { method: 'PATCH', token, body }),
   logout: (token: string) =>
     apiRequest<{ message: string }>('/user/logout', { method: 'POST', token }),
 };
