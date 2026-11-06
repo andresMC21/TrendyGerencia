@@ -210,7 +210,7 @@ La página pública **`/explorar`** (http://localhost:5173/explorar) permite con
 - **En la API:** `GET /products?neighborhoodId=granada` filtra por barrio y no distingue mayúsculas. `neighborhood` sigue funcionando como alias obsoleto; si se envían ambos, manda `neighborhoodId`.
 - **Publicaciones retiradas:** el feed solo devuelve productos `AVAILABLE`, así que las `REMOVED` nunca aparecen.
 
-Más detalle en [`doc/HU-09.md`](doc/HU-09.md).
+Más detalle en [`docs/HU-09.md`](docs/HU-09.md).
 
 ## Pruebas automatizadas
 
@@ -221,14 +221,14 @@ npm run test:cov    # unitarias + cobertura
 
 | Tipo | Herramienta | Resultado |
 |---|---|---|
-| Unitarias | Jest | 25 suites, 273 pruebas pasan |
-| Cobertura | Jest | Sentencias 91.3 % · Ramas 80.4 % · Funciones 86.0 % · Líneas 90.9 % (umbral exigido: 80 %) |
-| Integración | Jest + Supertest + PostGIS | 4 suites, 59 pruebas pasan (health, usuarios, productos, transacciones) |
+| Unitarias | Jest | 25 suites, 298 pruebas pasan |
+| Cobertura | Jest | Sentencias 91.2 % · Ramas 80.5 % · Funciones 85.6 % · Líneas 90.8 % (umbral exigido: 80 %) |
+| Integración | Jest + Supertest + PostGIS | 4 suites, 70 pruebas pasan (health, usuarios, productos, transacciones) |
 | Manuales / regresión | Postman (Newman) | 150 requests, 422 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
 
 ### Pruebas de integración
 
-Las pruebas de integración levantan la aplicación completa contra una base PostgreSQL + PostGIS real. Se ejecutan automáticamente en GitHub Actions (workflow `tests`) en cada push y pull request a `main` y `develop`: el workflow crea el servicio de base de datos, aplica las migraciones y corre `test:cov` y `test:e2e`. El detalle de qué prueba cubre cada criterio de aceptación está en [`doc/historias-de-usuario.md`](doc/historias-de-usuario.md).
+Las pruebas de integración levantan la aplicación completa contra una base PostgreSQL + PostGIS real. Se ejecutan automáticamente en GitHub Actions (workflow `tests`) en cada push y pull request a `main` y `develop`: el workflow crea el servicio de base de datos, aplica las migraciones y corre `test:cov` y `test:e2e`. El detalle de qué prueba cubre cada criterio de aceptación está en [`docs/historias-de-usuario.md`](docs/historias-de-usuario.md).
 
 ## CI/CD y despliegue
 
@@ -274,6 +274,7 @@ src/
 test/                        # Pruebas de integración (Supertest)
 web/                         # Página web (React + Vite): portada, explorar, registro, ingreso, Mi Trendy
 postman/                     # Colección de Postman
+docs/                        # Documentación: una ficha por HU, matriz de historias e informe técnico (PDF)
 ```
 
 ## Documentación adicional
