@@ -14,18 +14,18 @@ Creado el 6 de noviembre de 2026 en el espacio `My Workspace`.
 
 Repositorio: https://github.com/andresMC21/TrendyGerencia
 
-Rama configurada en ambos servicios: `deploy/trendy-2026-11-06`.
+Rama configurada en ambos servicios: `main`.
 Los recursos se crearon por la API de Render, de forma independiente del
-Blueprint `render.yml`, que conserva la configuración del despliegue anterior.
+Blueprint `render.yml`, que documenta los nombres y la configuración actuales.
 
 ## Actualizar
 
-1. Subir los cambios a la rama configurada.
-2. En el dashboard de Render, abrir `trendy-gerencia-api` y seleccionar
-   **Manual Deploy → Deploy latest commit**.
-3. Hacer lo mismo con `trendy-gerencia-web` y verificar las direcciones anteriores.
+1. Abrir un pull request con los cambios hacia `main`.
+2. Revisar las comprobaciones de GitHub Actions y fusionar el pull request.
+3. Render despliega automáticamente la API y la web al recibir el commit en
+   `main` (`autoDeployTrigger: commit`). Verificar las direcciones anteriores.
 
-El despliegue automático está desactivado. La API ejecuta las migraciones antes
+El despliegue automático está activado. La API ejecuta las migraciones antes
 de arrancar. La web compila con `VITE_API_URL` apuntando a la nueva API e incluye
 una reescritura de todas sus rutas a `index.html`.
 
