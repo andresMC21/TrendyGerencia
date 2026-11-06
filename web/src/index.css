@@ -1122,69 +1122,76 @@ h3 {
 }
 
 /* ---------- HU-17 · Finalizar o cancelar el intercambio ---------- */
-.exchange-checks {
+.exchange-ring {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  margin: 6px 0 16px;
+}
+.exchange-ring__svg {
+  width: 120px;
+  height: 120px;
+  flex: none;
+}
+.exchange-ring__half {
+  fill: none;
+  stroke-width: 12;
+  transition: stroke 0.5s ease;
+}
+.exchange-ring__center {
+  font-family: var(--font-title);
+  font-size: 26px;
+  font-weight: 700;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.exchange-ring__center--ok {
+  fill: var(--green);
+  font-size: 40px;
+}
+.exchange-ring__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
-  margin: 4px 0 14px;
+  min-width: 220px;
+  flex: 1;
 }
 .exchange-check {
   display: flex;
   align-items: center;
-  gap: 12px;
-  text-align: left;
-  font: inherit;
-  color: var(--text);
-  background: #fff;
-  border: 2px solid var(--line);
-  border-radius: 12px;
-  padding: 12px 14px;
+  gap: 10px;
 }
-button.exchange-check {
-  cursor: pointer;
-  border-color: var(--green);
-  border-style: dashed;
-}
-button.exchange-check:hover:not(:disabled) {
-  background: var(--green-soft);
-}
-.exchange-check__icon {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 2px solid var(--line);
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  color: #fff;
-}
-button.exchange-check .exchange-check__icon {
-  border-color: var(--green);
-}
-.exchange-check__text {
-  display: grid;
-  gap: 2px;
-}
-.exchange-check__text strong {
+.exchange-check strong {
+  display: block;
   font-family: var(--font-title);
   color: var(--navy);
 }
-.exchange-check__text small {
+.exchange-check small {
   color: var(--muted);
   font-size: 13px;
 }
-.exchange-check--ok {
-  background: var(--green-soft);
-  border-color: var(--green);
-  border-style: solid;
-}
-.exchange-check--ok .exchange-check__icon {
-  background: var(--green);
-  border-color: var(--green);
-}
-.exchange-check--ok .exchange-check__text strong {
+.exchange-check--ok strong {
   color: #146c3b;
+}
+.exchange-ring__dot {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  transition: background 0.5s ease;
+}
+.exchange-done {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 700;
+  color: #146c3b;
+  background: var(--green-soft);
+  border-radius: 999px;
+  padding: 8px 14px;
 }
 .btn-success {
   background: var(--green);
