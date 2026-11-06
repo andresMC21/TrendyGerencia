@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
+import { Product } from '../product/entities/product.entity';
 import { ProductStatus } from '../product/enums/product-status.enum';
 import { ProductService } from '../product/product.service';
 import { ConfirmPointDto } from './dto/confirm-point.dto';
@@ -15,6 +16,8 @@ import { TransactionDto } from './dto/transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { Transaction } from './entities/transaction.entity';
 import { TransactionStatus } from './enums/transaction-status.enum';
+
+const ACTIVE_TRANSACTION_MESSAGE = 'El producto ya tiene una transaccion activa';
 
 const ACTIVE_TRANSACTION_STATUSES = [
   TransactionStatus.PENDING,
@@ -54,57 +57,74 @@ export class TransactionService {
     private readonly dataSource: DataSource,
   ) { }
 
+  /**
+   * HU-15 · Iniciar una transacción (reserva el producto).
+   *
+   * Todo ocurre en una transacción de base de datos con la fila del producto
+   * bloqueada (SELECT ... FOR UPDATE): si varios compradores piden el mismo
+   * producto a la vez, se atienden de a uno y solo el primero lo reserva; los
+   * demás reciben 409. El índice único parcial UQ_transaction_active_product
+   * respalda la regla «una sola transacción activa por producto».
+   */
   async create(
     buyerId: string,
     createTransactionDto: CreateTransactionDto,
   ): Promise<TransactionDto> {
-    const product = await this.productService.findById(
-      createTransactionDto.productId,
-    );
+    const { productId } = createTransactionDto;
 
-    if (product.sellerId === buyerId) {
-      throw new ForbiddenException(
-        'No puedes iniciar una transaccion sobre tu propio producto',
-      );
-    }
-    if (product.status !== ProductStatus.AVAILABLE) {
-      throw new ConflictException(
-        `El producto no esta disponible: ${product.status}`,
-      );
-    }
-
-    const active = await this.transactionRepository.findOne({
-      where: {
-        productId: product.id,
-        status: In(ACTIVE_TRANSACTION_STATUSES),
-      },
-    });
-    if (active) {
-      throw new ConflictException(
-        'El producto ya tiene una transaccion activa',
-      );
-    }
-
-    const transaction = this.transactionRepository.create({
-      productId: product.id,
-      buyerId,
-      sellerId: product.sellerId,
-      status: TransactionStatus.PENDING,
-      message: createTransactionDto.message ?? null
-    });
-
-    await this.productService.updateStatus(product.id, ProductStatus.RESERVED);
+    let saved: Transaction;
     try {
-      const saved = await this.transactionRepository.save(transaction);
-      saved.product = product;
-      return TransactionDto.fromEntity(saved);
+      saved = await this.dataSource.transaction(async (manager) => {
+        const product = await manager.findOne(Product, {
+          where: { id: productId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!product) {
+          throw new NotFoundException(`Product with id ${productId} not found`);
+        }
+        if (product.sellerId === buyerId) {
+          throw new ForbiddenException(
+            'No puedes iniciar una transaccion sobre tu propio producto',
+          );
+        }
+        if (product.status !== ProductStatus.AVAILABLE) {
+          throw new ConflictException(
+            `El producto no esta disponible: ${product.status}`,
+          );
+        }
+
+        const active = await manager.findOne(Transaction, {
+          where: { productId, status: In(ACTIVE_TRANSACTION_STATUSES) },
+        });
+        if (active) throw new ConflictException(ACTIVE_TRANSACTION_MESSAGE);
+
+        const transaction = await manager.save(
+          manager.create(Transaction, {
+            productId,
+            buyerId,
+            sellerId: product.sellerId,
+            status: TransactionStatus.PENDING,
+            message: createTransactionDto.message ?? null,
+          }),
+        );
+        await this.productService.updateStatus(
+          productId,
+          ProductStatus.RESERVED,
+          manager,
+        );
+        transaction.product = { ...product, status: ProductStatus.RESERVED };
+        return transaction;
+      });
     } catch (error) {
-      await this.productService.updateStatus(
-        product.id,
-        ProductStatus.AVAILABLE,
-      );
+      // Violación del índice único: otra transacción activa ganó la carrera.
+      if ((error as { code?: string })?.code === '23505') {
+        throw new ConflictException(ACTIVE_TRANSACTION_MESSAGE);
+      }
       throw error;
     }
+
+    await this.productService.invalidateFeedCache(saved.product.neighborhoodId);
+    return TransactionDto.fromEntity(saved);
   }
 
   async findAll(userId: string): Promise<TransactionDto[]> {

@@ -6,6 +6,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { Product } from '../product/entities/product.entity';
 import { ProductStatus } from '../product/enums/product-status.enum';
 import { ProductService } from '../product/product.service';
 import { Transaction } from './entities/transaction.entity';
@@ -64,6 +65,7 @@ describe('TransactionService', () => {
   // EntityManager de la transacción de base de datos usada en update (HU-17).
   const manager = {
     findOne: jest.fn(),
+    create: jest.fn((_entity: unknown, value: object) => ({ id: 't1', ...value })),
     save: jest.fn(async (value: unknown) => value),
   };
   const dataSource = {
@@ -94,102 +96,128 @@ describe('TransactionService', () => {
     expect(service).toBeDefined();
   });
 
-  it('create reserva el producto y guarda la transaccion', async () => {
-    // Arrange
-    const product = makeProduct();
-    const transaction = makeTransaction({ product });
-    productService.findById.mockResolvedValue(product);
-    transactionRepository.findOne.mockResolvedValue(null);
-    transactionRepository.create.mockReturnValue(transaction);
-    transactionRepository.save.mockResolvedValue(transaction);
+  describe('create (HU-15 · reserva sin carreras)', () => {
+    /** manager.findOne devuelve el producto o la transacción activa según la entidad. */
+    const givenRows = (product: unknown, active: unknown = null) =>
+      manager.findOne.mockImplementation(async (entity: unknown) =>
+        entity === Transaction ? active : product,
+      );
 
-    // Act
-    const result = await service.create('buyer-1', { productId: 'p1' });
+    it('reserva el producto y guarda la transaccion en la misma transaccion de base de datos', async () => {
+      // Arrange
+      givenRows(makeProduct());
 
-    // Assert
-    expect(productService.updateStatus).toHaveBeenCalledWith(
-      'p1',
-      ProductStatus.RESERVED,
-    );
-    expect(transactionRepository.create).toHaveBeenCalledWith({
-      productId: 'p1',
-      message: null,
-      buyerId: 'buyer-1',
-      sellerId: 'seller-1',
-      status: TransactionStatus.PENDING,
+      // Act
+      const result = await service.create('buyer-1', { productId: 'p1' });
+
+      // Assert
+      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+      expect(manager.create).toHaveBeenCalledWith(Transaction, {
+        productId: 'p1',
+        message: null,
+        buyerId: 'buyer-1',
+        sellerId: 'seller-1',
+        status: TransactionStatus.PENDING,
+      });
+      expect(productService.updateStatus).toHaveBeenCalledWith(
+        'p1',
+        ProductStatus.RESERVED,
+        manager,
+      );
+      expect(productService.invalidateFeedCache).toHaveBeenCalledWith('granada');
+      expect(result).toMatchObject({
+        id: 't1',
+        productId: 'p1',
+        buyerId: 'buyer-1',
+        sellerId: 'seller-1',
+        status: TransactionStatus.PENDING,
+        product: expect.objectContaining({ status: ProductStatus.RESERVED }),
+      });
     });
-    expect(result).toMatchObject({
-      id: 't1',
-      productId: 'p1',
-      buyerId: 'buyer-1',
-      sellerId: 'seller-1',
-      status: TransactionStatus.PENDING,
+
+    it('bloquea la fila del producto (SELECT ... FOR UPDATE)', async () => {
+      // Arrange
+      givenRows(makeProduct());
+
+      // Act
+      await service.create('buyer-1', { productId: 'p1' });
+
+      // Assert
+      expect(manager.findOne).toHaveBeenCalledWith(Product, {
+        where: { id: 'p1' },
+        lock: { mode: 'pessimistic_write' },
+      });
     });
-  });
 
-  it('create rechaza si ya hay transaccion activa', async () => {
-    // Arrange
-    productService.findById.mockResolvedValue(makeProduct());
-    transactionRepository.findOne.mockResolvedValue(makeTransaction());
+    it('404 si el producto no existe', async () => {
+      // Arrange
+      givenRows(null);
 
-    // Act
-    const result = service.create('buyer-1', { productId: 'p1' });
+      // Act / Assert
+      await expect(
+        service.create('buyer-1', { productId: 'p1' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
 
-    // Assert
-    await expect(result).rejects.toBeInstanceOf(ConflictException);
-    expect(productService.updateStatus).not.toHaveBeenCalled();
-  });
+    it('rechaza si ya hay transaccion activa', async () => {
+      // Arrange
+      givenRows(makeProduct(), makeTransaction());
 
-  it('create libera el producto si falla el guardado', async () => {
-    // Arrange
-    productService.findById.mockResolvedValue(makeProduct());
-    transactionRepository.findOne.mockResolvedValue(null);
-    transactionRepository.create.mockReturnValue(makeTransaction());
-    transactionRepository.save.mockRejectedValue(new Error('db'));
+      // Act / Assert
+      await expect(
+        service.create('buyer-1', { productId: 'p1' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(productService.updateStatus).not.toHaveBeenCalled();
+    });
 
-    // Act
-    const result = service.create('buyer-1', { productId: 'p1' });
+    it('convierte la violacion del indice unico (23505) en 409', async () => {
+      // Arrange
+      givenRows(makeProduct());
+      manager.save.mockRejectedValueOnce(Object.assign(new Error('dup'), { code: '23505' }));
 
-    // Assert
-    await expect(result).rejects.toThrow('db');
-    expect(productService.updateStatus).toHaveBeenNthCalledWith(
-      1,
-      'p1',
-      ProductStatus.RESERVED,
+      // Act / Assert
+      await expect(
+        service.create('buyer-1', { productId: 'p1' }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(productService.invalidateFeedCache).not.toHaveBeenCalled();
+    });
+
+    it('propaga otros errores sin tocar la cache (la base de datos revierte todo)', async () => {
+      // Arrange
+      givenRows(makeProduct());
+      manager.save.mockRejectedValueOnce(new Error('db'));
+
+      // Act / Assert
+      await expect(service.create('buyer-1', { productId: 'p1' })).rejects.toThrow('db');
+      expect(productService.updateStatus).not.toHaveBeenCalled();
+      expect(productService.invalidateFeedCache).not.toHaveBeenCalled();
+    });
+
+    it('rechaza compras del propio vendedor', async () => {
+      // Arrange
+      givenRows(makeProduct({ sellerId: 'seller-1' }));
+
+      // Act / Assert
+      await expect(
+        service.create('seller-1', { productId: 'p1' }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
+    it.each([ProductStatus.RESERVED, ProductStatus.SOLD, ProductStatus.REMOVED])(
+      'rechaza productos en estado %s',
+      async (status) => {
+        // Arrange
+        givenRows(makeProduct({ status }));
+
+        // Act / Assert
+        await expect(
+          service.create('buyer-1', { productId: 'p1' }),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(manager.save).not.toHaveBeenCalled();
+      },
     );
-    expect(productService.updateStatus).toHaveBeenNthCalledWith(
-      2,
-      'p1',
-      ProductStatus.AVAILABLE,
-    );
-  });
-
-  it('create rechaza compras del propio vendedor', async () => {
-    // Arrange
-    productService.findById.mockResolvedValue(
-      makeProduct({ sellerId: 'seller-1' }),
-    );
-
-    // Act
-    const result = service.create('seller-1', { productId: 'p1' });
-
-    // Assert
-    await expect(result).rejects.toBeInstanceOf(ForbiddenException);
-    expect(transactionRepository.save).not.toHaveBeenCalled();
-  });
-
-  it('create rechaza productos que no estan disponibles', async () => {
-    // Arrange
-    productService.findById.mockResolvedValue(
-      makeProduct({ status: ProductStatus.RESERVED }),
-    );
-
-    // Act
-    const result = service.create('buyer-1', { productId: 'p1' });
-
-    // Assert
-    await expect(result).rejects.toBeInstanceOf(ConflictException);
-    expect(transactionRepository.save).not.toHaveBeenCalled();
   });
 
   it('findOne solo permite participantes', async () => {

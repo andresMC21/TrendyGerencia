@@ -255,6 +255,66 @@ describe('Transactions (e2e)', () => {
       .send({ productId })
       .expect(409));
 
+  describe('HU-15 · reserva sin condiciones de carrera', () => {
+    it('si varios compradores piden el mismo producto a la vez, solo uno lo reserva', async () => {
+      // Arrange
+      const buyers = await Promise.all(
+        [1, 2, 3, 4, 5].map((i) => newUser(`race${i}`)),
+      );
+      const product = await http
+        .post('/api/products')
+        .set(auth(tokenSeller))
+        .send(productBody({ title: 'Producto HU-15 concurrente' }))
+        .expect(201);
+
+      // Act
+      const responses = await Promise.all(
+        buyers.map((token) =>
+          http
+            .post('/api/transactions')
+            .set(auth(token))
+            .send({ productId: product.body.id }),
+        ),
+      );
+
+      // Assert
+      const codes = responses.map((r) => r.status).sort();
+      expect(codes).toEqual([201, 409, 409, 409, 409]);
+      const [{ count }] = await app.get(DataSource).query(
+        `SELECT COUNT(*)::int AS count FROM "transaction"
+          WHERE "productId" = $1 AND "status" IN ('PENDING', 'AGREED_POINT')`,
+        [product.body.id],
+      );
+      expect(count).toBe(1);
+      const detail = await http.get(`/api/products/${product.body.id}`).expect(200);
+      expect(detail.body.status).toBe('RESERVED');
+    });
+
+    it('la base de datos impide una segunda transaccion activa sobre el mismo producto', async () => {
+      // Arrange
+      const product = await http
+        .post('/api/products')
+        .set(auth(tokenSeller))
+        .send(productBody({ title: 'Producto HU-15 índice' }))
+        .expect(201);
+      const tx = await http
+        .post('/api/transactions')
+        .set(auth(tokenBuyer))
+        .send({ productId: product.body.id })
+        .expect(201);
+      const { buyerId, sellerId } = tx.body;
+
+      // Act / Assert
+      await expect(
+        app.get(DataSource).query(
+          `INSERT INTO "transaction" ("productId", "buyerId", "sellerId", "status")
+           VALUES ($1, $2, $3, 'PENDING')`,
+          [product.body.id, buyerId, sellerId],
+        ),
+      ).rejects.toThrow(/UQ_transaction_active_product/);
+    });
+  });
+
   describe('HU-17 · finalizar o cancelar el intercambio', () => {
     let tokenBuyer2: string;
 
