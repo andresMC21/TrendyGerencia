@@ -69,6 +69,8 @@ async function seed(): Promise<void> {
             ...seedTransaction,
             scheduledTime: new Date(seedTransaction.scheduledTime),
             agreedAt: new Date(seedTransaction.agreedAt),
+            sellerConfirmedAt: new Date(seedTransaction.sellerConfirmedAt),
+            buyerConfirmedAt: new Date(seedTransaction.buyerConfirmedAt),
           }),
         );
       }

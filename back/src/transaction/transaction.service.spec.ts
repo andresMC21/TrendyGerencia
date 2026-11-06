@@ -47,6 +47,8 @@ const makeTransaction = (over: Partial<Transaction> = {}) =>
     rejectedAt: null,
     rejectedSafePointId: null,
     rejectedScheduledTime: null,
+    sellerConfirmedAt: null,
+    buyerConfirmedAt: null,
     product: makeProduct(),
     buyer: { id: 'buyer-1', fullName: 'Buyer' },
     seller: { id: 'seller-1', fullName: 'Seller' },
@@ -621,28 +623,16 @@ describe('TransactionService', () => {
         }),
       );
 
-    it('completa: la transaccion queda COMPLETED y el producto pasa a SOLD (criterio 1)', async () => {
+    it('rechaza con 409 pedir COMPLETED por estado: lo completan las dos confirmaciones', async () => {
       // Arrange
       manager.findOne.mockResolvedValue(agreed());
-      reloadAs(TransactionStatus.COMPLETED, ProductStatus.SOLD);
 
-      // Act
-      const result = await service.update('t1', 'seller-1', {
-        status: TransactionStatus.COMPLETED,
-      });
-
-      // Assert
-      expect(manager.save).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 't1', status: TransactionStatus.COMPLETED }),
-      );
-      expect(productService.updateStatus).toHaveBeenCalledWith(
-        'p1',
-        ProductStatus.SOLD,
-        manager,
-      );
-      expect(result.status).toBe(TransactionStatus.COMPLETED);
-      expect(result.product?.status).toBe(ProductStatus.SOLD);
-      expect(productService.invalidateFeedCache).toHaveBeenCalledWith('granada');
+      // Act / Assert
+      await expect(
+        service.update('t1', 'seller-1', { status: TransactionStatus.COMPLETED }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(manager.save).not.toHaveBeenCalled();
+      expect(productService.updateStatus).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -674,7 +664,7 @@ describe('TransactionService', () => {
       },
     );
 
-    it.each([TransactionStatus.COMPLETED, TransactionStatus.CANCELLED])(
+    it.each([TransactionStatus.CANCELLED])(
       'rechaza con 403 a quien no es comprador ni vendedor al pedir %s (criterio 3)',
       async (status) => {
         // Arrange
@@ -692,10 +682,10 @@ describe('TransactionService', () => {
     it('bloquea la fila de la transaccion dentro de una transaccion de base de datos', async () => {
       // Arrange
       manager.findOne.mockResolvedValue(agreed());
-      reloadAs(TransactionStatus.COMPLETED, ProductStatus.SOLD);
+      reloadAs(TransactionStatus.CANCELLED, ProductStatus.AVAILABLE);
 
       // Act
-      await service.update('t1', 'buyer-1', { status: TransactionStatus.COMPLETED });
+      await service.update('t1', 'buyer-1', { status: TransactionStatus.CANCELLED });
 
       // Assert
       expect(dataSource.transaction).toHaveBeenCalledTimes(1);
@@ -781,9 +771,132 @@ describe('TransactionService', () => {
 
       // Act / Assert
       await expect(
-        service.update('t1', 'seller-1', { status: TransactionStatus.COMPLETED }),
+        service.update('t1', 'seller-1', { status: TransactionStatus.CANCELLED }),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(transactionRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    describe('confirmExchange · vendedor marca vendido y comprador recibido', () => {
+      it('el vendedor confirma primero: queda su confirmacion y sigue AGREED_POINT', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(agreed());
+        reloadAs(TransactionStatus.AGREED_POINT, ProductStatus.RESERVED);
+
+        // Act
+        await service.confirmExchange('t1', 'seller-1');
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            status: TransactionStatus.AGREED_POINT,
+            sellerConfirmedAt: expect.any(Date),
+            buyerConfirmedAt: null,
+          }),
+        );
+        expect(productService.updateStatus).not.toHaveBeenCalled();
+        expect(productService.invalidateFeedCache).not.toHaveBeenCalled();
+      });
+
+      it('el comprador confirma primero: queda su confirmacion y sigue AGREED_POINT', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(agreed());
+        reloadAs(TransactionStatus.AGREED_POINT, ProductStatus.RESERVED);
+
+        // Act
+        await service.confirmExchange('t1', 'buyer-1');
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            status: TransactionStatus.AGREED_POINT,
+            buyerConfirmedAt: expect.any(Date),
+            sellerConfirmedAt: null,
+          }),
+        );
+        expect(productService.updateStatus).not.toHaveBeenCalled();
+      });
+
+      it('con la segunda confirmacion queda COMPLETED y el producto SOLD (criterio 1)', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(agreed({ sellerConfirmedAt: new Date() }));
+        reloadAs(TransactionStatus.COMPLETED, ProductStatus.SOLD);
+
+        // Act
+        const result = await service.confirmExchange('t1', 'buyer-1');
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            status: TransactionStatus.COMPLETED,
+            buyerConfirmedAt: expect.any(Date),
+          }),
+        );
+        expect(productService.updateStatus).toHaveBeenCalledWith(
+          'p1',
+          ProductStatus.SOLD,
+          manager,
+        );
+        expect(result.status).toBe(TransactionStatus.COMPLETED);
+        expect(productService.invalidateFeedCache).toHaveBeenCalledWith('granada');
+      });
+
+      it('confirmar dos veces no cambia la fecha de la primera confirmacion', async () => {
+        // Arrange
+        const first = new Date('2030-01-01T10:00:00Z');
+        manager.findOne.mockResolvedValue(agreed({ sellerConfirmedAt: first }));
+        reloadAs(TransactionStatus.AGREED_POINT, ProductStatus.RESERVED);
+
+        // Act
+        await service.confirmExchange('t1', 'seller-1');
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            sellerConfirmedAt: first,
+            status: TransactionStatus.AGREED_POINT,
+          }),
+        );
+      });
+
+      it('sobre una transaccion ya completada no hace nada', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(agreed({ status: TransactionStatus.COMPLETED }));
+        reloadAs(TransactionStatus.COMPLETED, ProductStatus.SOLD);
+
+        // Act
+        const result = await service.confirmExchange('t1', 'buyer-1');
+
+        // Assert
+        expect(manager.save).not.toHaveBeenCalled();
+        expect(result.status).toBe(TransactionStatus.COMPLETED);
+      });
+
+      it.each([
+        ['PENDING', makeTransaction()],
+        ['CANCELLED', agreed({ status: TransactionStatus.CANCELLED })],
+      ])('409 si la transaccion esta %s', async (_l, transaction) => {
+        // Arrange
+        manager.findOne.mockResolvedValue(transaction);
+
+        // Act / Assert
+        await expect(service.confirmExchange('t1', 'buyer-1')).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+        expect(manager.save).not.toHaveBeenCalled();
+      });
+
+      it('403 a una persona ajena y 404 si no existe', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValueOnce(agreed()).mockResolvedValueOnce(null);
+
+        // Act / Assert
+        await expect(service.confirmExchange('t1', 'intruso')).rejects.toBeInstanceOf(
+          ForbiddenException,
+        );
+        await expect(service.confirmExchange('t1', 'buyer-1')).rejects.toBeInstanceOf(
+          NotFoundException,
+        );
+      });
     });
   });
 });

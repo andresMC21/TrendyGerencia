@@ -164,7 +164,7 @@ Los archivos `.env` reales no se suben al repositorio (están en `.gitignore`); 
 
 El seed también crea 5 productos, 1 transacción completada y 1 reseña de ejemplo. Se puede ejecutar varias veces: los productos que ya existen conservan su estado (reservado, vendido o retirado), así que reiniciar la API no interrumpe una compra en curso.
 
-**Demo de compra completa:** María abre **Escritorio de madera con cajones**, inicia la compra y propone un punto; Camilo acepta la propuesta (HU-16) y cualquiera de los dos marca el intercambio como completado (HU-17).
+**Demo de compra completa:** María abre **Escritorio de madera con cajones**, inicia la compra y propone un punto; Camilo acepta la propuesta (HU-16). Después del encuentro, Camilo marca **Producto vendido** y María **Producto recibido**; con las dos en verde el intercambio queda completado (HU-17).
 
 ## Cómo probar cada funcionalidad
 
@@ -202,7 +202,7 @@ La colección `postman/trendy-api.postman_collection.json` cubre todos los endpo
 | Retirar una publicación (HU-13, borrado lógico → `REMOVED`) y ver mis publicaciones | `DELETE /products/:id`, `GET /products/mine` · web: `/mis-publicaciones` | dueño (`ana`); otro `USER` recibe 403 |
 | Feed por barrio / cercanía / filtros | `GET /products?neighborhoodId=…&lat=…&lng=…&radius=…` | público |
 | Favoritos | `POST /products/:id/favorite` | cualquiera autenticado |
-| Compra: reservar → proponer punto → la otra persona acepta → completar | `POST /transactions`, `POST /transactions/:id/meeting-proposal`, `POST /transactions/:id/meeting-proposal/accept` (o `/reject`), `PUT /transactions/:id/status` | `carlos` compra, `ana` vende |
+| Compra: reservar → el comprador propone punto → el vendedor acepta → vendido + recibido | `POST /transactions`, `POST /transactions/:id/meeting-proposal`, `POST /transactions/:id/meeting-proposal/accept` (o `/reject`), `POST /transactions/:id/confirm-exchange` (cada uno), `PUT /transactions/:id/status` para cancelar | `carlos` compra, `ana` vende |
 | Reseñas tras una compra completada | `POST /review`, `GET /review` | comprador y vendedor |
 
 ### Explorar el barrio (HU-09)
@@ -225,10 +225,10 @@ npm run test:cov    # unitarias + cobertura
 
 | Tipo | Herramienta | Resultado |
 |---|---|---|
-| Unitarias | Jest | 25 suites, 318 pruebas pasan |
+| Unitarias | Jest | 25 suites, 326 pruebas pasan |
 | Cobertura | Jest | Sentencias 90.9 % · Ramas 80.8 % · Funciones 85.4 % · Líneas 90.4 % (umbral exigido: 80 %) |
-| Integración | Jest + Supertest + PostGIS | 4 suites, 71 pruebas pasan (health, usuarios, productos, transacciones) |
-| Manuales / regresión | Postman (Newman) | 157 requests, 442 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
+| Integración | Jest + Supertest + PostGIS | 4 suites, 73 pruebas pasan (health, usuarios, productos, transacciones) |
+| Manuales / regresión | Postman (Newman) | 160 requests, 452 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
 
 ### Pruebas de integración
 

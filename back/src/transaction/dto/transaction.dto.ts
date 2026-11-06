@@ -111,6 +111,24 @@ export class TransactionDto {
   })
   rejectedScheduledTime: Date | null;
 
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description:
+      'Cuándo el vendedor marcó «producto vendido», o null. Con las dos confirmaciones la transacción pasa a COMPLETED.',
+  })
+  sellerConfirmedAt: Date | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description:
+      'Cuándo el comprador marcó «producto recibido», o null. Con las dos confirmaciones la transacción pasa a COMPLETED.',
+  })
+  buyerConfirmedAt: Date | null;
+
   @ApiPropertyOptional({
     type: ProductDto,
     description:
@@ -170,6 +188,8 @@ export class TransactionDto {
     dto.rejectedAt = transaction.rejectedAt ?? null;
     dto.rejectedSafePointId = transaction.rejectedSafePointId ?? null;
     dto.rejectedScheduledTime = transaction.rejectedScheduledTime ?? null;
+    dto.sellerConfirmedAt = transaction.sellerConfirmedAt ?? null;
+    dto.buyerConfirmedAt = transaction.buyerConfirmedAt ?? null;
     if (transaction.product)
       dto.product = ProductDto.fromEntity(transaction.product);
     dto.buyer = TransactionUserDto.fromEntity(transaction.buyer);
