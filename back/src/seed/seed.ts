@@ -46,11 +46,19 @@ async function seed(): Promise<void> {
 
       for (const seedProduct of seedProducts) {
         const { location, ...product } = seedProduct;
+        // El seed corre en cada arranque del despliegue: un producto que ya existe
+        // conserva su estado (reservado, vendido, retirado) y sus visitas, para no
+        // dejar una compra en curso con el producto otra vez disponible.
+        const existing = await productRepository.findOne({
+          where: { id: product.id },
+          select: { id: true, status: true, viewsCount: true },
+        });
         await productRepository.save(
           productRepository.create({
             ...product,
+            status: existing?.status ?? product.status,
             location: toGeoJson(location),
-            viewsCount: 0,
+            viewsCount: existing?.viewsCount ?? 0,
           }),
         );
       }
