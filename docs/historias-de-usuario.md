@@ -17,4 +17,4 @@ Toda la documentación del proyecto está en esta carpeta (`docs/`), junto con e
 
 ## Usuarios de prueba
 
-Con `npm run seed`: `demo@trendy.local` / `Trendy123` (usuario fijo), `ana@trendy.local` / `Ana12345` (vendedora verificada), `carlos@trendy.local` / `Carlos12`, `admin@trendy.local` / `Admin1234` y `moderador@trendy.local` / `Mod12345`.
+Con `npm run seed`: `demo@trendy.local` / `Trendy123` (usuario fijo), `ana@trendy.local` / `Ana12345` (vendedora verificada), `carlos@trendy.local` / `Carlos12`, `admin@trendy.local` / `Admin1234`, `moderador@trendy.local` / `Mod12345`, y para la demo de compra `maria.compradora@trendy.local` / `Maria2026` (compradora) y `camilo.vendedor@trendy.local` / `Camilo2026` (vende un escritorio y una lámpara).

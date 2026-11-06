@@ -51,6 +51,25 @@ export const seedUsers = [
     verificationStatus: VerificationStatus.UNVERIFIED,
     role: [ValidRoles.USER],
   },
+  {
+    // Demo HU-15 a HU-17: María compra el producto que vende Camilo.
+    id: '66666666-6666-4666-8666-666666666666',
+    email: 'maria.compradora@trendy.local',
+    password: 'Maria2026',
+    fullName: 'María Betancourt',
+    info: 'Busca muebles y objetos para su apartamento en San Fernando',
+    verificationStatus: VerificationStatus.VERIFIED,
+    role: [ValidRoles.USER],
+  },
+  {
+    id: '77777777-7777-4777-8777-777777777777',
+    email: 'camilo.vendedor@trendy.local',
+    password: 'Camilo2026',
+    fullName: 'Camilo Martínez',
+    info: 'Vende lo que ya no usa en El Ingenio',
+    verificationStatus: VerificationStatus.VERIFIED,
+    role: [ValidRoles.USER],
+  },
 ] as const;
 
 export const seedProducts = [
@@ -96,6 +115,37 @@ export const seedProducts = [
     location: { lat: 3.4335, lng: -76.5441 },
     neighborhoodId: 'san-fernando',
     estimatedWeightKg: 9,
+  },
+  {
+    // Producto de Camilo para la demo con María (HU-15, HU-16 y HU-17).
+    id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+    sellerId: seedUsers[6].id,
+    title: 'Escritorio de madera con cajones',
+    description:
+      'Escritorio de pino de 120 x 60 cm con dos cajones. Buen estado, solo marcas leves de uso.',
+    price: 180000,
+    acceptsBarter: true,
+    category: 'hogar',
+    condition: ProductCondition.USED,
+    status: ProductStatus.AVAILABLE,
+    location: { lat: 3.3897, lng: -76.5318 },
+    neighborhoodId: 'el-ingenio',
+    estimatedWeightKg: 18,
+  },
+  {
+    // Segundo producto de Camilo para repetir la demo o mostrar la cancelación.
+    id: 'abababab-abab-4bab-8bab-abababababab',
+    sellerId: seedUsers[6].id,
+    title: 'Lámpara de pie con pantalla de tela',
+    description: 'Lámpara de pie de 1,60 m con bombillo LED incluido. Funciona perfecto.',
+    price: 65000,
+    acceptsBarter: false,
+    category: 'hogar',
+    condition: ProductCondition.LIKE_NEW,
+    status: ProductStatus.AVAILABLE,
+    location: { lat: 3.3901, lng: -76.5302 },
+    neighborhoodId: 'el-ingenio',
+    estimatedWeightKg: 4,
   },
 ] as const;
 
