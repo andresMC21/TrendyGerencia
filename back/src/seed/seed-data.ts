@@ -108,6 +108,9 @@ export const seedTransactions = [
     status: TransactionStatus.COMPLETED,
     safePointId: 'cai-granada',
     scheduledTime: '2026-10-15T20:00:00.000Z',
+    // HU-16 · el comprador propuso el punto y el vendedor lo aceptó.
+    proposedById: seedUsers[3].id,
+    agreedAt: '2026-10-14T18:30:00.000Z',
   },
 ] as const;
 

@@ -41,6 +41,8 @@ const makeTransaction = (over: Partial<Transaction> = {}) =>
     status: TransactionStatus.PENDING,
     safePointId: null,
     scheduledTime: null,
+    proposedById: null,
+    agreedAt: null,
     product: makeProduct(),
     buyer: { id: 'buyer-1', fullName: 'Buyer' },
     seller: { id: 'seller-1', fullName: 'Seller' },
@@ -262,101 +264,285 @@ describe('TransactionService', () => {
     expect(result).toHaveLength(1);
   });
 
-  describe('confirmPoint (HU-16 · acordar una entrega)', () => {
+  describe('acuerdo del punto de encuentro (HU-16)', () => {
     const FUTURO = '2099-10-05T15:00:00Z';
-
-    it('guarda punto y horario y cambia a AGREED_POINT (criterios 1 y 2)', async () => {
-      // Arrange
-      manager.findOne.mockResolvedValue(makeTransaction());
-      transactionRepository.findOne.mockResolvedValue(
-        makeTransaction({
-          status: TransactionStatus.AGREED_POINT,
-          safePointId: 'sp-1',
-          scheduledTime: new Date(FUTURO),
-        }),
-      );
-
-      // Act
-      const result = await service.confirmPoint('t1', 'buyer-1', {
+    const propuesta = { safePointId: 'sp-1', scheduledTime: FUTURO };
+    /** Transacción PENDING con una propuesta vigente de quien se indique. */
+    const conPropuesta = (proposedById = 'buyer-1', over: Partial<Transaction> = {}) =>
+      makeTransaction({
         safePointId: 'sp-1',
-        scheduledTime: FUTURO,
+        scheduledTime: new Date(FUTURO),
+        proposedById,
+        ...over,
       });
 
-      // Assert
-      expect(manager.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          safePointId: 'sp-1',
-          scheduledTime: new Date(FUTURO),
-          status: TransactionStatus.AGREED_POINT,
-        }),
-      );
-      expect(result.status).toBe(TransactionStatus.AGREED_POINT);
-      expect(result.safePointId).toBe('sp-1');
-    });
-
-    it('bloquea la fila de la transaccion', async () => {
-      // Arrange
-      manager.findOne.mockResolvedValue(makeTransaction());
+    beforeEach(() => {
       transactionRepository.findOne.mockResolvedValue(makeTransaction());
+    });
 
-      // Act
-      await service.confirmPoint('t1', 'seller-1', { safePointId: 'sp-1', scheduledTime: FUTURO });
+    describe('proposeMeeting · proponer o contraproponer', () => {
+      it('guarda la propuesta y quien la hizo, sin acordar todavia', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(makeTransaction());
 
-      // Assert
-      expect(manager.findOne).toHaveBeenCalledWith(Transaction, {
-        where: { id: 't1' },
-        lock: { mode: 'pessimistic_write' },
+        // Act
+        await service.proposeMeeting('t1', 'buyer-1', propuesta);
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            safePointId: 'sp-1',
+            scheduledTime: new Date(FUTURO),
+            proposedById: 'buyer-1',
+            agreedAt: null,
+            status: TransactionStatus.PENDING,
+          }),
+        );
+      });
+
+      it('una contrapropuesta del vendedor reemplaza la del comprador', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(conPropuesta('buyer-1'));
+
+        // Act
+        await service.proposeMeeting('t1', 'seller-1', {
+          safePointId: 'sp-2',
+          scheduledTime: '2099-10-06T10:00:00Z',
+        });
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            safePointId: 'sp-2',
+            proposedById: 'seller-1',
+            status: TransactionStatus.PENDING,
+          }),
+        );
+      });
+
+      it('bloquea la fila de la transaccion', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(makeTransaction());
+
+        // Act
+        await service.proposeMeeting('t1', 'seller-1', propuesta);
+
+        // Assert
+        expect(manager.findOne).toHaveBeenCalledWith(Transaction, {
+          where: { id: 't1' },
+          lock: { mode: 'pessimistic_write' },
+        });
+      });
+
+      it('rechaza con 403 a una persona ajena', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(makeTransaction());
+
+        // Act / Assert
+        await expect(
+          service.proposeMeeting('t1', 'otro', propuesta),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(manager.save).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['una fecha invalida', 'fecha-mala'],
+        ['un horario en el pasado', '2020-01-01T10:00:00Z'],
+      ])('rechaza con 400 %s', async (_label, scheduledTime) => {
+        // Arrange
+        manager.findOne.mockResolvedValue(makeTransaction());
+
+        // Act / Assert
+        await expect(
+          service.proposeMeeting('t1', 'buyer-1', { safePointId: 'sp-1', scheduledTime }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(manager.save).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        TransactionStatus.AGREED_POINT,
+        TransactionStatus.CANCELLED,
+        TransactionStatus.COMPLETED,
+      ])('rechaza con 409 si la transaccion esta %s', async (status) => {
+        // Arrange
+        manager.findOne.mockResolvedValue(makeTransaction({ status }));
+
+        // Act / Assert
+        await expect(
+          service.proposeMeeting('t1', 'buyer-1', propuesta),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(manager.save).not.toHaveBeenCalled();
+      });
+
+      it('404 si la transaccion no existe', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(null);
+
+        // Act / Assert
+        await expect(
+          service.proposeMeeting('t1', 'buyer-1', propuesta),
+        ).rejects.toBeInstanceOf(NotFoundException);
       });
     });
 
-    it('rechaza con 403 a una persona ajena (criterio 3)', async () => {
-      // Arrange
-      manager.findOne.mockResolvedValue(makeTransaction());
+    describe('acceptMeeting · aceptar la propuesta de la otra persona', () => {
+      it('la contraparte acepta y la transaccion pasa a AGREED_POINT', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(conPropuesta('buyer-1'));
+        transactionRepository.findOne.mockResolvedValue(
+          conPropuesta('buyer-1', {
+            status: TransactionStatus.AGREED_POINT,
+            agreedAt: new Date(),
+          }),
+        );
 
-      // Act / Assert
-      await expect(
-        service.confirmPoint('t1', 'otro', { safePointId: 'sp-1', scheduledTime: FUTURO }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
-      expect(manager.save).not.toHaveBeenCalled();
+        // Act
+        const result = await service.acceptMeeting('t1', 'seller-1', propuesta);
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            status: TransactionStatus.AGREED_POINT,
+            agreedAt: expect.any(Date),
+          }),
+        );
+        expect(result.status).toBe(TransactionStatus.AGREED_POINT);
+        expect(result.proposedById).toBe('buyer-1');
+      });
+
+      it('el comprador tambien puede aceptar la propuesta del vendedor', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(conPropuesta('seller-1'));
+
+        // Act
+        await service.acceptMeeting('t1', 'buyer-1', propuesta);
+
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({ status: TransactionStatus.AGREED_POINT }),
+        );
+      });
+
+      it('409 si quien acepta es quien propuso', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(conPropuesta('buyer-1'));
+
+        // Act / Assert
+        await expect(
+          service.acceptMeeting('t1', 'buyer-1', propuesta),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(manager.save).not.toHaveBeenCalled();
+      });
+
+      it('409 si no hay propuesta vigente', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(makeTransaction());
+
+        // Act / Assert
+        await expect(
+          service.acceptMeeting('t1', 'seller-1', propuesta),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(manager.save).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['otro punto', { safePointId: 'sp-2', scheduledTime: FUTURO }],
+        ['otro horario', { safePointId: 'sp-1', scheduledTime: '2099-10-06T15:00:00Z' }],
+      ])('409 si la propuesta cambio (%s) antes de aceptar', async (_l, seen) => {
+        // Arrange
+        manager.findOne.mockResolvedValue(conPropuesta('buyer-1'));
+
+        // Act / Assert
+        await expect(
+          service.acceptMeeting('t1', 'seller-1', seen),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(manager.save).not.toHaveBeenCalled();
+      });
+
+      it('400 si el horario propuesto ya paso', async () => {
+        // Arrange
+        const pasado = '2020-01-01T10:00:00Z';
+        manager.findOne.mockResolvedValue(
+          conPropuesta('buyer-1', { scheduledTime: new Date(pasado) }),
+        );
+
+        // Act / Assert
+        await expect(
+          service.acceptMeeting('t1', 'seller-1', { safePointId: 'sp-1', scheduledTime: pasado }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(manager.save).not.toHaveBeenCalled();
+      });
+
+      it('400 si la fecha enviada no es valida', async () => {
+        // Act / Assert
+        await expect(
+          service.acceptMeeting('t1', 'seller-1', { safePointId: 'sp-1', scheduledTime: 'x' }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(manager.findOne).not.toHaveBeenCalled();
+      });
+
+      it('403 a una persona ajena', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(conPropuesta('buyer-1'));
+
+        // Act / Assert
+        await expect(
+          service.acceptMeeting('t1', 'otro', propuesta),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+      });
+
+      it('409 si la transaccion ya no esta PENDING', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(
+          conPropuesta('buyer-1', { status: TransactionStatus.CANCELLED }),
+        );
+
+        // Act / Assert
+        await expect(
+          service.acceptMeeting('t1', 'seller-1', propuesta),
+        ).rejects.toBeInstanceOf(ConflictException);
+      });
     });
 
-    it.each([
-      ['una fecha invalida', 'fecha-mala'],
-      ['un horario en el pasado', '2020-01-01T10:00:00Z'],
-    ])('rechaza con 400 %s', async (_label, scheduledTime) => {
-      // Arrange
-      manager.findOne.mockResolvedValue(makeTransaction());
+    describe('rejectMeeting · rechazar la propuesta', () => {
+      it('la contraparte rechaza: se borra la propuesta y sigue PENDING', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(conPropuesta('buyer-1'));
 
-      // Act / Assert
-      await expect(
-        service.confirmPoint('t1', 'buyer-1', { safePointId: 'sp-1', scheduledTime }),
-      ).rejects.toBeInstanceOf(BadRequestException);
-      expect(manager.save).not.toHaveBeenCalled();
-    });
+        // Act
+        await service.rejectMeeting('t1', 'seller-1');
 
-    it.each([
-      TransactionStatus.AGREED_POINT,
-      TransactionStatus.CANCELLED,
-      TransactionStatus.COMPLETED,
-    ])('rechaza con 409 si la transaccion esta %s', async (status) => {
-      // Arrange
-      manager.findOne.mockResolvedValue(makeTransaction({ status }));
+        // Assert
+        expect(manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            safePointId: null,
+            scheduledTime: null,
+            proposedById: null,
+            status: TransactionStatus.PENDING,
+          }),
+        );
+      });
 
-      // Act / Assert
-      await expect(
-        service.confirmPoint('t1', 'buyer-1', { safePointId: 'sp-1', scheduledTime: FUTURO }),
-      ).rejects.toBeInstanceOf(ConflictException);
-      expect(manager.save).not.toHaveBeenCalled();
-    });
+      it('409 si quien rechaza es quien propuso', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(conPropuesta('seller-1'));
 
-    it('404 si la transaccion no existe', async () => {
-      // Arrange
-      manager.findOne.mockResolvedValue(null);
+        // Act / Assert
+        await expect(service.rejectMeeting('t1', 'seller-1')).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+        expect(manager.save).not.toHaveBeenCalled();
+      });
 
-      // Act / Assert
-      await expect(
-        service.confirmPoint('t1', 'buyer-1', { safePointId: 'sp-1', scheduledTime: FUTURO }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      it('409 si no hay propuesta vigente', async () => {
+        // Arrange
+        manager.findOne.mockResolvedValue(makeTransaction());
+
+        // Act / Assert
+        await expect(service.rejectMeeting('t1', 'seller-1')).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+      });
     });
   });
 
@@ -489,14 +675,25 @@ describe('TransactionService', () => {
       expect(productService.updateStatus).not.toHaveBeenCalled();
     });
 
-    it('rechaza AGREED_POINT sin punto ni horario confirmados', async () => {
+    it.each([
+      ['sin propuesta', makeTransaction()],
+      [
+        'aunque haya propuesta (debe aceptarla la otra persona)',
+        makeTransaction({
+          safePointId: 'sp-1',
+          scheduledTime: new Date('2099-10-05T15:00:00Z'),
+          proposedById: 'buyer-1',
+        }),
+      ],
+    ])('rechaza con 409 pedir AGREED_POINT por estado: %s', async (_l, transaction) => {
       // Arrange
-      manager.findOne.mockResolvedValue(makeTransaction());
+      manager.findOne.mockResolvedValue(transaction);
 
       // Act / Assert
       await expect(
         service.update('t1', 'buyer-1', { status: TransactionStatus.AGREED_POINT }),
-      ).rejects.toBeInstanceOf(BadRequestException);
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(manager.save).not.toHaveBeenCalled();
     });
 
     it('pedir el estado que ya tiene no toca el producto (repetir cancelar no libera una nueva reserva)', async () => {

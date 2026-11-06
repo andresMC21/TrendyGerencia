@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router';
 import { Footer, Header } from '../components/Brand';
 import { Alert } from '../components/Form';
 import { ApiError, transactionApi, type Transaction as Tx } from '../lib/api';
-import { ESTADO_TRANSACCION, fechaHora } from '../lib/format';
+import { ESTADO_TRANSACCION, etapaAcuerdo, fechaHora } from '../lib/format';
 import { nombrePunto, SAFE_POINTS } from '../lib/safePoints';
 import { useSession } from '../lib/session';
 
@@ -14,7 +14,10 @@ type Estado =
   | { tipo: 'no-existe' }
   | { tipo: 'error' };
 
-/** HU-16 · Detalle y punto seguro. HU-17 · Finalizar o cancelar el intercambio. */
+/**
+ * HU-16 · Detalle y acuerdo del punto seguro entre comprador y vendedor.
+ * HU-17 · Finalizar o cancelar el intercambio.
+ */
 export default function Transaccion() {
   const { id = '' } = useParams();
   return <TransaccionPagina key={id} id={id} />;
@@ -41,6 +44,26 @@ function TransaccionPagina({ id }: { id: string }) {
       activo = false;
     };
   }, [id, token]);
+
+  // HU-16 · Mientras la transacción siga abierta, se consulta cada pocos segundos para
+  // ver la respuesta de la otra persona (propuesta, aceptación o cancelación).
+  const abierta =
+    estado.tipo === 'ok' && (estado.tx.status === 'PENDING' || estado.tx.status === 'AGREED_POINT');
+  useEffect(() => {
+    if (!token || !abierta) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      transactionApi
+        .get(token, id)
+        .then((tx) =>
+          setEstado((prev) =>
+            prev.tipo === 'ok' && prev.tx.updatedAt === tx.updatedAt ? prev : { tipo: 'ok', tx },
+          ),
+        )
+        .catch(() => undefined);
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [abierta, id, token]);
 
   return (
     <>
@@ -121,15 +144,16 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
       </dl>
 
       <h2 className="detail-h">Entrega presencial</h2>
-      {tx.safePointId && tx.scheduledTime ? (
+      {tx.status === 'PENDING' ? (
+        <AcordarEncuentro tx={tx} onChange={onChange} />
+      ) : tx.safePointId && tx.scheduledTime && (tx.agreedAt || tx.status !== 'CANCELLED') ? (
         <div className="meeting-box" data-testid="encuentro-acordado">
+          <span className="meeting-kicker">Acordado por los dos</span>
           <strong>{nombrePunto(tx.safePointId)}</strong>
           <span>{fechaHora(tx.scheduledTime)}</span>
         </div>
-      ) : tx.status === 'PENDING' ? (
-        <ConfirmarPunto tx={tx} onChange={onChange} />
       ) : (
-        <Alert tone="info">Esta transacción no tiene un punto de encuentro registrado.</Alert>
+        <Alert tone="info">Esta transacción no llegó a acordar un punto de encuentro.</Alert>
       )}
 
       <h2 className="detail-h">Resultado del intercambio</h2>
@@ -258,7 +282,7 @@ function CerrarIntercambio({
       <p className="field-hint">
         {puedeCompletar
           ? 'Cuando se encuentren y hagan el intercambio, márcalo como completado. Si no se va a dar, cancélalo para liberar el producto.'
-          : 'Para marcarla como completada, primero acuerden el punto seguro y el horario. Si ya no se va a dar, puedes cancelarla.'}
+          : 'Para marcarla como completada, primero los dos deben acordar el punto seguro y el horario. Si ya no se va a dar, puedes cancelarla.'}
       </p>
       <div className="tx-actions">
         <button
@@ -290,16 +314,199 @@ function ahoraLocal(): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
-function ConfirmarPunto({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
+/** Mensaje según el error de la API en la negociación del encuentro. */
+function mensajeError(err: unknown, accion: string): string {
+  if (err instanceof ApiError && err.status === 401)
+    return `Tu sesión expiró. Vuelve a ingresar para ${accion}.`;
+  if (err instanceof ApiError && err.status === 403)
+    return 'No participas en esta transacción, así que no puedes modificarla.';
+  return err instanceof ApiError ? err.message : `No pudimos ${accion}. Inténtalo de nuevo.`;
+}
+
+/**
+ * HU-16 · Comprador y vendedor acuerdan el encuentro: uno propone y el otro acepta,
+ * contrapropone o rechaza. Solo cuando los dos están de acuerdo pasa a AGREED_POINT.
+ */
+function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
+  const { user, token } = useSession();
+  const etapa = etapaAcuerdo(tx, user?.id);
+  const soyComprador = tx.buyerId === user?.id;
+  const otro = (soyComprador ? tx.seller?.fullName : tx.buyer?.fullName) ?? 'la otra persona';
+  const [editando, setEditando] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [aviso, setAviso] = useState('');
+  const inFlight = useRef(false);
+
+  async function recargar() {
+    if (token) await transactionApi.get(token, tx.id).then(onChange).catch(() => undefined);
+  }
+
+  async function responder(accion: 'aceptar' | 'rechazar') {
+    if (!token || inFlight.current || !tx.safePointId || !tx.scheduledTime) return;
+    inFlight.current = true;
+    setSending(true);
+    setError('');
+    setAviso('');
+    try {
+      const updated =
+        accion === 'aceptar'
+          ? await transactionApi.acceptMeeting(token, tx.id, tx.safePointId, tx.scheduledTime)
+          : await transactionApi.rejectMeeting(token, tx.id);
+      setAviso(
+        accion === 'aceptar'
+          ? '¡Listo! Los dos quedaron de acuerdo en el punto y el horario.'
+          : `Rechazaste la propuesta. Puedes proponer otro punto u horario a ${otro}.`,
+      );
+      onChange({ ...tx, ...updated });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        setError(`${otro} cambió la propuesta o la transacción cambió de estado. Revisa la versión actual.`);
+        await recargar();
+      } else {
+        setError(mensajeError(err, accion === 'aceptar' ? 'aceptar la propuesta' : 'rechazar la propuesta'));
+      }
+    } finally {
+      inFlight.current = false;
+      setSending(false);
+    }
+  }
+
+  const propuesta =
+    tx.safePointId && tx.scheduledTime ? (
+      <div className="meeting-box" data-testid="propuesta-encuentro">
+        <span className="meeting-kicker">
+          {etapa === 'esperando' ? 'Tu propuesta' : `Propuesta de ${otro}`}
+        </span>
+        <strong>{nombrePunto(tx.safePointId)}</strong>
+        <span>{fechaHora(tx.scheduledTime)}</span>
+      </div>
+    ) : null;
+
+  return (
+    <section className="meeting-agreement" aria-label="Acordar punto seguro y horario">
+      <ol className="agreement-steps" aria-label="Pasos del acuerdo">
+        <li className="agreement-step agreement-step--done">Proponer</li>
+        <li className={`agreement-step${etapa !== 'sin-propuesta' ? ' agreement-step--done' : ''}`}>
+          Responder
+        </li>
+        <li className="agreement-step">Acuerdo</li>
+      </ol>
+
+      {aviso && <Alert tone="success">{aviso}</Alert>}
+      {error && <Alert tone="error">{error}</Alert>}
+
+      {etapa === 'sin-propuesta' && (
+        <>
+          <p className="field-hint">
+            Propón un lugar público y vigilado y una hora. {otro} tendrá que aceptarlo para que quede
+            acordado.
+          </p>
+          <ProponerEncuentro
+            tx={tx}
+            onChange={onChange}
+            onDone={() => setAviso(`Propuesta enviada. Ahora ${otro} debe aceptarla.`)}
+          />
+        </>
+      )}
+
+      {etapa === 'esperando' && (
+        <>
+          {propuesta}
+          <p className="agreement-status" data-testid="estado-acuerdo">
+            Esperando que {otro} acepte tu propuesta. Si cambias algo, {otro} verá la nueva propuesta.
+          </p>
+          {editando ? (
+            <ProponerEncuentro
+              tx={tx}
+              onChange={onChange}
+              onCancel={() => setEditando(false)}
+              onDone={() => {
+                setEditando(false);
+                setAviso(`Cambiaste la propuesta. ${otro} debe aceptar la nueva.`);
+              }}
+            />
+          ) : (
+            <button type="button" className="btn btn-outline" onClick={() => setEditando(true)}>
+              Cambiar mi propuesta
+            </button>
+          )}
+        </>
+      )}
+
+      {etapa === 'por-responder' && (
+        <>
+          {propuesta}
+          <p className="agreement-status agreement-status--todo" data-testid="estado-acuerdo">
+            {otro} propone este punto y horario. ¿Te sirve?
+          </p>
+          {editando ? (
+            <ProponerEncuentro
+              tx={tx}
+              onChange={onChange}
+              onCancel={() => setEditando(false)}
+              onDone={() => {
+                setEditando(false);
+                setAviso(`Enviaste otra propuesta. Ahora ${otro} debe aceptarla.`);
+              }}
+            />
+          ) : (
+            <div className="tx-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => responder('aceptar')}
+                disabled={sending}
+                data-testid="btn-aceptar-propuesta"
+              >
+                {sending ? 'Guardando…' : 'Aceptar propuesta'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setEditando(true)}
+                disabled={sending}
+                data-testid="btn-contraproponer"
+              >
+                Proponer otro punto u hora
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger-outline"
+                onClick={() => responder('rechazar')}
+                disabled={sending}
+                data-testid="btn-rechazar-propuesta"
+              >
+                Rechazar
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+
+/** HU-16 · Formulario para proponer (o contraproponer) punto seguro y horario. */
+function ProponerEncuentro({
+  tx,
+  onChange,
+  onDone,
+  onCancel,
+}: {
+  tx: Tx;
+  onChange: (tx: Tx) => void;
+  onDone: () => void;
+  onCancel?: () => void;
+}) {
   const { token } = useSession();
   const [safePointId, setSafePointId] = useState('');
   const [fechaLocal, setFechaLocal] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [ok, setOk] = useState(false);
   const inFlight = useRef(false);
 
-  async function confirmar(event: FormEvent<HTMLFormElement>) {
+  async function proponer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token || inFlight.current) return;
 
@@ -312,20 +519,16 @@ function ConfirmarPunto({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }
     setSending(true);
     setError('');
     try {
-      const updated = await transactionApi.confirmPoint(token, tx.id, safePointId, fecha.toISOString());
-      setOk(true);
+      const updated = await transactionApi.proposeMeeting(token, tx.id, safePointId, fecha.toISOString());
       // El POST devuelve la transacción; se conservan las relaciones ya cargadas.
       onChange({ ...tx, ...updated });
+      onDone();
     } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        setError('Tu sesión expiró. Vuelve a ingresar para confirmar el encuentro.');
-      } else if (err instanceof ApiError && err.status === 403) {
-        setError('No participas en esta transacción, así que no puedes modificarla.');
-      } else if (err instanceof ApiError && err.status === 409) {
-        setError('La otra persona ya acordó el encuentro o la transacción cambió de estado.');
+      if (err instanceof ApiError && err.status === 409) {
+        setError('La transacción cambió de estado mientras tanto. Te mostramos su estado actual.');
         await transactionApi.get(token, tx.id).then(onChange).catch(() => undefined);
       } else {
-        setError(err instanceof ApiError ? err.message : 'No pudimos guardar el encuentro. Inténtalo de nuevo.');
+        setError(mensajeError(err, 'enviar la propuesta'));
       }
     } finally {
       inFlight.current = false;
@@ -334,51 +537,52 @@ function ConfirmarPunto({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }
   }
 
   return (
-    <section className="transaction-start" aria-label="Acordar punto seguro y horario">
-      {ok && <Alert tone="success">Encuentro acordado. La transacción pasó a AGREED_POINT.</Alert>}
+    <form className="transaction-start" onSubmit={proponer} aria-busy={sending} noValidate>
       {error && <Alert tone="error">{error}</Alert>}
-      <p className="field-hint">
-        Elige un lugar público y vigilado. Cualquiera de los dos participantes puede registrarlo.
-      </p>
-      <form onSubmit={confirmar} aria-busy={sending} noValidate>
-        <fieldset className="safe-points" disabled={sending}>
-          <legend>Punto seguro</legend>
-          {SAFE_POINTS.map((p) => (
-            <label key={p.id} className={`safe-point${safePointId === p.id ? ' safe-point--on' : ''}`}>
-              <input
-                type="radio"
-                name="safePointId"
-                value={p.id}
-                checked={safePointId === p.id}
-                onChange={() => setSafePointId(p.id)}
-              />
-              <span>
-                <strong>{p.name}</strong>
-                <small>{p.address}</small>
-              </span>
-            </label>
-          ))}
-        </fieldset>
-
-        <div className="field">
-          <label htmlFor="scheduled-time">Fecha y hora del encuentro</label>
-          <div className="field-box">
+      <fieldset className="safe-points" disabled={sending}>
+        <legend>Punto seguro</legend>
+        {SAFE_POINTS.map((p) => (
+          <label key={p.id} className={`safe-point${safePointId === p.id ? ' safe-point--on' : ''}`}>
             <input
-              id="scheduled-time"
-              type="datetime-local"
-              value={fechaLocal}
-              min={ahoraLocal()}
-              onChange={(ev) => setFechaLocal(ev.target.value)}
-              disabled={sending}
-              required
+              type="radio"
+              name="safePointId"
+              value={p.id}
+              checked={safePointId === p.id}
+              onChange={() => setSafePointId(p.id)}
             />
-          </div>
-        </div>
+            <span>
+              <strong>{p.name}</strong>
+              <small>{p.address}</small>
+            </span>
+          </label>
+        ))}
+      </fieldset>
 
-        <button type="submit" className="btn btn-primary" disabled={sending}>
-          {sending ? 'Guardando…' : 'Acordar encuentro'}
+      <div className="field">
+        <label htmlFor="scheduled-time">Fecha y hora del encuentro</label>
+        <div className="field-box">
+          <input
+            id="scheduled-time"
+            type="datetime-local"
+            value={fechaLocal}
+            min={ahoraLocal()}
+            onChange={(ev) => setFechaLocal(ev.target.value)}
+            disabled={sending}
+            required
+          />
+        </div>
+      </div>
+
+      <div className="tx-actions">
+        <button type="submit" className="btn btn-primary" disabled={sending} data-testid="btn-proponer">
+          {sending ? 'Enviando…' : 'Enviar propuesta'}
         </button>
-      </form>
-    </section>
+        {onCancel && (
+          <button type="button" className="btn btn-outline" onClick={onCancel} disabled={sending}>
+            Volver
+          </button>
+        )}
+      </div>
+    </form>
   );
 }
