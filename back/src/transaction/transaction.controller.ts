@@ -134,10 +134,10 @@ export class TransactionController {
   @Put(':id/status')
   @Auth()
   @ApiOperation({
-    summary: 'Finalizar o cancelar la transacción (HU-17)',
+    summary: 'Cancelar la transacción (HU-17)',
     description:
-      'Solo el comprador o el vendedor pueden cambiar el estado. Transiciones válidas: PENDING → CANCELLED y AGREED_POINT → COMPLETED/CANCELLED. ' +
-      'COMPLETED deja el producto en SOLD y CANCELLED lo libera (vuelve a AVAILABLE); transacción y producto se guardan juntos. ' +
+      'Solo el comprador o el vendedor pueden cambiar el estado. Transiciones válidas: PENDING → CANCELLED y AGREED_POINT → CANCELLED; CANCELLED libera el producto (vuelve a AVAILABLE). ' +
+      'COMPLETED no se pide aquí: se alcanza cuando los dos confirman con POST /transactions/:id/confirm-exchange. ' +
       'AGREED_POINT no se pide aquí: se alcanza cuando la otra persona acepta la propuesta de encuentro (HU-16). Pedir el estado que la transacción ya tiene no cambia nada.',
   })
   @ApiParam({
@@ -179,6 +179,49 @@ export class TransactionController {
     @Body() updateTransactionDto: UpdateTransactionDto,
   ): Promise<TransactionDto> {
     return this.transactionService.update(id, user.id, updateTransactionDto);
+  }
+
+  @Post(':id/confirm-exchange')
+  @Auth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Confirmar mi parte del intercambio (HU-17)',
+    description:
+      'El vendedor marca «producto vendido» y el comprador «producto recibido». Requiere el punto acordado (AGREED_POINT). Cuando confirman los dos, la transacción pasa a COMPLETED y el producto a SOLD. Confirmar dos veces no cambia nada.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    format: 'uuid',
+    example: '00000000-0000-4000-8000-000000000000',
+    description: 'Identificador UUID de la transacción.',
+  })
+  @ApiOkResponse({
+    type: TransactionDto,
+    description:
+      'Confirmación guardada (sellerConfirmedAt o buyerConfirmedAt). Si ya confirmaron los dos, la transacción queda COMPLETED.',
+  })
+  @ApiBadRequestResponse({
+    description: 'El identificador de la transacción no tiene formato UUID.',
+  })
+  @ApiNotFoundResponse({
+    description: 'No existe una transacción con ese identificador.',
+  })
+  @ApiForbiddenResponse({
+    description: 'El usuario autenticado no participa en la transacción.',
+  })
+  @ApiConflictResponse({
+    description:
+      'La transacción no tiene el punto acordado (PENDING) o fue cancelada.',
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Error inesperado al confirmar el intercambio.',
+  })
+  confirmExchange(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ): Promise<TransactionDto> {
+    return this.transactionService.confirmExchange(id, user.id);
   }
 
   @Post(':id/meeting-proposal')

@@ -310,21 +310,37 @@ describe('Transactions (e2e)', () => {
     await http.post(proposal(transactionId)).set(auth(tokenSeller)).send(P1).expect(409);
   });
 
-  it('PUT /transactions/:id/status valida transiciones y completa la venta', async () => {
-    // Assert
+  it('HU-17 · vendedor y comprador confirman y la venta se completa', async () => {
+    const confirm = (token: string) =>
+      http.post(`/api/transactions/${transactionId}/confirm-exchange`).set(auth(token));
+
     await http
       .put(`/api/transactions/${transactionId}/status`)
       .set(auth(tokenBuyer))
       .send({ status: 'NO_EXISTE' })
       .expect(400);
 
-    const res = await http
+    // Nadie completa solo por estado
+    await http
       .put(`/api/transactions/${transactionId}/status`)
       .set(auth(tokenSeller))
       .send({ status: 'COMPLETED' })
-      .expect(200);
+      .expect(409);
+    await confirm(tokenOther).expect(403);
 
+    // El vendedor marca «producto vendido»: aún falta el comprador
+    const half = await confirm(tokenSeller).expect(200);
+    expect(half.body.status).toBe('AGREED_POINT');
+    expect(half.body.sellerConfirmedAt).toEqual(expect.any(String));
+    expect(half.body.buyerConfirmedAt).toBeNull();
+    expect((await http.get(`/api/products/${productId}`).expect(200)).body.status).toBe(
+      'RESERVED',
+    );
+
+    // El comprador marca «producto recibido»: intercambio completado
+    const res = await confirm(tokenBuyer).expect(200);
     expect(res.body.status).toBe('COMPLETED');
+    expect(res.body.buyerConfirmedAt).toEqual(expect.any(String));
 
     const product = await http.get(`/api/products/${productId}`).expect(200);
     expect(product.body.status).toBe('SOLD');
@@ -556,6 +572,8 @@ describe('Transactions (e2e)', () => {
         .send(point)
         .expect(200);
     };
+    const confirmExchange = (txId: string, token: string) =>
+      http.post(`/api/transactions/${txId}/confirm-exchange`).set(auth(token));
     const setStatus = (txId: string, status: string, token: string) =>
       http
         .put(`/api/transactions/${txId}/status`)
@@ -571,19 +589,49 @@ describe('Transactions (e2e)', () => {
       tokenBuyer2 = await newUser('buyer2');
     });
 
-    it('criterio 1: el comprador completa, la transaccion queda COMPLETED y el producto SOLD', async () => {
+    it('criterio 1: con «recibido» del comprador y «vendido» del vendedor queda COMPLETED y el producto SOLD', async () => {
       // Arrange
       const product = await newProduct();
       const tx = await reserve(product);
       await agreePoint(tx);
 
       // Act
-      const res = await setStatus(tx, 'COMPLETED', tokenBuyer).expect(200);
+      const first = await confirmExchange(tx, tokenBuyer).expect(200);
+      const res = await confirmExchange(tx, tokenSeller).expect(200);
 
       // Assert
+      expect(first.body.status).toBe('AGREED_POINT');
       expect(res.body.status).toBe('COMPLETED');
       expect(res.body.product.status).toBe('SOLD');
       expect(await productStatus(product)).toBe('SOLD');
+    });
+
+    it('si los dos confirman a la vez, el intercambio queda completado una sola vez', async () => {
+      // Arrange
+      const product = await newProduct();
+      const tx = await reserve(product);
+      await agreePoint(tx);
+
+      // Act
+      const responses = await Promise.all([
+        confirmExchange(tx, tokenBuyer),
+        confirmExchange(tx, tokenSeller),
+      ]);
+
+      // Assert
+      expect(responses.map((r) => r.status)).toEqual([200, 200]);
+      expect(await txStatus(tx)).toBe('COMPLETED');
+      expect(await productStatus(product)).toBe('SOLD');
+    });
+
+    it('no se confirma el intercambio sin punto acordado', async () => {
+      // Arrange
+      const product = await newProduct();
+      const tx = await reserve(product);
+
+      // Act / Assert
+      await confirmExchange(tx, tokenSeller).expect(409);
+      expect(await txStatus(tx)).toBe('PENDING');
     });
 
     it('criterio 2: cancelar una PENDING la deja CANCELLED y libera el producto para otro comprador', async () => {
@@ -668,10 +716,11 @@ describe('Transactions (e2e)', () => {
       const product = await newProduct();
       const tx = await reserve(product);
       await agreePoint(tx);
+      await confirmExchange(tx, tokenBuyer).expect(200);
 
-      // Act
+      // Act: el vendedor confirma «vendido» mientras el comprador cancela
       const [complete, cancel] = await Promise.all([
-        setStatus(tx, 'COMPLETED', tokenSeller),
+        confirmExchange(tx, tokenSeller),
         setStatus(tx, 'CANCELLED', tokenBuyer),
       ]);
 

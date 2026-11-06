@@ -94,6 +94,14 @@ export class Transaction {
   @Column({ type: 'timestamptz', nullable: true })
   rejectedScheduledTime: Date | null;
 
+  /** HU-17 · Cuándo el vendedor marcó «producto vendido» (entregado). */
+  @Column({ type: 'timestamptz', nullable: true })
+  sellerConfirmedAt: Date | null;
+
+  /** HU-17 · Cuándo el comprador marcó «producto recibido». */
+  @Column({ type: 'timestamptz', nullable: true })
+  buyerConfirmedAt: Date | null;
+
   /** HU-16 · Momento en que la otra persona aceptó la propuesta. */
   @Column({ type: 'timestamptz', nullable: true })
   agreedAt: Date | null;

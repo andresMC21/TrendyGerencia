@@ -22,6 +22,9 @@ const ACTIVE_TRANSACTION_MESSAGE = 'El producto ya tiene una transaccion activa'
 const AGREEMENT_NEEDS_OTHER_PARTY =
   'El punto se acuerda cuando la otra persona acepta la propuesta de encuentro';
 
+const BOTH_MUST_CONFIRM_MESSAGE =
+  'El intercambio se completa cuando el vendedor marca producto vendido y el comprador producto recibido';
+
 const BUYER_PROPOSES_FIRST_MESSAGE =
   'El comprador propone primero el punto y el horario; el vendedor responde';
 
@@ -157,7 +160,8 @@ export class TransactionService {
   }
 
   /**
-   * HU-17 · Finalizar o cancelar el intercambio.
+   * HU-17 · Cancelar el intercambio (completarlo exige las dos confirmaciones:
+   * confirmExchange).
    *
    * - Solo comprador o vendedor pueden cambiar el estado (403 para cualquier
    *   otra persona, también administradores).
@@ -193,6 +197,9 @@ export class TransactionService {
         if (target === TransactionStatus.AGREED_POINT) {
           throw new ConflictException(AGREEMENT_NEEDS_OTHER_PARTY);
         }
+        if (target === TransactionStatus.COMPLETED) {
+          throw new ConflictException(BOTH_MUST_CONFIRM_MESSAGE);
+        }
         this.assertTransition(transaction.status, target);
 
         transaction.status = target;
@@ -213,6 +220,66 @@ export class TransactionService {
     // Se recarga después del commit para devolver el estado real del producto.
     const updated = await this.findEntity(id);
     if (changedProductId && updated.product) {
+      await this.productService.invalidateFeedCache(
+        updated.product.neighborhoodId,
+      );
+    }
+    return TransactionDto.fromEntity(updated);
+  }
+
+  /**
+   * HU-17 · Cada parte confirma su lado del intercambio.
+   *
+   * - El vendedor marca «producto vendido» y el comprador «producto recibido».
+   * - Solo con el punto ya acordado (AGREED_POINT); 409 en otro estado.
+   * - Cuando están las dos confirmaciones, la transacción pasa a COMPLETED y
+   *   el producto a SOLD, en la misma transacción de base de datos.
+   * - Fila bloqueada: si los dos confirman a la vez, el segundo ve la
+   *   confirmación del primero y completa el intercambio.
+   * - Confirmar dos veces no cambia nada.
+   */
+  async confirmExchange(id: string, userId: string): Promise<TransactionDto> {
+    const completedProductId = await this.dataSource.transaction(
+      async (manager) => {
+        const transaction = await manager.findOne(Transaction, {
+          where: { id },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!transaction) {
+          throw new NotFoundException(`Transaction with id ${id} not found`);
+        }
+        this.assertParticipant(transaction, userId);
+        if (transaction.status === TransactionStatus.COMPLETED) return null;
+        if (transaction.status !== TransactionStatus.AGREED_POINT) {
+          throw new ConflictException(
+            'Solo se confirma el intercambio con el punto de encuentro acordado',
+          );
+        }
+
+        const now = new Date();
+        if (userId === transaction.sellerId) {
+          transaction.sellerConfirmedAt ??= now;
+        } else {
+          transaction.buyerConfirmedAt ??= now;
+        }
+
+        const both =
+          !!transaction.sellerConfirmedAt && !!transaction.buyerConfirmedAt;
+        if (both) transaction.status = TransactionStatus.COMPLETED;
+        await manager.save(transaction);
+
+        if (!both) return null;
+        await this.productService.updateStatus(
+          transaction.productId,
+          ProductStatus.SOLD,
+          manager,
+        );
+        return transaction.productId;
+      },
+    );
+
+    const updated = await this.findEntity(id);
+    if (completedProductId && updated.product) {
       await this.productService.invalidateFeedCache(
         updated.product.neighborhoodId,
       );
