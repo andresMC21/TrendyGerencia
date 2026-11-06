@@ -60,6 +60,24 @@ export class TransactionDto {
   })
   scheduledTime: Date | null;
 
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description:
+      'Quién propuso el punto y horario vigentes, o null si no hay propuesta. Mientras la transacción esté PENDING, la otra persona debe aceptarla.',
+  })
+  proposedById: string | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description:
+      'Momento en que comprador y vendedor quedaron de acuerdo, o null si aún no hay acuerdo.',
+  })
+  agreedAt: Date | null;
+
   @ApiPropertyOptional({
     type: ProductDto,
     description:
@@ -113,6 +131,8 @@ export class TransactionDto {
     dto.status = transaction.status;
     dto.safePointId = transaction.safePointId;
     dto.scheduledTime = transaction.scheduledTime;
+    dto.proposedById = transaction.proposedById ?? null;
+    dto.agreedAt = transaction.agreedAt ?? null;
     if (transaction.product)
       dto.product = ProductDto.fromEntity(transaction.product);
     dto.buyer = TransactionUserDto.fromEntity(transaction.buyer);

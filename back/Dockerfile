@@ -7,4 +7,4 @@ RUN npm ci
 COPY . .
 RUN npm run build
 EXPOSE 3000
-CMD ["sh", "-c", "npm run migration:run:prod && npm run seed && node dist/main"]
+CMD ["sh", "-c", "npm run migration:run:prod && node dist/seed/seed.js && npm run start:prod"]

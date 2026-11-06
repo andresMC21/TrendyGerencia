@@ -1,7 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsDateString, IsNotEmpty, IsString } from 'class-validator';
 
-export class ConfirmPointDto {
+/**
+ * HU-16 · Punto seguro y horario de una propuesta de encuentro.
+ *
+ * Se usa para proponer (o contraproponer) y también para aceptar: quien acepta
+ * envía la propuesta que vio, y si la otra persona la cambió mientras tanto la
+ * API responde 409 en lugar de aceptar algo distinto.
+ */
+export class MeetingProposalDto {
   @ApiProperty({
     type: String,
     example: 'sp-1',

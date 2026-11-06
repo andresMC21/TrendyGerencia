@@ -24,8 +24,8 @@ import {
 import { Auth } from '../user/decorators/auth.decorator';
 import { GetUser } from '../user/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
-import { ConfirmPointDto } from './dto/confirm-point.dto';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { MeetingProposalDto } from './dto/meeting-proposal.dto';
 import { TransactionDto } from './dto/transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { TransactionService } from './transaction.service';
@@ -136,9 +136,9 @@ export class TransactionController {
   @ApiOperation({
     summary: 'Finalizar o cancelar la transacción (HU-17)',
     description:
-      'Solo el comprador o el vendedor pueden cambiar el estado. Transiciones válidas: PENDING → AGREED_POINT/CANCELLED y AGREED_POINT → COMPLETED/CANCELLED. ' +
+      'Solo el comprador o el vendedor pueden cambiar el estado. Transiciones válidas: PENDING → CANCELLED y AGREED_POINT → COMPLETED/CANCELLED. ' +
       'COMPLETED deja el producto en SOLD y CANCELLED lo libera (vuelve a AVAILABLE); transacción y producto se guardan juntos. ' +
-      'Para pasar a AGREED_POINT deben existir un punto seguro y un horario confirmados. Pedir el estado que la transacción ya tiene no cambia nada.',
+      'AGREED_POINT no se pide aquí: se alcanza cuando la otra persona acepta la propuesta de encuentro (HU-16). Pedir el estado que la transacción ya tiene no cambia nada.',
   })
   @ApiParam({
     name: 'id',
@@ -157,7 +157,7 @@ export class TransactionController {
   })
   @ApiBadRequestResponse({
     description:
-      'El identificador o el estado no son válidos, o faltan el punto seguro y el horario para pasar a AGREED_POINT.',
+      'El identificador o el estado no son válidos.',
   })
   @ApiNotFoundResponse({
     description: 'No existe una transacción con ese identificador.',
@@ -168,7 +168,7 @@ export class TransactionController {
   })
   @ApiConflictResponse({
     description:
-      'La transición no está permitida desde el estado actual (por ejemplo, cancelar una transacción ya completada o completar una que aún no acordó punto).',
+      'La transición no está permitida desde el estado actual (por ejemplo, cancelar una transacción ya completada, completar una que aún no acordó punto o pedir AGREED_POINT sin que la otra persona acepte).',
   })
   @ApiInternalServerErrorResponse({
     description: 'Error inesperado al actualizar la transacción.',
@@ -181,13 +181,13 @@ export class TransactionController {
     return this.transactionService.update(id, user.id, updateTransactionDto);
   }
 
-  @Post(':id/confirm-point')
+  @Post(':id/meeting-proposal')
   @Auth()
   @HttpCode(200)
   @ApiOperation({
-    summary: 'Confirmar punto seguro y horario de encuentro',
+    summary: 'Proponer o contraproponer punto seguro y horario (HU-16)',
     description:
-      'Requiere JWT y participación en la transacción. Cualquier participante puede registrar el punto y el horario mientras la transacción esté PENDING. La operación cambia el estado a AGREED_POINT.',
+      'Requiere JWT y participación en la transacción, que debe estar PENDING. Guarda la propuesta y quién la hizo; la transacción sigue en PENDING hasta que la otra persona la acepte. Una nueva propuesta de cualquiera de los dos reemplaza a la anterior.',
   })
   @ApiParam({
     name: 'id',
@@ -197,17 +197,20 @@ export class TransactionController {
     description: 'Identificador UUID de la transacción.',
   })
   @ApiBody({
-    type: ConfirmPointDto,
-    description: 'Punto seguro y fecha/hora programada para el encuentro.',
+    type: MeetingProposalDto,
+    description: 'Punto seguro y fecha/hora futura propuestos para el encuentro.',
   })
   @ApiOkResponse({
     type: TransactionDto,
     description:
-      'El punto y la fecha se guardaron y la transacción pasó a AGREED_POINT.',
+      'La propuesta quedó registrada y espera la respuesta de la otra persona.',
   })
   @ApiBadRequestResponse({
     description:
-      'El identificador, el punto seguro o la fecha programada no son válidos.',
+      'El identificador, el punto seguro o la fecha no son válidos, o la fecha ya pasó.',
+  })
+  @ApiConflictResponse({
+    description: 'La transacción no está en estado PENDING.',
   })
   @ApiNotFoundResponse({
     description: 'No existe una transacción con ese identificador.',
@@ -215,17 +218,104 @@ export class TransactionController {
   @ApiForbiddenResponse({
     description: 'El usuario autenticado no participa en la transacción.',
   })
-  @ApiConflictResponse({
-    description: 'La transacción no está en estado PENDING.',
-  })
   @ApiInternalServerErrorResponse({
-    description: 'Error inesperado al confirmar el punto de encuentro.',
+    description: 'Error inesperado al negociar el punto de encuentro.',
   })
-  confirmPoint(
+  proposeMeeting(
     @Param('id', ParseUUIDPipe) id: string,
     @GetUser() user: User,
-    @Body() confirmPointDto: ConfirmPointDto,
+    @Body() proposal: MeetingProposalDto,
   ): Promise<TransactionDto> {
-    return this.transactionService.confirmPoint(id, user.id, confirmPointDto);
+    return this.transactionService.proposeMeeting(id, user.id, proposal);
+  }
+
+  @Post(':id/meeting-proposal/accept')
+  @Auth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Aceptar la propuesta de encuentro de la otra persona (HU-16)',
+    description:
+      'Solo la contraparte de quien propuso puede aceptar. Se envía la propuesta que se vio: si cambió mientras tanto, responde 409. Al aceptar, la transacción pasa a AGREED_POINT.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    format: 'uuid',
+    example: '00000000-0000-4000-8000-000000000000',
+    description: 'Identificador UUID de la transacción.',
+  })
+  @ApiBody({
+    type: MeetingProposalDto,
+    description: 'La propuesta que se está aceptando (punto y horario).',
+  })
+  @ApiOkResponse({
+    type: TransactionDto,
+    description: 'Comprador y vendedor quedaron de acuerdo: AGREED_POINT.',
+  })
+  @ApiBadRequestResponse({
+    description:
+      'El cuerpo no es válido o el horario propuesto ya pasó (hay que proponer otro).',
+  })
+  @ApiConflictResponse({
+    description:
+      'No hay propuesta vigente, es tu propia propuesta, la propuesta cambió o la transacción no está PENDING.',
+  })
+  @ApiNotFoundResponse({
+    description: 'No existe una transacción con ese identificador.',
+  })
+  @ApiForbiddenResponse({
+    description: 'El usuario autenticado no participa en la transacción.',
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Error inesperado al negociar el punto de encuentro.',
+  })
+  acceptMeeting(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+    @Body() seen: MeetingProposalDto,
+  ): Promise<TransactionDto> {
+    return this.transactionService.acceptMeeting(id, user.id, seen);
+  }
+
+  @Post(':id/meeting-proposal/reject')
+  @Auth()
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Rechazar la propuesta de encuentro de la otra persona (HU-16)',
+    description:
+      'Solo la contraparte de quien propuso puede rechazar. La propuesta se borra y la transacción sigue en PENDING para que cualquiera proponga otra.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    format: 'uuid',
+    example: '00000000-0000-4000-8000-000000000000',
+    description: 'Identificador UUID de la transacción.',
+  })
+  @ApiOkResponse({
+    type: TransactionDto,
+    description: 'La propuesta se rechazó; la transacción sigue en PENDING.',
+  })
+  @ApiBadRequestResponse({
+    description: 'El identificador de la transacción no tiene formato UUID.',
+  })
+  @ApiConflictResponse({
+    description:
+      'No hay propuesta vigente, es tu propia propuesta o la transacción no está PENDING.',
+  })
+  @ApiNotFoundResponse({
+    description: 'No existe una transacción con ese identificador.',
+  })
+  @ApiForbiddenResponse({
+    description: 'El usuario autenticado no participa en la transacción.',
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Error inesperado al negociar el punto de encuentro.',
+  })
+  rejectMeeting(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ): Promise<TransactionDto> {
+    return this.transactionService.rejectMeeting(id, user.id);
   }
 }

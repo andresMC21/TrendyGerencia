@@ -6,18 +6,24 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { Product } from '../product/entities/product.entity';
 import { ProductStatus } from '../product/enums/product-status.enum';
 import { ProductService } from '../product/product.service';
-import { ConfirmPointDto } from './dto/confirm-point.dto';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { MeetingProposalDto } from './dto/meeting-proposal.dto';
 import { TransactionDto } from './dto/transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { Transaction } from './entities/transaction.entity';
 import { TransactionStatus } from './enums/transaction-status.enum';
 
 const ACTIVE_TRANSACTION_MESSAGE = 'El producto ya tiene una transaccion activa';
+
+const AGREEMENT_NEEDS_OTHER_PARTY =
+  'El punto se acuerda cuando la otra persona acepta la propuesta de encuentro';
+
+const PROPOSAL_CHANGED_MESSAGE =
+  'La propuesta de encuentro cambio; revisa la nueva antes de aceptar';
 
 const ACTIVE_TRANSACTION_STATUSES = [
   TransactionStatus.PENDING,
@@ -28,10 +34,9 @@ const ALLOWED_STATUS_TRANSITIONS: Record<
   TransactionStatus,
   TransactionStatus[]
 > = {
-  [TransactionStatus.PENDING]: [
-    TransactionStatus.AGREED_POINT,
-    TransactionStatus.CANCELLED,
-  ],
+  // PENDING → AGREED_POINT no se pide por aquí: ocurre al aceptar la
+  // propuesta de encuentro (acceptMeeting), para que decidan los dos.
+  [TransactionStatus.PENDING]: [TransactionStatus.CANCELLED],
   [TransactionStatus.AGREED_POINT]: [
     TransactionStatus.COMPLETED,
     TransactionStatus.CANCELLED,
@@ -149,7 +154,7 @@ export class TransactionService {
   }
 
   /**
-   * HU-17 · Finalizar o cancelar el intercambio (y el paso a AGREED_POINT).
+   * HU-17 · Finalizar o cancelar el intercambio.
    *
    * - Solo comprador o vendedor pueden cambiar el estado (403 para cualquier
    *   otra persona, también administradores).
@@ -182,16 +187,10 @@ export class TransactionService {
         this.assertParticipant(transaction, userId);
 
         if (transaction.status === target) return null;
-        this.assertTransition(transaction.status, target);
-
-        if (
-          target === TransactionStatus.AGREED_POINT &&
-          (!transaction.safePointId || !transaction.scheduledTime)
-        ) {
-          throw new BadRequestException(
-            'Confirma un punto seguro antes de pasar a AGREED_POINT',
-          );
+        if (target === TransactionStatus.AGREED_POINT) {
+          throw new ConflictException(AGREEMENT_NEEDS_OTHER_PARTY);
         }
+        this.assertTransition(transaction.status, target);
 
         transaction.status = target;
         await manager.save(transaction);
@@ -219,55 +218,155 @@ export class TransactionService {
   }
 
   /**
-   * HU-16 · Acordar una entrega: punto seguro y horario.
+   * HU-16 · Proponer (o contraproponer) punto seguro y horario.
    *
    * - Solo comprador o vendedor (403 para cualquier otra persona).
-   * - La transacción debe estar PENDING y pasa a AGREED_POINT.
+   * - La transacción debe estar PENDING (409 si ya hay acuerdo o se cerró).
    * - El horario debe ser futuro (400 si ya pasó).
-   * - Se hace con la fila bloqueada, igual que HU-17: si la otra persona
-   *   cancela al mismo tiempo, gana una de las dos operaciones y la otra recibe
-   *   409, en lugar de que «acordar» sobrescriba una cancelación.
+   * - La transacción sigue en PENDING: queda registrada la propuesta y quién
+   *   la hizo, y la otra persona debe aceptarla. Una nueva propuesta de
+   *   cualquiera de los dos reemplaza a la anterior (contrapropuesta).
+   * - Fila bloqueada: si la otra persona acepta o cancela al mismo tiempo, las
+   *   operaciones se atienden de a una.
    */
-  async confirmPoint(
+  async proposeMeeting(
     id: string,
     userId: string,
-    confirmPointDto: ConfirmPointDto,
+    proposal: MeetingProposalDto,
   ): Promise<TransactionDto> {
-    const scheduledTime = new Date(confirmPointDto.scheduledTime);
-    if (Number.isNaN(scheduledTime.getTime())) {
+    const scheduledTime = this.parseFutureTime(proposal.scheduledTime);
+
+    await this.dataSource.transaction(async (manager) => {
+      const transaction = await this.lockForMeeting(manager, id, userId);
+      transaction.safePointId = proposal.safePointId;
+      transaction.scheduledTime = scheduledTime;
+      transaction.proposedById = userId;
+      transaction.agreedAt = null;
+      await manager.save(transaction);
+    });
+
+    return TransactionDto.fromEntity(await this.findEntity(id));
+  }
+
+  /**
+   * HU-16 · Aceptar la propuesta de la otra persona: queda el acuerdo.
+   *
+   * - Solo la contraparte de quien propuso (409 si es tu propia propuesta).
+   * - Se envía la propuesta que se vio; si cambió mientras tanto (hubo una
+   *   contrapropuesta), 409 en lugar de aceptar algo distinto.
+   * - El horario aún debe ser futuro.
+   * - La transacción pasa a AGREED_POINT.
+   */
+  async acceptMeeting(
+    id: string,
+    userId: string,
+    seen: MeetingProposalDto,
+  ): Promise<TransactionDto> {
+    const seenTime = new Date(seen.scheduledTime);
+    if (Number.isNaN(seenTime.getTime())) {
       throw new BadRequestException(
         'scheduledTime debe ser una fecha ISO valida',
       );
     }
 
     await this.dataSource.transaction(async (manager) => {
-      const transaction = await manager.findOne(Transaction, {
-        where: { id },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!transaction) {
-        throw new NotFoundException(`Transaction with id ${id} not found`);
-      }
-      this.assertParticipant(transaction, userId);
+      const transaction = await this.lockForMeeting(manager, id, userId);
+      this.assertCounterpartOfProposal(transaction, userId);
 
-      if (transaction.status !== TransactionStatus.PENDING) {
-        throw new ConflictException(
-          'Solo transacciones PENDING pueden confirmar punto',
-        );
+      if (
+        transaction.safePointId !== seen.safePointId ||
+        transaction.scheduledTime?.getTime() !== seenTime.getTime()
+      ) {
+        throw new ConflictException(PROPOSAL_CHANGED_MESSAGE);
       }
-      if (scheduledTime.getTime() <= Date.now()) {
+      if (seenTime.getTime() <= Date.now()) {
         throw new BadRequestException(
-          'scheduledTime debe ser una fecha y hora futura',
+          'El horario propuesto ya paso; propon uno nuevo',
         );
       }
 
-      transaction.safePointId = confirmPointDto.safePointId;
-      transaction.scheduledTime = scheduledTime;
       transaction.status = TransactionStatus.AGREED_POINT;
+      transaction.agreedAt = new Date();
       await manager.save(transaction);
     });
 
     return TransactionDto.fromEntity(await this.findEntity(id));
+  }
+
+  /**
+   * HU-16 · Rechazar la propuesta de la otra persona.
+   *
+   * Se borra la propuesta y la transacción sigue en PENDING: cualquiera de los
+   * dos puede proponer otro punto u horario.
+   */
+  async rejectMeeting(id: string, userId: string): Promise<TransactionDto> {
+    await this.dataSource.transaction(async (manager) => {
+      const transaction = await this.lockForMeeting(manager, id, userId);
+      this.assertCounterpartOfProposal(transaction, userId);
+
+      transaction.safePointId = null;
+      transaction.scheduledTime = null;
+      transaction.proposedById = null;
+      await manager.save(transaction);
+    });
+
+    return TransactionDto.fromEntity(await this.findEntity(id));
+  }
+
+  /** Bloquea la transacción y valida participante y estado PENDING. */
+  private async lockForMeeting(
+    manager: EntityManager,
+    id: string,
+    userId: string,
+  ): Promise<Transaction> {
+    // Bloqueo sin relaciones: Postgres no permite FOR UPDATE sobre un LEFT JOIN.
+    const transaction = await manager.findOne(Transaction, {
+      where: { id },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (!transaction) {
+      throw new NotFoundException(`Transaction with id ${id} not found`);
+    }
+    this.assertParticipant(transaction, userId);
+    if (transaction.status !== TransactionStatus.PENDING) {
+      throw new ConflictException(
+        'Solo transacciones PENDING pueden negociar el punto de encuentro',
+      );
+    }
+    return transaction;
+  }
+
+  private assertCounterpartOfProposal(
+    transaction: Transaction,
+    userId: string,
+  ): void {
+    if (
+      !transaction.proposedById ||
+      !transaction.safePointId ||
+      !transaction.scheduledTime
+    ) {
+      throw new ConflictException('No hay una propuesta de encuentro vigente');
+    }
+    if (transaction.proposedById === userId) {
+      throw new ConflictException(
+        'Tu propuesta debe aceptarla o rechazarla la otra persona',
+      );
+    }
+  }
+
+  private parseFutureTime(value: string): Date {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException(
+        'scheduledTime debe ser una fecha ISO valida',
+      );
+    }
+    if (date.getTime() <= Date.now()) {
+      throw new BadRequestException(
+        'scheduledTime debe ser una fecha y hora futura',
+      );
+    }
+    return date;
   }
 
   private async findEntity(id: string): Promise<Transaction> {

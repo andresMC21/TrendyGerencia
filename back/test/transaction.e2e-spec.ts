@@ -189,37 +189,103 @@ describe('Transactions (e2e)', () => {
       .expect(403);
   });
 
-  it('POST /transactions/:id/confirm-point valida permisos, body y estado', async () => {
-    // Assert
-    await http
-      .post(`/api/transactions/${transactionId}/confirm-point`)
-      .set(auth(tokenOther))
-      .send({ safePointId: 'sp-1', scheduledTime: '2030-10-05T15:00:00Z' })
-      .expect(403);
+  it('HU-16 · comprador y vendedor negocian el punto hasta quedar de acuerdo', async () => {
+    const proposal = (id: string) => `/api/transactions/${id}/meeting-proposal`;
+    const P1 = { safePointId: 'sp-1', scheduledTime: '2030-10-05T15:00:00.000Z' };
+    const P2 = { safePointId: 'sp-2', scheduledTime: '2030-10-06T10:00:00.000Z' };
 
+    // Validaciones de permisos y cuerpo
+    await http.post(proposal(transactionId)).set(auth(tokenOther)).send(P1).expect(403);
     await http
-      .post(`/api/transactions/${transactionId}/confirm-point`)
+      .post(proposal(transactionId))
       .set(auth(tokenBuyer))
       .send({ safePointId: '', scheduledTime: 'fecha-mala' })
       .expect(400);
 
-    const res = await http
-      .post(`/api/transactions/${transactionId}/confirm-point`)
-      .set(auth(tokenSeller))
-      .send({ safePointId: 'sp-1', scheduledTime: '2030-10-05T15:00:00Z' })
+    // El comprador propone: queda PENDING esperando al vendedor
+    const proposed = await http
+      .post(proposal(transactionId))
+      .set(auth(tokenBuyer))
+      .send(P1)
       .expect(200);
-
-    expect(res.body).toMatchObject({
-      id: transactionId,
-      status: 'AGREED_POINT',
+    expect(proposed.body).toMatchObject({
+      status: 'PENDING',
       safePointId: 'sp-1',
+      proposedById: proposed.body.buyerId,
+      agreedAt: null,
     });
 
+    // Nadie puede saltarse el acuerdo
     await http
-      .post(`/api/transactions/${transactionId}/confirm-point`)
-      .set(auth(tokenSeller))
-      .send({ safePointId: 'sp-2', scheduledTime: '2030-10-05T15:00:00Z' })
+      .post(`${proposal(transactionId)}/accept`)
+      .set(auth(tokenBuyer))
+      .send(P1)
       .expect(409);
+    await http
+      .put(`/api/transactions/${transactionId}/status`)
+      .set(auth(tokenBuyer))
+      .send({ status: 'AGREED_POINT' })
+      .expect(409);
+    await http
+      .post(`${proposal(transactionId)}/accept`)
+      .set(auth(tokenOther))
+      .send(P1)
+      .expect(403);
+
+    // El vendedor contrapropone
+    const counter = await http
+      .post(proposal(transactionId))
+      .set(auth(tokenSeller))
+      .send(P2)
+      .expect(200);
+    expect(counter.body).toMatchObject({
+      status: 'PENDING',
+      safePointId: 'sp-2',
+      proposedById: counter.body.sellerId,
+    });
+
+    // El comprador no puede aceptar la propuesta vieja
+    await http
+      .post(`${proposal(transactionId)}/accept`)
+      .set(auth(tokenBuyer))
+      .send(P1)
+      .expect(409);
+
+    // Rechaza la contrapropuesta: se borra y sigue PENDING
+    await http.post(`${proposal(transactionId)}/reject`).set(auth(tokenSeller)).expect(409);
+    const rejected = await http
+      .post(`${proposal(transactionId)}/reject`)
+      .set(auth(tokenBuyer))
+      .expect(200);
+    expect(rejected.body).toMatchObject({
+      status: 'PENDING',
+      safePointId: null,
+      scheduledTime: null,
+      proposedById: null,
+    });
+    await http
+      .post(`${proposal(transactionId)}/accept`)
+      .set(auth(tokenBuyer))
+      .send(P2)
+      .expect(409);
+
+    // El vendedor vuelve a proponer y el comprador acepta
+    await http.post(proposal(transactionId)).set(auth(tokenSeller)).send(P2).expect(200);
+    const agreed = await http
+      .post(`${proposal(transactionId)}/accept`)
+      .set(auth(tokenBuyer))
+      .send(P2)
+      .expect(200);
+    expect(agreed.body).toMatchObject({
+      id: transactionId,
+      status: 'AGREED_POINT',
+      safePointId: 'sp-2',
+      scheduledTime: P2.scheduledTime,
+    });
+    expect(agreed.body.agreedAt).toEqual(expect.any(String));
+
+    // Con el acuerdo hecho ya no se renegocia
+    await http.post(proposal(transactionId)).set(auth(tokenSeller)).send(P1).expect(409);
   });
 
   it('PUT /transactions/:id/status valida transiciones y completa la venta', async () => {
@@ -331,7 +397,7 @@ describe('Transactions (e2e)', () => {
 
       // Act / Assert
       await http
-        .post(`/api/transactions/${tx.body.id}/confirm-point`)
+        .post(`/api/transactions/${tx.body.id}/meeting-proposal`)
         .set(auth(tokenBuyer))
         .send({ safePointId: 'cai-granada', scheduledTime: '2020-01-01T10:00:00Z' })
         .expect(400);
@@ -342,39 +408,50 @@ describe('Transactions (e2e)', () => {
       expect(detail.body.status).toBe('PENDING');
     });
 
-    it('si una parte acuerda el punto y la otra cancela a la vez, el resultado es coherente', async () => {
+    const reservedTx = async (title: string) => {
+      const product = await http
+        .post('/api/products')
+        .set(auth(tokenSeller))
+        .send(productBody({ title }))
+        .expect(201);
+      const tx = await http
+        .post('/api/transactions')
+        .set(auth(tokenBuyer))
+        .send({ productId: product.body.id })
+        .expect(201);
+      return { productId: product.body.id as string, txId: tx.body.id as string };
+    };
+    const P1 = { safePointId: 'cai-granada', scheduledTime: '2099-11-10T15:00:00.000Z' };
+    const P2 = { safePointId: 'cc-chipichape', scheduledTime: '2099-11-11T09:00:00.000Z' };
+
+    it('si una parte acepta el punto y la otra cancela a la vez, el resultado es coherente', async () => {
       for (let i = 0; i < 5; i++) {
         // Arrange
-        const product = await http
-          .post('/api/products')
+        const { productId: pid, txId } = await reservedTx(`Producto HU-16 carrera ${i}`);
+        await http
+          .post(`/api/transactions/${txId}/meeting-proposal`)
           .set(auth(tokenSeller))
-          .send(productBody({ title: `Producto HU-16 carrera ${i}` }))
-          .expect(201);
-        const tx = await http
-          .post('/api/transactions')
-          .set(auth(tokenBuyer))
-          .send({ productId: product.body.id })
-          .expect(201);
+          .send(P1)
+          .expect(200);
 
         // Act
-        const [cancel, confirm] = await Promise.all([
+        const [cancel, accept] = await Promise.all([
           http
-            .put(`/api/transactions/${tx.body.id}/status`)
+            .put(`/api/transactions/${txId}/status`)
             .set(auth(tokenSeller))
             .send({ status: 'CANCELLED' }),
           http
-            .post(`/api/transactions/${tx.body.id}/confirm-point`)
+            .post(`/api/transactions/${txId}/meeting-proposal/accept`)
             .set(auth(tokenBuyer))
-            .send({ safePointId: 'cai-granada', scheduledTime: '2099-11-10T15:00:00Z' }),
+            .send(P1),
         ]);
 
         // Assert: o quedó cancelada con el producto libre, o acordada y reservada
         const status = (
-          await http.get(`/api/transactions/${tx.body.id}`).set(auth(tokenBuyer)).expect(200)
+          await http.get(`/api/transactions/${txId}`).set(auth(tokenBuyer)).expect(200)
         ).body.status;
-        const productStatus = (
-          await http.get(`/api/products/${product.body.id}`).expect(200)
-        ).body.status;
+        const productStatus = (await http.get(`/api/products/${pid}`).expect(200)).body
+          .status;
         expect(cancel.status).toBe(200);
         if (status === 'CANCELLED') {
           expect(productStatus).toBe('AVAILABLE');
@@ -382,7 +459,44 @@ describe('Transactions (e2e)', () => {
           expect(status).toBe('AGREED_POINT');
           expect(productStatus).toBe('RESERVED');
         }
-        expect([200, 409]).toContain(confirm.status);
+        expect([200, 409]).toContain(accept.status);
+      }
+    });
+
+    it('si el comprador acepta mientras el vendedor cambia la propuesta, nunca acepta algo que no vio', async () => {
+      for (let i = 0; i < 5; i++) {
+        // Arrange
+        const { txId } = await reservedTx(`Producto HU-16 contrapropuesta ${i}`);
+        await http
+          .post(`/api/transactions/${txId}/meeting-proposal`)
+          .set(auth(tokenSeller))
+          .send(P1)
+          .expect(200);
+
+        // Act
+        const [accept, change] = await Promise.all([
+          http
+            .post(`/api/transactions/${txId}/meeting-proposal/accept`)
+            .set(auth(tokenBuyer))
+            .send(P1),
+          http
+            .post(`/api/transactions/${txId}/meeting-proposal`)
+            .set(auth(tokenSeller))
+            .send(P2),
+        ]);
+
+        // Assert
+        const tx = (
+          await http.get(`/api/transactions/${txId}`).set(auth(tokenBuyer)).expect(200)
+        ).body;
+        if (accept.status === 200) {
+          expect(change.status).toBe(409);
+          expect(tx).toMatchObject({ status: 'AGREED_POINT', safePointId: P1.safePointId });
+        } else {
+          expect(accept.status).toBe(409);
+          expect(change.status).toBe(200);
+          expect(tx).toMatchObject({ status: 'PENDING', safePointId: P2.safePointId });
+        }
       }
     });
   });
@@ -406,12 +520,20 @@ describe('Transactions (e2e)', () => {
         .expect(201);
       return res.body.id as string;
     };
-    const agreePoint = (txId: string) =>
-      http
-        .post(`/api/transactions/${txId}/confirm-point`)
+    /** HU-16 · El comprador propone y el vendedor acepta. */
+    const agreePoint = async (txId: string) => {
+      const point = { safePointId: 'sp-1', scheduledTime: '2030-10-05T15:00:00Z' };
+      await http
+        .post(`/api/transactions/${txId}/meeting-proposal`)
         .set(auth(tokenBuyer))
-        .send({ safePointId: 'sp-1', scheduledTime: '2030-10-05T15:00:00Z' })
+        .send(point)
         .expect(200);
+      await http
+        .post(`/api/transactions/${txId}/meeting-proposal/accept`)
+        .set(auth(tokenSeller))
+        .send(point)
+        .expect(200);
+    };
     const setStatus = (txId: string, status: string, token: string) =>
       http
         .put(`/api/transactions/${txId}/status`)
