@@ -78,6 +78,39 @@ export class TransactionDto {
   })
   agreedAt: Date | null;
 
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description:
+      'Quién rechazó la última propuesta de encuentro, o null. Se limpia cuando llega una propuesta nueva.',
+  })
+  rejectedById: string | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'Cuándo se rechazó la última propuesta, o null.',
+  })
+  rejectedAt: Date | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'cai-granada',
+    description: 'Punto seguro de la propuesta rechazada, o null.',
+  })
+  rejectedSafePointId: string | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'Fecha y hora de la propuesta rechazada, o null.',
+  })
+  rejectedScheduledTime: Date | null;
+
   @ApiPropertyOptional({
     type: ProductDto,
     description:
@@ -133,6 +166,10 @@ export class TransactionDto {
     dto.scheduledTime = transaction.scheduledTime;
     dto.proposedById = transaction.proposedById ?? null;
     dto.agreedAt = transaction.agreedAt ?? null;
+    dto.rejectedById = transaction.rejectedById ?? null;
+    dto.rejectedAt = transaction.rejectedAt ?? null;
+    dto.rejectedSafePointId = transaction.rejectedSafePointId ?? null;
+    dto.rejectedScheduledTime = transaction.rejectedScheduledTime ?? null;
     if (transaction.product)
       dto.product = ProductDto.fromEntity(transaction.product);
     dto.buyer = TransactionUserDto.fromEntity(transaction.buyer);

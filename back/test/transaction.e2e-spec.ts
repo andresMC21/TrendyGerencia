@@ -266,6 +266,17 @@ describe('Transactions (e2e)', () => {
       scheduledTime: null,
       proposedById: null,
     });
+    // El vendedor, que había contrapropuesto, ve que el comprador la rechazó
+    const seenBySeller = await http
+      .get(`/api/transactions/${transactionId}`)
+      .set(auth(tokenSeller))
+      .expect(200);
+    expect(seenBySeller.body).toMatchObject({
+      rejectedById: rejected.body.buyerId,
+      rejectedSafePointId: 'sp-2',
+      rejectedScheduledTime: P2.scheduledTime,
+    });
+    expect(seenBySeller.body.rejectedAt).toEqual(expect.any(String));
     await http
       .post(`${proposal(transactionId)}/accept`)
       .set(auth(tokenBuyer))
@@ -275,8 +286,13 @@ describe('Transactions (e2e)', () => {
     // Sin propuesta, el vendedor vuelve a esperar al comprador
     await http.post(proposal(transactionId)).set(auth(tokenSeller)).send(P2).expect(409);
 
-    // El comprador propone de nuevo y el vendedor acepta
-    await http.post(proposal(transactionId)).set(auth(tokenBuyer)).send(P2).expect(200);
+    // El comprador propone de nuevo (el aviso de rechazo se limpia) y el vendedor acepta
+    const again = await http
+      .post(proposal(transactionId))
+      .set(auth(tokenBuyer))
+      .send(P2)
+      .expect(200);
+    expect(again.body).toMatchObject({ rejectedById: null, rejectedSafePointId: null });
     const agreed = await http
       .post(`${proposal(transactionId)}/accept`)
       .set(auth(tokenSeller))
