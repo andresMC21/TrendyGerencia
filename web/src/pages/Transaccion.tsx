@@ -49,6 +49,9 @@ function TransaccionPagina({ id }: { id: string }) {
   // ver la respuesta de la otra persona (propuesta, aceptación o cancelación).
   const abierta =
     estado.tipo === 'ok' && (estado.tx.status === 'PENDING' || estado.tx.status === 'AGREED_POINT');
+  // HU-17 · Con el punto acordado se consulta más seguido, para que el círculo se
+  // complete apenas la otra persona confirme su parte.
+  const intervalo = estado.tipo === 'ok' && estado.tx.status === 'AGREED_POINT' ? 2500 : 6000;
   useEffect(() => {
     if (!token || !abierta) return;
     const timer = window.setInterval(() => {
@@ -61,9 +64,9 @@ function TransaccionPagina({ id }: { id: string }) {
           ),
         )
         .catch(() => undefined);
-    }, 8000);
+    }, intervalo);
     return () => window.clearInterval(timer);
-  }, [abierta, id, token]);
+  }, [abierta, intervalo, id, token]);
 
   return (
     <>
@@ -157,10 +160,10 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
       )}
 
       <h2 className="detail-h">Resultado del intercambio</h2>
-      {aviso && <Alert tone="error">{aviso}</Alert>}
+      {aviso && <Alert tone="info">{aviso}</Alert>}
       {tx.status === 'COMPLETED' && (
         <>
-          <Confirmaciones tx={tx} />
+          <AnilloIntercambio tx={tx} />
           <div data-testid="resultado-final">
             <Alert tone="success">
               <strong>Intercambio completado.</strong> {tx.seller?.fullName ?? 'El vendedor'} marcó
@@ -189,72 +192,53 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
 type Accion = 'CONFIRMAR' | 'CANCELLED';
 
 /**
- * HU-17 · Estado de las dos confirmaciones: «producto vendido» del vendedor y
- * «producto recibido» del comprador. Cada una se pone en verde al confirmarse;
- * la propia es un botón mientras falte. Con las dos, el intercambio se completa.
+ * HU-17 · Círculo del intercambio: la mitad izquierda es el «producto vendido» del
+ * vendedor y la derecha el «producto recibido» del comprador. Cada mitad se pone
+ * verde cuando esa persona confirma; con las dos, el círculo queda completo.
  */
-function Confirmaciones({
-  tx,
-  onConfirmar,
-  disabled,
-}: {
-  tx: Tx;
-  onConfirmar?: () => void;
-  disabled?: boolean;
-}) {
-  const { user } = useSession();
+function AnilloIntercambio({ tx }: { tx: Tx }) {
+  const vendido = !!tx.sellerConfirmedAt;
+  const recibido = !!tx.buyerConfirmedAt;
+  const total = Number(vendido) + Number(recibido);
+  const completo = tx.status === 'COMPLETED' || total === 2;
+  const color = (ok: boolean) => (ok ? 'var(--green)' : 'var(--line)');
   const partes = [
-    {
-      key: 'vendedor',
-      label: 'Producto vendido',
-      quien: `${tx.seller?.fullName ?? 'Vendedor'} · vendedor`,
-      mia: tx.sellerId === user?.id,
-      hecha: tx.sellerConfirmedAt,
-    },
-    {
-      key: 'comprador',
-      label: 'Producto recibido',
-      quien: `${tx.buyer?.fullName ?? 'Comprador'} · comprador`,
-      mia: tx.buyerId === user?.id,
-      hecha: tx.buyerConfirmedAt,
-    },
+    { key: 'vendedor', ok: vendido, label: 'Producto vendido', quien: tx.seller?.fullName ?? 'Vendedor' },
+    { key: 'comprador', ok: recibido, label: 'Producto recibido', quien: tx.buyer?.fullName ?? 'Comprador' },
   ];
-  const abierta = tx.status === 'AGREED_POINT';
 
   return (
-    <div className="exchange-checks" data-testid="confirmaciones">
-      {partes.map((p) => {
-        const contenido = (
-          <>
-            <span className="exchange-check__icon" aria-hidden="true">
-              {p.hecha ? '✓' : ''}
-            </span>
-            <span className="exchange-check__text">
+    <div className="exchange-ring" data-testid="confirmaciones">
+      <svg
+        viewBox="0 0 120 120"
+        className="exchange-ring__svg"
+        role="img"
+        aria-label={`Intercambio: ${total} de 2 confirmaciones`}
+      >
+        {/* Mitad izquierda: vendedor. Mitad derecha: comprador. */}
+        <path d="M60 8 A52 52 0 0 0 60 112" stroke={color(vendido)} className="exchange-ring__half" />
+        <path d="M60 8 A52 52 0 0 1 60 112" stroke={color(recibido)} className="exchange-ring__half" />
+        <text x="60" y="60" className={`exchange-ring__center${completo ? ' exchange-ring__center--ok' : ''}`}>
+          {completo ? '✓' : `${total}/2`}
+        </text>
+      </svg>
+      <ul className="exchange-ring__legend">
+        {partes.map((p, i) => (
+          <li
+            key={p.key}
+            className={`exchange-check${p.ok ? ' exchange-check--ok' : ''}`}
+            data-testid={`estado-${p.key}`}
+          >
+            <span className="exchange-ring__dot" style={{ background: color(p.ok) }} aria-hidden="true" />
+            <span>
               <strong>{p.label}</strong>
               <small>
-                {p.quien} · {p.hecha ? 'confirmado' : p.mia && abierta ? 'pulsa para confirmar' : 'pendiente'}
+                {p.quien} · mitad {i === 0 ? 'izquierda' : 'derecha'} · {p.ok ? 'confirmado ✓' : 'por confirmar'}
               </small>
             </span>
-          </>
-        );
-        const clase = `exchange-check${p.hecha ? ' exchange-check--ok' : ''}${p.mia ? ' exchange-check--mine' : ''}`;
-        return p.mia && abierta && !p.hecha && onConfirmar ? (
-          <button
-            key={p.key}
-            type="button"
-            className={clase}
-            onClick={onConfirmar}
-            disabled={disabled}
-            data-testid={`confirmar-${p.key}`}
-          >
-            {contenido}
-          </button>
-        ) : (
-          <div key={p.key} className={clase} data-testid={`estado-${p.key}`}>
-            {contenido}
-          </div>
-        );
-      })}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -323,7 +307,7 @@ function CerrarIntercambio({
         setError('Solo el comprador y el vendedor pueden confirmar o cancelar esta transacción.');
       } else if (err instanceof ApiError && err.status === 409) {
         // La otra persona canceló o cambió el estado: se avisa y se muestra el estado real.
-        onAviso('La transacción cambió de estado mientras tanto. Te mostramos su estado actual.');
+        onAviso('La transacción se actualizó mientras tanto. Te mostramos su estado actual.');
         await transactionApi.get(token, tx.id).then(onChange).catch(() => undefined);
       } else {
         setError(err instanceof ApiError ? err.message : 'No pudimos actualizar la transacción. Inténtalo de nuevo.');
@@ -375,13 +359,29 @@ function CerrarIntercambio({
         {!acordado
           ? 'Cuando acuerden el punto y la hora, el vendedor marcará «producto vendido» y el comprador «producto recibido».'
           : yoConfirme && !otroConfirmo
-            ? `Ya confirmaste tu parte. Falta que ${otro} confirme para completar el intercambio.`
+            ? `Tu mitad del círculo ya está en verde. Se completa cuando ${otro} marque su parte.`
             : otroConfirmo && !yoConfirme
-              ? `${otro} ya confirmó su parte. Confirma la tuya para completar el intercambio.`
-              : `Después del encuentro, cada uno confirma su parte. Con los dos en verde, el intercambio queda completado.`}
+              ? `${otro} ya completó su mitad. Marca la tuya para cerrar el intercambio.`
+              : 'Después del encuentro, cada uno completa su mitad del círculo.'}
       </p>
-      <Confirmaciones tx={tx} onConfirmar={() => setPendiente('CONFIRMAR')} disabled={sending} />
+      {acordado && <AnilloIntercambio tx={tx} />}
       <div className="tx-actions">
+        {acordado &&
+          (yoConfirme ? (
+            <span className="exchange-done" data-testid="mi-parte-confirmada">
+              ✓ {soyVendedor ? 'Marcaste producto vendido' : 'Marcaste producto recibido'}
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={() => setPendiente('CONFIRMAR')}
+              disabled={sending}
+              data-testid={soyVendedor ? 'confirmar-vendedor' : 'confirmar-comprador'}
+            >
+              {soyVendedor ? 'Marcar producto vendido' : 'Marcar producto recibido'}
+            </button>
+          ))}
         <button
           type="button"
           className="btn btn-danger-outline"
