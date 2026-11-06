@@ -40,6 +40,16 @@ export class UserProfileDto {
 
   @ApiProperty({
     type: String,
+    format: 'uri',
+    nullable: true,
+    example: 'https://images.example.com/fotos/ana.jpg',
+    description: 'HU-03 · URL de la foto de perfil o null si no tiene.',
+  })
+  @Expose()
+  photoUrl: string | null;
+
+  @ApiProperty({
+    type: String,
     enum: ValidRoles,
     isArray: true,
     example: [ValidRoles.USER],

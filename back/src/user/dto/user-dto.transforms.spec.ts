@@ -6,6 +6,7 @@ import { ChangeEmailDto } from './changeEmail.dto';
 import { PaginationDto } from './pagination.dto';
 import { RegisterUserDto } from './register.dto';
 import { SearchUserDto } from './search.dto';
+import { UpdateUserDto } from './update.dto';
 
 describe('User DTO transforms and validation', () => {
   it('normaliza email en RegisterUserDto', () => {
@@ -68,5 +69,24 @@ describe('User DTO transforms and validation', () => {
 
     expect(dto.email).toBe('user@example.com');
     expect(validateSync(dto)).toHaveLength(0);
+  });
+
+  describe('HU-03 · photoUrl en UpdateUserDto', () => {
+    const errors = (photoUrl: unknown) =>
+      validateSync(plainToInstance(UpdateUserDto, { photoUrl }));
+
+    it.each(['https://images.example.com/ana.jpg', 'http://images.example.com/foto.png', null, undefined])(
+      'acepta %s',
+      (value) => {
+        expect(errors(value)).toHaveLength(0);
+      },
+    );
+
+    it.each(['no-es-url', 'javascript:alert(1)', 'ftp://example.com/a.jpg', 'www.example.com/a.jpg', 5])(
+      'rechaza %s',
+      (value) => {
+        expect(errors(value).length).toBeGreaterThan(0);
+      },
+    );
   });
 });

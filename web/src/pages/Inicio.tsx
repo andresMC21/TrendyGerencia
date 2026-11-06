@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
+import { Avatar } from '../components/Avatar';
 import { Footer, Header } from '../components/Brand';
 import { Alert } from '../components/Form';
 import { ProductCard } from '../components/ProductCard';
 import { productApi, type Product } from '../lib/api';
 import { barrioGuardado } from '../lib/barrios';
-import { barrio, fecha, iniciales, ROL, VERIFICACION } from '../lib/format';
+import { barrio, fecha, ROL, VERIFICACION } from '../lib/format';
 import { useSession } from '../lib/session';
 
 export default function Inicio() {
@@ -44,7 +45,7 @@ export default function Inicio() {
           <div className="dash-grid">
             <aside className="profile-card">
               <div className="profile-head">
-                <span className="avatar">{iniciales(user.fullName)}</span>
+                <Avatar name={user.fullName} photoUrl={user.photoUrl} />
                 <div>
                   <strong>{user.fullName}</strong>
                   <span>{user.email}</span>

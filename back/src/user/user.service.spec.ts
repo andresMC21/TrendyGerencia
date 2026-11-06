@@ -23,6 +23,7 @@ const makeUser = (overrides: Partial<User> = {}): User =>
     fullName: 'Ana Gomez',
     tokenVersion: 0,
     info: 'Vendedora local',
+    photoUrl: 'https://images.example.com/ana.jpg',
     verificationStatus: VerificationStatus.UNVERIFIED,
     ratingAverage: 4.5,
     reviewsCount: 2,
@@ -330,6 +331,43 @@ describe('UserService', () => {
         info: 'Nueva bio',
       });
       expect(result.info).toBe('Nueva bio');
+    });
+
+    it('HU-03 · findMe incluye foto, verificación y reputación', () => {
+      // Act
+      const result = service.findMe(makeUser());
+
+      // Assert
+      expect(result).toMatchObject({
+        fullName: 'Ana Gomez',
+        email: 'ana@example.com',
+        photoUrl: 'https://images.example.com/ana.jpg',
+        verificationStatus: VerificationStatus.UNVERIFIED,
+        ratingAverage: 4.5,
+        reviewsCount: 2,
+      });
+    });
+
+    it('HU-03 · findMe devuelve photoUrl null cuando no hay foto', () => {
+      // Act
+      const result = service.findMe(makeUser({ photoUrl: null }));
+
+      // Assert
+      expect(result.photoUrl).toBeNull();
+    });
+
+    it('HU-03 · updateMe guarda la foto de perfil', async () => {
+      // Act
+      const result = await service.updateMe(makeUser({ photoUrl: null }), {
+        photoUrl: 'https://images.example.com/nueva.jpg',
+      });
+
+      // Assert
+      expect(userRepository.preload).toHaveBeenCalledWith({
+        id: 'user-1',
+        photoUrl: 'https://images.example.com/nueva.jpg',
+      });
+      expect(result.photoUrl).toBe('https://images.example.com/nueva.jpg');
     });
 
     it('updateMe devuelve 404 si preload no encuentra el usuario', async () => {

@@ -260,6 +260,42 @@ describe('Users (e2e)', () => {
       .expect(400);
   });
 
+  describe('HU-03 · Consultar mi perfil', () => {
+    it('incluye nombre, correo, foto, verificación y reputación, sin la contraseña', async () => {
+      const res = await http.get('/api/user/me').set(auth(token)).expect(200);
+
+      expect(res.body).toEqual(
+        expect.objectContaining({
+          fullName: expect.any(String),
+          email: userEmail,
+          photoUrl: null,
+          verificationStatus: 'UNVERIFIED',
+          ratingAverage: expect.any(Number),
+          reviewsCount: expect.any(Number),
+        }),
+      );
+      expect(JSON.stringify(res.body)).not.toMatch(/password|\$2[aby]\$/);
+    });
+
+    it('la foto se puede definir y quitar, y se refleja en el perfil', async () => {
+      const url = 'https://images.example.com/fotos/perfil.jpg';
+      await http.patch('/api/user/me').set(auth(token)).send({ photoUrl: url }).expect(200);
+      expect((await http.get('/api/user/me').set(auth(token)).expect(200)).body.photoUrl).toBe(url);
+      expect((await http.get(`/api/user/${userId}`).expect(200)).body.photoUrl).toBe(url);
+
+      await http.patch('/api/user/me').set(auth(token)).send({ photoUrl: null }).expect(200);
+      expect((await http.get('/api/user/me').set(auth(token)).expect(200)).body.photoUrl).toBeNull();
+    });
+
+    it('rechaza una foto que no es una URL http(s)', async () => {
+      await http
+        .patch('/api/user/me')
+        .set(auth(token))
+        .send({ photoUrl: 'javascript:alert(1)' })
+        .expect(400);
+    });
+  });
+
   it('PATCH /user/me/password cambia la contraseña con la actual correcta', async () => {
     const newPassword = 'NewPassw2';
 

@@ -45,6 +45,8 @@ type SessionState = {
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   dismissWelcome: () => void;
+  /** Reemplaza el perfil en memoria tras editarlo (HU-03). */
+  setProfile: (profile: UserProfile) => void;
 };
 
 const SessionContext = createContext<SessionState | null>(null);
@@ -114,6 +116,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       dismissWelcome: () => setIsNewAccount(false),
+      setProfile: setUser,
     }),
     [loading, token, user, isNewAccount, register, login, logout],
   );

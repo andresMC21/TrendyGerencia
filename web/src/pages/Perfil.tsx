@@ -1,6 +1,10 @@
+import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
+import { Avatar } from '../components/Avatar';
 import { Footer, Header } from '../components/Brand';
-import { fecha, iniciales, ROL, VERIFICACION } from '../lib/format';
+import { Alert, Field } from '../components/Form';
+import { ApiError, authApi } from '../lib/api';
+import { fecha, ROL, VERIFICACION } from '../lib/format';
 import { useSession } from '../lib/session';
 
 /** HU-03 · Consultar mi perfil (GET /user/me). */
@@ -23,7 +27,7 @@ export default function Perfil() {
 
           <section className="profile-card profile-card--full" aria-label="Datos de mi perfil">
             <div className="profile-head">
-              <span className="avatar avatar--lg">{iniciales(user.fullName)}</span>
+              <Avatar name={user.fullName} photoUrl={user.photoUrl} size="lg" />
               <div>
                 <strong data-testid="perfil-nombre">{user.fullName}</strong>
                 <span data-testid="perfil-email">{user.email}</span>
@@ -73,9 +77,80 @@ export default function Perfil() {
               </div>
             </dl>
           </section>
+
+          <FotoDePerfil />
         </div>
       </main>
       <Footer />
     </>
+  );
+}
+
+/** HU-03 · Cambiar o quitar la foto de perfil (URL de una imagen). */
+function FotoDePerfil() {
+  const { token, user, setProfile } = useSession();
+  const [url, setUrl] = useState(user?.photoUrl ?? '');
+  const [error, setError] = useState('');
+  const [ok, setOk] = useState('');
+  const [sending, setSending] = useState(false);
+
+  async function guardar(photoUrl: string | null) {
+    if (!token) return;
+    setSending(true);
+    setError('');
+    setOk('');
+    try {
+      const perfil = await authApi.updateMe(token, { photoUrl });
+      setProfile(perfil);
+      setUrl(perfil.photoUrl ?? '');
+      setOk(photoUrl ? 'Foto actualizada.' : 'Quitaste tu foto de perfil.');
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 400
+          ? 'Escribe la dirección completa de una imagen, empezando por https://'
+          : 'No pudimos guardar la foto. Inténtalo de nuevo.',
+      );
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const onSubmit = (e: FormEvent) => {
+    e.preventDefault();
+    void guardar(url.trim() || null);
+  };
+
+  return (
+    <section className="form-card photo-card" aria-label="Foto de perfil">
+      <h2 className="detail-h">Foto de perfil</h2>
+      {error && <Alert tone="error">{error}</Alert>}
+      {ok && <Alert tone="success">{ok}</Alert>}
+      <form onSubmit={onSubmit} noValidate>
+        <Field
+          label="Dirección (URL) de la imagen"
+          name="photoUrl"
+          type="url"
+          placeholder="https://…/mi-foto.jpg"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          hint="Pega el enlace de una imagen pública. Se verá en tu perfil."
+        />
+        <div className="tx-actions">
+          <button type="submit" className="btn btn-primary" disabled={sending}>
+            {sending ? 'Guardando…' : 'Guardar foto'}
+          </button>
+          {user?.photoUrl && (
+            <button
+              type="button"
+              className="btn btn-outline"
+              disabled={sending}
+              onClick={() => void guardar(null)}
+            >
+              Quitar foto
+            </button>
+          )}
+        </div>
+      </form>
+    </section>
   );
 }

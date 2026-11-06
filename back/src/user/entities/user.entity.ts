@@ -44,6 +44,13 @@ export class User {
   })
   info: string | null;
 
+  /** HU-03 · URL de la foto de perfil (null si no tiene). */
+  @Column({
+    type: 'text',
+    nullable: true,
+  })
+  photoUrl: string | null;
+
   @Column({
     type: 'text',
     default: VerificationStatus.UNVERIFIED,
