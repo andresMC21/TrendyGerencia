@@ -159,8 +159,12 @@ Los archivos `.env` reales no se suben al repositorio (están en `.gitignore`); 
 | `ana@trendy.local` | `Ana12345` | USER | Verificada; vende 2 productos |
 | `carlos@trendy.local` | `Carlos12` | USER | Sin verificar; vende 1 producto y compró uno de Ana |
 | `demo@trendy.local` | `Trendy123` | USER | Usuario fijo para probar la página web |
+| `maria.compradora@trendy.local` | `Maria2026` | USER | Verificada; compradora para la demo de HU-15 a HU-17 |
+| `camilo.vendedor@trendy.local` | `Camilo2026` | USER | Verificado; vende **Escritorio de madera con cajones** y **Lámpara de pie** (El Ingenio) |
 
-El seed también crea 3 productos, 1 transacción completada y 1 reseña de ejemplo. Se puede ejecutar varias veces.
+El seed también crea 5 productos, 1 transacción completada y 1 reseña de ejemplo. Se puede ejecutar varias veces: los productos que ya existen conservan su estado (reservado, vendido o retirado), así que reiniciar la API no interrumpe una compra en curso.
+
+**Demo de compra completa:** María abre **Escritorio de madera con cajones**, inicia la compra y propone un punto; Camilo acepta la propuesta (HU-16) y cualquiera de los dos marca el intercambio como completado (HU-17).
 
 ## Cómo probar cada funcionalidad
 
