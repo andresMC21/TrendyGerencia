@@ -170,10 +170,14 @@ export type Transaction = {
   sellerId: string;
   status: TransactionStatus;
   message: string | null;
-  /** HU-16 · punto seguro acordado (null mientras no se defina). */
+  /** HU-16 · punto seguro propuesto o acordado (null mientras no haya propuesta). */
   safePointId?: string | null;
-  /** HU-16 · fecha y hora ISO del encuentro (null mientras no se defina). */
+  /** HU-16 · fecha y hora ISO propuesta o acordada (null mientras no haya propuesta). */
   scheduledTime?: string | null;
+  /** HU-16 · quién hizo la propuesta vigente; la otra persona debe aceptarla. */
+  proposedById?: string | null;
+  /** HU-16 · cuándo quedaron de acuerdo los dos (null mientras no haya acuerdo). */
+  agreedAt?: string | null;
   product?: Product;
   buyer?: TransactionUser;
   seller?: TransactionUser;
@@ -195,14 +199,30 @@ export const transactionApi = {
   get: (token: string, id: string) =>
     apiRequest<Transaction>(`/transactions/${encodeURIComponent(id)}`, { token }),
   /**
-   * HU-16 · Registrar punto seguro y horario. El servidor valida que el usuario
-   * participe (403) y que la transacción esté PENDING (409); al guardar pasa a AGREED_POINT.
+   * HU-16 · Proponer o contraproponer punto seguro y horario. La transacción sigue
+   * PENDING hasta que la otra persona acepte. 403 si no participa; 409 si ya no está PENDING.
    */
-  confirmPoint: (token: string, id: string, safePointId: string, scheduledTime: string) =>
-    apiRequest<Transaction>(`/transactions/${encodeURIComponent(id)}/confirm-point`, {
+  proposeMeeting: (token: string, id: string, safePointId: string, scheduledTime: string) =>
+    apiRequest<Transaction>(`/transactions/${encodeURIComponent(id)}/meeting-proposal`, {
       method: 'POST',
       token,
       body: { safePointId, scheduledTime },
+    }),
+  /**
+   * HU-16 · Aceptar la propuesta de la otra persona (pasa a AGREED_POINT). Se envía
+   * la propuesta que se vio: si cambió mientras tanto, el servidor responde 409.
+   */
+  acceptMeeting: (token: string, id: string, safePointId: string, scheduledTime: string) =>
+    apiRequest<Transaction>(`/transactions/${encodeURIComponent(id)}/meeting-proposal/accept`, {
+      method: 'POST',
+      token,
+      body: { safePointId, scheduledTime },
+    }),
+  /** HU-16 · Rechazar la propuesta de la otra persona; la transacción sigue PENDING. */
+  rejectMeeting: (token: string, id: string) =>
+    apiRequest<Transaction>(`/transactions/${encodeURIComponent(id)}/meeting-proposal/reject`, {
+      method: 'POST',
+      token,
     }),
   /**
    * HU-17 · Finalizar (COMPLETED → producto SOLD) o cancelar (CANCELLED → producto

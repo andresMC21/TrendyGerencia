@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { Footer, Header } from '../components/Brand';
 import { Alert } from '../components/Form';
 import { transactionApi, type Transaction } from '../lib/api';
-import { ESTADO_TRANSACCION, fechaHora } from '../lib/format';
+import { ESTADO_TRANSACCION, etapaAcuerdo, fechaHora } from '../lib/format';
 import { nombrePunto } from '../lib/safePoints';
 import { useSession } from '../lib/session';
 
@@ -65,15 +65,7 @@ export default function Transacciones() {
                       <span className="tx-meta">
                         {soyComprador ? 'Compras a' : 'Vendes a'} {otro ?? 'otro usuario'}
                       </span>
-                      {t.safePointId && t.scheduledTime ? (
-                        <span className="tx-meta">
-                          {nombrePunto(t.safePointId)} · {fechaHora(t.scheduledTime)}
-                        </span>
-                      ) : (
-                        t.status === 'PENDING' && (
-                          <span className="tx-meta tx-meta--todo">Falta acordar punto y horario</span>
-                        )
-                      )}
+                      <MetaAcuerdo tx={t} userId={user?.id} otro={otro} />
                     </Link>
                   </li>
                 );
@@ -85,4 +77,33 @@ export default function Transacciones() {
       <Footer />
     </>
   );
+}
+
+/** HU-16 · Resumen del acuerdo del encuentro en la lista. */
+function MetaAcuerdo({ tx, userId, otro }: { tx: Transaction; userId?: string; otro?: string }) {
+  const lugar =
+    tx.safePointId && tx.scheduledTime
+      ? `${nombrePunto(tx.safePointId)} · ${fechaHora(tx.scheduledTime)}`
+      : null;
+  if (tx.status === 'CANCELLED' || tx.status === 'COMPLETED') {
+    return lugar && tx.agreedAt ? <span className="tx-meta">{lugar}</span> : null;
+  }
+  switch (etapaAcuerdo(tx, userId)) {
+    case 'sin-propuesta':
+      return <span className="tx-meta tx-meta--todo">Falta proponer punto y horario</span>;
+    case 'esperando':
+      return (
+        <span className="tx-meta">
+          Propusiste {lugar} · Esperando la respuesta de {otro ?? 'la otra persona'}
+        </span>
+      );
+    case 'por-responder':
+      return (
+        <span className="tx-meta tx-meta--todo">
+          {otro ?? 'La otra persona'} propone {lugar} · Te toca responder
+        </span>
+      );
+    default:
+      return <span className="tx-meta">Acordado: {lugar}</span>;
+  }
 }

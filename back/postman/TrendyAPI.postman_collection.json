@@ -4575,14 +4575,179 @@
           "response": []
         },
         {
-          "name": "PUT /transactions/:id/status: AGREED_POINT sin punto → 400",
+          "name": "POST /transactions/:id/meeting-proposal: usuario ajeno → 403",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 400\", function () { pm.response.to.have.status(400); });"
+                  "pm.test(\"Status 403\", function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenTemp}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"safePointId\": \"sp-1\",\n  \"scheduledTime\": \"2030-10-05T15:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/meeting-proposal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "meeting-proposal"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transactions/:id/meeting-proposal: el comprador propone (sigue PENDING)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "const t = pm.response.json();",
+                  "pm.test(\"Propuesta registrada, sin acuerdo todavía\", function () { pm.expect(t.status).to.eql(\"PENDING\"); pm.expect(t.safePointId).to.eql(\"sp-1\"); pm.expect(t.proposedById).to.eql(t.buyerId); pm.expect(t.agreedAt).to.eql(null); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenBuyer}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"safePointId\": \"sp-1\",\n  \"scheduledTime\": \"2030-10-05T15:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/meeting-proposal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "meeting-proposal"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transactions/:id/meeting-proposal/accept: aceptar la propia propuesta → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenBuyer}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"safePointId\": \"sp-1\",\n  \"scheduledTime\": \"2030-10-05T15:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/meeting-proposal/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "meeting-proposal",
+                "accept"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "PUT /transactions/:id/status: pedir AGREED_POINT sin que la otra persona acepte → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", function () { pm.response.to.have.status(409); });"
                 ]
               }
             }
@@ -4629,61 +4794,7 @@
           "response": []
         },
         {
-          "name": "POST /transactions/:id/confirm-point: usuario ajeno → 403",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test(\"Status 403\", function () { pm.response.to.have.status(403); });"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{tokenTemp}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"safePointId\": \"sp-1\",\n  \"scheduledTime\": \"2030-10-05T15:00:00Z\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/transactions/{{transactionId}}/confirm-point",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "transactions",
-                "{{transactionId}}",
-                "confirm-point"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "POST /transactions/:id/confirm-point: confirmar punto seguro",
+          "name": "POST /transactions/:id/meeting-proposal: el vendedor contrapropone",
           "event": [
             {
               "listen": "test",
@@ -4692,7 +4803,7 @@
                 "exec": [
                   "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
                   "const t = pm.response.json();",
-                  "pm.test(\"AGREED_POINT con punto y hora\", function () { pm.expect(t.status).to.eql(\"AGREED_POINT\"); pm.expect(t.safePointId).to.eql(\"sp-1\"); pm.expect(new Date(t.scheduledTime).toISOString()).to.eql(\"2030-10-05T15:00:00.000Z\"); });"
+                  "pm.test(\"Contrapropuesta del vendedor\", function () { pm.expect(t.status).to.eql(\"PENDING\"); pm.expect(t.safePointId).to.eql(\"sp-2\"); pm.expect(t.proposedById).to.eql(t.sellerId); });"
                 ]
               }
             }
@@ -4717,6 +4828,60 @@
             ],
             "body": {
               "mode": "raw",
+              "raw": "{\n  \"safePointId\": \"sp-2\",\n  \"scheduledTime\": \"2030-10-06T10:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/meeting-proposal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "meeting-proposal"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transactions/:id/meeting-proposal/accept: propuesta que ya cambió → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", function () { pm.response.to.have.status(409); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenBuyer}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
               "raw": "{\n  \"safePointId\": \"sp-1\",\n  \"scheduledTime\": \"2030-10-05T15:00:00Z\"\n}",
               "options": {
                 "raw": {
@@ -4725,21 +4890,176 @@
               }
             },
             "url": {
-              "raw": "{{baseUrl}}/transactions/{{transactionId}}/confirm-point",
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/meeting-proposal/accept",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "transactions",
                 "{{transactionId}}",
-                "confirm-point"
+                "meeting-proposal",
+                "accept"
               ]
             }
           },
           "response": []
         },
         {
-          "name": "POST /transactions/:id/confirm-point: ya no está PENDING → 409",
+          "name": "POST /transactions/:id/meeting-proposal/reject: el comprador rechaza",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "const t = pm.response.json();",
+                  "pm.test(\"Propuesta borrada, sigue PENDING\", function () { pm.expect(t.status).to.eql(\"PENDING\"); pm.expect(t.safePointId).to.eql(null); pm.expect(t.proposedById).to.eql(null); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenBuyer}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/meeting-proposal/reject",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "meeting-proposal",
+                "reject"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transactions/:id/meeting-proposal: el vendedor propone de nuevo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenSeller}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"safePointId\": \"sp-2\",\n  \"scheduledTime\": \"2030-10-06T10:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/meeting-proposal",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "meeting-proposal"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transactions/:id/meeting-proposal/accept: el comprador acepta → AGREED_POINT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "const t = pm.response.json();",
+                  "pm.test(\"AGREED_POINT con punto y hora acordados\", function () { pm.expect(t.status).to.eql(\"AGREED_POINT\"); pm.expect(t.safePointId).to.eql(\"sp-2\"); pm.expect(new Date(t.scheduledTime).toISOString()).to.eql(\"2030-10-06T10:00:00.000Z\"); pm.expect(t.agreedAt).to.be.a(\"string\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenBuyer}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"safePointId\": \"sp-2\",\n  \"scheduledTime\": \"2030-10-06T10:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/meeting-proposal/accept",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "transactions",
+                "{{transactionId}}",
+                "meeting-proposal",
+                "accept"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST /transactions/:id/meeting-proposal: ya acordado → 409",
           "event": [
             {
               "listen": "test",
@@ -4771,7 +5091,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"safePointId\": \"sp-2\",\n  \"scheduledTime\": \"2030-10-05T15:00:00Z\"\n}",
+              "raw": "{\n  \"safePointId\": \"sp-1\",\n  \"scheduledTime\": \"2030-10-05T15:00:00Z\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4779,14 +5099,14 @@
               }
             },
             "url": {
-              "raw": "{{baseUrl}}/transactions/{{transactionId}}/confirm-point",
+              "raw": "{{baseUrl}}/transactions/{{transactionId}}/meeting-proposal",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "transactions",
                 "{{transactionId}}",
-                "confirm-point"
+                "meeting-proposal"
               ]
             }
           },

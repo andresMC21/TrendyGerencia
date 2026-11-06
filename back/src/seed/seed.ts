@@ -60,6 +60,7 @@ async function seed(): Promise<void> {
           transactionRepository.create({
             ...seedTransaction,
             scheduledTime: new Date(seedTransaction.scheduledTime),
+            agreedAt: new Date(seedTransaction.agreedAt),
           }),
         );
       }

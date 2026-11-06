@@ -11,7 +11,9 @@ describe('TransactionController', () => {
     findAll: jest.fn(),
     findOne: jest.fn(),
     update: jest.fn(),
-    confirmPoint: jest.fn(),
+    proposeMeeting: jest.fn(),
+    acceptMeeting: jest.fn(),
+    rejectMeeting: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -90,21 +92,44 @@ describe('TransactionController', () => {
     );
   });
 
-  it('confirmPoint delega id, usuario y punto seguro', async () => {
+  it('proposeMeeting delega id, usuario y propuesta', async () => {
     // Arrange
     const user = { id: 'buyer-1' } as any;
     const dto = { safePointId: 'sp-1', scheduledTime: '2026-10-05T15:00:00Z' };
-    transactionService.confirmPoint.mockResolvedValue('confirmed');
+    transactionService.proposeMeeting.mockResolvedValue('proposed');
 
     // Act
-    const result = await controller.confirmPoint('t1', user, dto);
+    const result = await controller.proposeMeeting('t1', user, dto);
 
     // Assert
-    expect(result).toBe('confirmed');
-    expect(transactionService.confirmPoint).toHaveBeenCalledWith(
-      't1',
-      'buyer-1',
-      dto,
-    );
+    expect(result).toBe('proposed');
+    expect(transactionService.proposeMeeting).toHaveBeenCalledWith('t1', 'buyer-1', dto);
+  });
+
+  it('acceptMeeting delega id, usuario y la propuesta vista', async () => {
+    // Arrange
+    const user = { id: 'seller-1' } as any;
+    const dto = { safePointId: 'sp-1', scheduledTime: '2026-10-05T15:00:00Z' };
+    transactionService.acceptMeeting.mockResolvedValue('accepted');
+
+    // Act
+    const result = await controller.acceptMeeting('t1', user, dto);
+
+    // Assert
+    expect(result).toBe('accepted');
+    expect(transactionService.acceptMeeting).toHaveBeenCalledWith('t1', 'seller-1', dto);
+  });
+
+  it('rejectMeeting delega id y usuario', async () => {
+    // Arrange
+    const user = { id: 'seller-1' } as any;
+    transactionService.rejectMeeting.mockResolvedValue('rejected');
+
+    // Act
+    const result = await controller.rejectMeeting('t1', user);
+
+    // Assert
+    expect(result).toBe('rejected');
+    expect(transactionService.rejectMeeting).toHaveBeenCalledWith('t1', 'seller-1');
   });
 });

@@ -68,3 +68,21 @@ export const fechaHora = (iso: string) => {
   const t = new Date(iso).toLocaleString('es-CO', { dateStyle: 'full', timeStyle: 'short' });
   return t.charAt(0).toUpperCase() + t.slice(1);
 };
+
+/**
+ * HU-16 · En qué punto va el acuerdo del encuentro, visto por `userId`.
+ * - sin-propuesta: nadie ha propuesto todavía.
+ * - esperando: propuse yo y falta que la otra persona responda.
+ * - por-responder: la otra persona propuso y me toca aceptar, contraproponer o rechazar.
+ * - acordado: los dos aceptaron el punto y el horario.
+ */
+export type EtapaAcuerdo = 'sin-propuesta' | 'esperando' | 'por-responder' | 'acordado';
+
+export function etapaAcuerdo(
+  tx: { status: string; safePointId?: string | null; scheduledTime?: string | null; proposedById?: string | null },
+  userId: string | undefined,
+): EtapaAcuerdo {
+  if (tx.status !== 'PENDING') return 'acordado';
+  if (!tx.safePointId || !tx.scheduledTime || !tx.proposedById) return 'sin-propuesta';
+  return tx.proposedById === userId ? 'esperando' : 'por-responder';
+}

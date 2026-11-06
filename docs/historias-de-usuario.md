@@ -12,7 +12,7 @@ Toda la documentación del proyecto está en esta carpeta (`docs/`), junto con e
 | HU-11 | Consultar un producto | `GET /products/:id` | `/producto/:id` | [HU-11](HU-11.md) |
 | HU-13 | Retirar una publicación | `DELETE /products/:id`, `GET /products/mine` | `/mis-publicaciones` | [HU-13](HU-13.md) |
 | HU-15 | Iniciar una transacción | `POST /transactions` | `/producto/:id` | [HU-15](HU-15.md) |
-| HU-16 | Acordar una entrega | `POST /transactions/:id/confirm-point` | `/transacciones/:id` | [HU-16](HU-16.md) |
+| HU-16 | Acordar una entrega | `POST /transactions/:id/meeting-proposal` (`/accept`, `/reject`) | `/transacciones/:id` | [HU-16](HU-16.md) |
 | HU-17 | Finalizar o cancelar intercambio | `PUT /transactions/:id/status` | `/transacciones/:id` | [HU-17](HU-17.md) |
 
 ## Usuarios de prueba

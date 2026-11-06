@@ -198,7 +198,7 @@ La colección `postman/trendy-api.postman_collection.json` cubre todos los endpo
 | Retirar una publicación (HU-13, borrado lógico → `REMOVED`) y ver mis publicaciones | `DELETE /products/:id`, `GET /products/mine` · web: `/mis-publicaciones` | dueño (`ana`); otro `USER` recibe 403 |
 | Feed por barrio / cercanía / filtros | `GET /products?neighborhoodId=…&lat=…&lng=…&radius=…` | público |
 | Favoritos | `POST /products/:id/favorite` | cualquiera autenticado |
-| Compra: reservar → acordar punto → completar | `POST /transactions`, `POST /transactions/:id/confirm-point`, `PUT /transactions/:id/status` | `carlos` compra, `ana` vende |
+| Compra: reservar → proponer punto → la otra persona acepta → completar | `POST /transactions`, `POST /transactions/:id/meeting-proposal`, `POST /transactions/:id/meeting-proposal/accept` (o `/reject`), `PUT /transactions/:id/status` | `carlos` compra, `ana` vende |
 | Reseñas tras una compra completada | `POST /review`, `GET /review` | comprador y vendedor |
 
 ### Explorar el barrio (HU-09)
@@ -221,10 +221,10 @@ npm run test:cov    # unitarias + cobertura
 
 | Tipo | Herramienta | Resultado |
 |---|---|---|
-| Unitarias | Jest | 25 suites, 298 pruebas pasan |
-| Cobertura | Jest | Sentencias 91.2 % · Ramas 80.5 % · Funciones 85.6 % · Líneas 90.8 % (umbral exigido: 80 %) |
-| Integración | Jest + Supertest + PostGIS | 4 suites, 70 pruebas pasan (health, usuarios, productos, transacciones) |
-| Manuales / regresión | Postman (Newman) | 150 requests, 422 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
+| Unitarias | Jest | 25 suites, 315 pruebas pasan |
+| Cobertura | Jest | Sentencias 90.9 % · Ramas 80.8 % · Funciones 85.4 % · Líneas 90.4 % (umbral exigido: 80 %) |
+| Integración | Jest + Supertest + PostGIS | 4 suites, 71 pruebas pasan (health, usuarios, productos, transacciones) |
+| Manuales / regresión | Postman (Newman) | 156 requests, 437 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
 
 ### Pruebas de integración
 

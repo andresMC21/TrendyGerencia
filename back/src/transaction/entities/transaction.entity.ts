@@ -56,6 +56,24 @@ export class Transaction {
   @Column({ type: 'timestamptz', nullable: true })
   scheduledTime: Date | null;
 
+  /**
+   * HU-16 · Quién hizo la propuesta de punto y horario que está vigente.
+   * Mientras la transacción siga en PENDING, la otra persona debe aceptarla.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  proposedById: string | null;
+
+  @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({
+    name: 'proposedById',
+    foreignKeyConstraintName: 'FK_transaction_proposed_by',
+  })
+  proposedBy?: User | null;
+
+  /** HU-16 · Momento en que la otra persona aceptó la propuesta. */
+  @Column({ type: 'timestamptz', nullable: true })
+  agreedAt: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
