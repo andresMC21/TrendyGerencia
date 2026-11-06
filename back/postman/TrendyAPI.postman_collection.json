@@ -3597,7 +3597,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/products?neighborhood={{neighborhoodId}}",
+              "raw": "{{baseUrl}}/products?neighborhoodId={{neighborhoodId}}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -3606,7 +3606,7 @@
               ],
               "query": [
                 {
-                  "key": "neighborhood",
+                  "key": "neighborhoodId",
                   "value": "{{neighborhoodId}}"
                 }
               ]

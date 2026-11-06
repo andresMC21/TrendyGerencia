@@ -55,14 +55,24 @@ export class ProductController {
   @ApiOperation({
     summary: 'Feed de productos',
     description:
-      'Público, no requiere JWT. Devuelve únicamente productos AVAILABLE. lat y lng deben enviarse juntos; radius se interpreta en kilómetros y solo aplica con ambos. sort=distance también requiere coordenadas.',
+      'HU-09. Público, no requiere JWT. Devuelve únicamente productos AVAILABLE, así que los retirados (REMOVED) nunca aparecen. neighborhoodId filtra por barrio. lat y lng deben enviarse juntos; radius se interpreta en kilómetros y solo aplica con ambos. sort=distance también requiere coordenadas.',
+  })
+  @ApiQuery({
+    name: 'neighborhoodId',
+    type: String,
+    required: false,
+    example: '{{neighborhoodId}}',
+    description:
+      'Filtra por el identificador del barrio; no distingue mayúsculas.',
   })
   @ApiQuery({
     name: 'neighborhood',
     type: String,
     required: false,
+    deprecated: true,
     example: '{{neighborhoodId}}',
-    description: 'Filtra por el identificador del barrio.',
+    description:
+      'Alias de neighborhoodId, que tiene prioridad si se envían ambos.',
   })
   @ApiQuery({
     name: 'lat',

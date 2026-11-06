@@ -71,7 +71,6 @@ export class ProductService {
     query: FindProductsQueryDto,
   ): Promise<PaginatedResult<ProductDto>> {
     const {
-      neighborhood,
       lat,
       lng,
       radius = 5,
@@ -89,6 +88,7 @@ export class ProductService {
     if (sort === ProductSort.DISTANCE && !hasGeo) {
       throw new BadRequestException('sort=distance requiere lat y lng');
     }
+    const neighborhood = this.resolveNeighborhood(query);
 
     const cacheKey = this.buildFeedCacheKey(query);
     const cached = this.feedCache.get(cacheKey);
@@ -388,7 +388,7 @@ export class ProductService {
       page: query.page ?? 1,
       limit: query.limit ?? 20,
     };
-    return `feed:${query.neighborhood ?? 'all'}:${JSON.stringify(q)}`;
+    return `feed:${this.resolveNeighborhood(query) ?? 'all'}:${JSON.stringify(q)}`;
   }
 
   /**
@@ -413,6 +413,11 @@ export class ProductService {
   }
 
   // ───────────────────────── Helpers ─────────────────────────
+
+  /** `neighborhoodId` manda sobre su alias; un valor vacío equivale a no filtrar. */
+  private resolveNeighborhood(query: FindProductsQueryDto): string | undefined {
+    return query.neighborhoodId || query.neighborhood || undefined;
+  }
 
   private applySort(
     qb: ReturnType<Repository<Product>['createQueryBuilder']>,

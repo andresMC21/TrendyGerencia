@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { useSession } from './lib/session';
+import Explorar from './pages/Explorar';
 import Ingresar from './pages/Ingresar';
 import Inicio from './pages/Inicio';
 import Landing from './pages/Landing';
@@ -83,6 +84,7 @@ export default function App() {
           </SoloUsuarios>
         }
       />
+      <Route path="/explorar" element={<Explorar />} />
       <Route path="/producto/:id" element={<Producto />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

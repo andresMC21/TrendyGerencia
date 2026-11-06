@@ -715,6 +715,12 @@ h3 {
 .feed-head span {
   color: var(--slate);
 }
+.feed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
 .feed-loading {
   color: var(--muted);
 }
@@ -774,6 +780,26 @@ h3 {
 .product-meta {
   font-size: 13px;
   color: var(--muted);
+}
+
+/* ---------- Explorar el barrio (HU-09) ---------- */
+.filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0 16px;
+  background: var(--panel);
+  border-radius: 6px;
+  padding: 18px 18px 6px;
+  margin-bottom: 24px;
+}
+.pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 24px;
+  color: var(--slate);
 }
 
 /* ---------- Perfil y detalle de producto (HU-03, HU-11) ---------- */

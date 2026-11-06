@@ -93,7 +93,7 @@ export const seedProducts = [
     category: 'hogar',
     condition: ProductCondition.LIKE_NEW,
     status: ProductStatus.AVAILABLE,
-    location: { lat: 3.4695, lng: -76.5225 },
+    location: { lat: 3.4335, lng: -76.5441 },
     neighborhoodId: 'san-fernando',
     estimatedWeightKg: 9,
   },

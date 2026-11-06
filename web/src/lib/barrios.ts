@@ -24,6 +24,29 @@ export const BARRIOS: { id: string; punto: GeoPoint }[] = [
   { id: 'versalles', punto: { lat: 3.4613, lng: -76.5298 } },
 ];
 
+const BARRIO_KEY = 'trendy.barrio';
+
+/**
+ * HU-09 · La cuenta no guarda un barrio, así que se recuerda en este dispositivo
+ * el último que la persona eligió en /explorar.
+ */
+export function barrioGuardado(): string | null {
+  try {
+    const id = localStorage.getItem(BARRIO_KEY);
+    return BARRIOS.some((b) => b.id === id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function guardarBarrio(id: string) {
+  try {
+    localStorage.setItem(BARRIO_KEY, id);
+  } catch {
+    /* sin almacenamiento: solo se pierde el recordatorio */
+  }
+}
+
 /** Categorías sugeridas; la API las guarda en minúsculas. */
 export const CATEGORIAS = [
   'hogar',

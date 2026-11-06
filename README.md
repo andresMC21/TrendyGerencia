@@ -194,10 +194,21 @@ La colección `postman/trendy-api.postman_collection.json` cubre todos los endpo
 | Administrar usuarios y **roles** | `/admin/users` (listar, editar, `/role`, `/active`, `DELETE`) | `admin` (el `moderador` solo lee) |
 | Probar que un `USER` no accede a rutas admin (403) | `GET /admin/users` | `ana` |
 | Publicar y editar productos | `POST /products`, `PUT /products/:id` | `ana` |
-| Feed por barrio / cercanía / filtros | `GET /products?neighborhood=…&lat=…&lng=…&radius=…` | público |
+| Feed por barrio / cercanía / filtros | `GET /products?neighborhoodId=…&lat=…&lng=…&radius=…` | público |
 | Favoritos | `POST /products/:id/favorite` | cualquiera autenticado |
 | Compra: reservar → acordar punto → completar | `POST /transactions`, `POST /transactions/:id/confirm-point`, `PUT /transactions/:id/status` | `carlos` compra, `ana` vende |
 | Reseñas tras una compra completada | `POST /review`, `GET /review` | comprador y vendedor |
+
+### Explorar el barrio (HU-09)
+
+La página pública **`/explorar`** (http://localhost:5173/explorar) permite consultar los productos sin iniciar sesión. Se llega desde el enlace **Explorar** del encabezado y desde el botón **Explorar productos** de la portada.
+
+- **Filtros:** barrio, categoría y condición, con paginación de 12 en 12. Quedan en la URL, así que se pueden compartir: `/explorar?barrio=granada&categoria=hogar&condicion=USADO&pagina=2`.
+- **En `/inicio`:** la sección «Todos los productos» muestra lo más reciente de toda Cali. **Ver todos los productos** abre la lista completa y **Productos de mi barrio** abre el último barrio elegido.
+- **En la API:** `GET /products?neighborhoodId=granada` filtra por barrio y no distingue mayúsculas. `neighborhood` sigue funcionando como alias obsoleto; si se envían ambos, manda `neighborhoodId`.
+- **Publicaciones retiradas:** el feed solo devuelve productos `AVAILABLE`, así que las `REMOVED` nunca aparecen.
+
+Más detalle en [`doc/HU-09.md`](doc/HU-09.md).
 
 ## Pruebas automatizadas
 
@@ -208,9 +219,9 @@ npm run test:cov    # unitarias + cobertura
 
 | Tipo | Herramienta | Resultado |
 |---|---|---|
-| Unitarias | Jest | 21 suites, 168 pruebas pasan |
-| Cobertura | Jest | Sentencias 91.75 % · Ramas 80.98 % · Funciones 86.25 % · Líneas 91.37 % (umbral exigido: 80 %) |
-| Integración | Jest + Supertest + PostGIS | 4 suites, 38 pruebas pasan (health, usuarios, productos, transacciones) |
+| Unitarias | Jest | 25 suites, 268 pruebas pasan |
+| Cobertura | Jest | Sentencias 91.64 % · Ramas 80.28 % · Funciones 86.98 % · Líneas 91.26 % (umbral exigido: 80 %) |
+| Integración | Jest + Supertest + PostGIS | 4 suites, 54 pruebas pasan (health, usuarios, productos, transacciones) |
 | Manuales / regresión | Postman (Newman) | 179 requests, 260 aserciones, 0 fallos |
 
 ### Pruebas de integración
@@ -246,7 +257,7 @@ src/
 ├── transaction/             # Compra/trueque y máquina de estados
 └── review/                  # Reseñas y promedio de calificación
 test/                        # Pruebas de integración (Supertest)
-web/                         # Página web (React + Vite): portada, registro, ingreso, Mi Trendy
+web/                         # Página web (React + Vite): portada, explorar, registro, ingreso, Mi Trendy
 postman/                     # Colección de Postman
 ```
 
@@ -260,4 +271,5 @@ postman/                     # Colección de Postman
 - La sesión es JWT sin estado (1 h de vigencia): cerrar sesión consiste en descartar el token en el cliente; no hay lista de revocación ni *refresh token*.
 - **No** hay autenticación de dos factores (2FA).
 - El feed de productos usa una **caché en memoria** (no Redis), por lo que no se comparte entre varias instancias.
+- La cuenta no guarda un barrio: «Productos de mi barrio» usa el último barrio elegido en `/explorar`, recordado solo en ese dispositivo.
 - `reason` en la resolución de verificaciones se registra en logs, no se guarda en el perfil.

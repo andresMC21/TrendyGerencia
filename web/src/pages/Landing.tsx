@@ -86,6 +86,9 @@ export default function Landing() {
                   </Link>
                 </>
               )}
+              <Link to="/explorar" className="btn btn-outline btn-lg">
+                Explorar productos
+              </Link>
             </div>
           </div>
           <span className="hero-bar" aria-hidden="true" />

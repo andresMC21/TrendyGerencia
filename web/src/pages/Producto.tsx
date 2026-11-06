@@ -43,7 +43,7 @@ function ProductoPagina({ id }: { id: string }) {
       <Header />
       <main className="dashboard">
         <div className="container container--narrow">
-          <Link to="/inicio" className="back-link">
+          <Link to="/explorar" className="back-link">
             ← Volver a las publicaciones
           </Link>
 
@@ -52,7 +52,7 @@ function ProductoPagina({ id }: { id: string }) {
           {estado.tipo === 'no-existe' && (
             <Alert tone="info">
               Este producto no existe o ya no está publicado.{' '}
-              <Link to="/inicio">Ver otras publicaciones</Link>
+              <Link to="/explorar">Ver otras publicaciones</Link>
             </Alert>
           )}
 

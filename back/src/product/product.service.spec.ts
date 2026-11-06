@@ -255,6 +255,68 @@ describe('ProductService', () => {
       expect(qb.orderBy).toHaveBeenCalledWith(column, dir);
     });
 
+    it('HU-09 · filtra por neighborhoodId', async () => {
+      // Act
+      await service.findAll({ neighborhoodId: 'granada' });
+
+      // Assert
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'product.neighborhoodId = :neighborhood',
+        { neighborhood: 'granada' },
+      );
+    });
+
+    it('HU-09 · neighborhood sigue funcionando como alias y neighborhoodId tiene prioridad', async () => {
+      // Act
+      await service.findAll({ neighborhood: 'centro' });
+      await service.findAll({ neighborhoodId: 'granada', neighborhood: 'centro' });
+
+      // Assert
+      expect(qb.andWhere).toHaveBeenNthCalledWith(
+        1,
+        'product.neighborhoodId = :neighborhood',
+        { neighborhood: 'centro' },
+      );
+      expect(qb.andWhere).toHaveBeenNthCalledWith(
+        2,
+        'product.neighborhoodId = :neighborhood',
+        { neighborhood: 'granada' },
+      );
+    });
+
+    it('HU-09 · un barrio vacío no filtra', async () => {
+      // Act
+      await service.findAll({ neighborhoodId: '' });
+
+      // Assert
+      expect(qb.andWhere).not.toHaveBeenCalled();
+    });
+
+    it('HU-09 · solo consulta productos AVAILABLE, con o sin barrio', async () => {
+      // Act
+      await service.findAll({});
+      await service.findAll({ neighborhoodId: 'granada' });
+
+      // Assert
+      expect(qb.where).toHaveBeenCalledTimes(2);
+      for (const call of qb.where.mock.calls) {
+        expect(call).toEqual(['product.status = :status', { status: ProductStatus.AVAILABLE }]);
+      }
+    });
+
+    it('HU-09 · retirar un producto saca del caché el feed de su barrio', async () => {
+      // Arrange
+      productRepo.findOneBy.mockResolvedValue(makeProduct());
+      await service.findAll({ neighborhoodId: 'granada' });
+
+      // Act
+      await service.remove('p1', 'seller-1');
+      await service.findAll({ neighborhoodId: 'granada' });
+
+      // Assert
+      expect(qb.getCount).toHaveBeenCalledTimes(2);
+    });
+
     it('devuelve una lista vacía', async () => {
       // Arrange
 
@@ -338,6 +400,13 @@ describe('ProductService', () => {
       // Assert
       expect(service.buildFeedCacheKey({ neighborhood: 'granada' })).toMatch(/^feed:granada:/);
       expect(service.buildFeedCacheKey({})).toMatch(/^feed:all:/);
+    });
+    it('HU-09 · comparte la clave entre neighborhoodId y su alias, y un barrio vacío cuenta como all', () => {
+      // Assert
+      expect(service.buildFeedCacheKey({ neighborhoodId: 'granada' })).toBe(
+        service.buildFeedCacheKey({ neighborhood: 'granada' }),
+      );
+      expect(service.buildFeedCacheKey({ neighborhoodId: '' })).toMatch(/^feed:all:/);
     });
   });
 
