@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Footer, Header } from '../components/Brand';
 import { Alert } from '../components/Form';
+import { ProductCard } from '../components/ProductCard';
 import { productApi, type Product } from '../lib/api';
-import { barrio, CONDICION, fecha, iniciales, precio, ROL, VERIFICACION } from '../lib/format';
+import { barrioGuardado } from '../lib/barrios';
+import { barrio, fecha, iniciales, ROL, VERIFICACION } from '../lib/format';
 import { useSession } from '../lib/session';
 
 export default function Inicio() {
@@ -21,6 +23,7 @@ export default function Inicio() {
   if (!user) return null;
   const nombre = user.fullName.split(' ')[0];
   const ver = VERIFICACION[user.verificationStatus];
+  const miBarrio = barrioGuardado();
 
   return (
     <>
@@ -82,35 +85,26 @@ export default function Inicio() {
 
             <section>
               <div className="feed-head">
-                <h2>Cerca de ti</h2>
-                <span>Objetos publicados por vecinos de Cali</span>
+                <h2>Todos los productos</h2>
+                <span>Lo más reciente de toda Cali</span>
+              </div>
+              <div className="feed-actions">
+                <Link
+                  to={miBarrio ? `/explorar?barrio=${miBarrio}` : '/explorar'}
+                  className="btn btn-primary btn-sm"
+                >
+                  {miBarrio ? `Productos de ${barrio(miBarrio)}` : 'Productos de mi barrio'}
+                </Link>
+                <Link to="/explorar" className="btn btn-outline btn-sm">
+                  Ver todos los productos
+                </Link>
               </div>
               {feedError && <Alert tone="info">No pudimos cargar las publicaciones por ahora.</Alert>}
-              {products?.length === 0 && <Alert tone="info">Aún no hay publicaciones en tu zona.</Alert>}
+              {products?.length === 0 && <Alert tone="info">Aún no hay publicaciones en Cali.</Alert>}
               {products === null && !feedError && <div className="feed-loading">Cargando…</div>}
               <div className="feed">
                 {products?.map((p) => (
-                  <article key={p.id} className="product">
-                    <div className="product-top">
-                      <span className="product-cat">{p.category}</span>
-                      {p.acceptsBarter && <span className="chip chip--orange">Acepta trueque</span>}
-                    </div>
-                    <h3>
-                      <Link to={`/producto/${p.id}`} className="product-link">
-                        {p.title}
-                      </Link>
-                    </h3>
-                    <p className="product-desc">{p.description}</p>
-                    <div className="product-foot">
-                      <span className="product-price">{precio(Number(p.price))}</span>
-                      <span className="product-meta">
-                        {barrio(p.neighborhoodId)} · {CONDICION[p.condition] ?? p.condition}
-                      </span>
-                    </div>
-                    <Link to={`/producto/${p.id}`} className="product-more">
-                      Ver producto →
-                    </Link>
-                  </article>
+                  <ProductCard key={p.id} product={p} />
                 ))}
               </div>
             </section>

@@ -31,6 +31,9 @@ export function Header() {
         <Logo />
         <nav className="header-nav">
           <span className="city-tag">Cali, CO</span>
+          <Link to="/explorar" className="nav-link">
+            Explorar
+          </Link>
           {user ? (
             <>
               <Link to="/inicio" className="nav-link">

@@ -112,6 +112,15 @@ export type ProductDetail = Product & {
   seller: { id: string; fullName: string; ratingAverage: number; reviewsCount: number };
 };
 
+/** HU-09 · Filtros del feed público. */
+export type FeedFilters = {
+  neighborhoodId?: string;
+  category?: string;
+  condition?: ProductCondition;
+  page?: number;
+  limit?: number;
+};
+
 export const authApi = {
   register: (body: RegisterBody) =>
     apiRequest<RegisterResponse>('/user/register', { method: 'POST', body }),
@@ -123,7 +132,13 @@ export const authApi = {
 };
 
 export const productApi = {
-  feed: () => apiRequest<{ items: Product[]; total: number }>('/products?limit=12'),
+  feed: ({ limit = 12, ...filters }: FeedFilters = {}) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined) query.set(key, String(value));
+    }
+    return apiRequest<{ items: Product[]; total: number }>(`/products?${query}`);
+  },
   /** HU-11 · detalle de un producto (público, no requiere token). */
   get: (id: string) => apiRequest<ProductDetail>(`/products/${encodeURIComponent(id)}`),
   /** HU-08 · publicar un producto (requiere token). */

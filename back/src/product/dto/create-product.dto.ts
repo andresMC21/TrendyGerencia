@@ -23,7 +23,7 @@ import { GeoPointDto } from './geo-point.dto';
 const trimString = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim() : value;
 
-const trimLowerString = ({ value }: { value: unknown }) =>
+export const trimLowerString = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 /** Slug del barrio: minúsculas, números y guiones (p. ej. `san-fernando`). */
