@@ -82,7 +82,6 @@ export function Footer() {
         <span>
           <strong>Trendy</strong> · Espacio digital local para dar una segunda vida a tus objetos
         </span>
-        <span>Equipo Calamares · Innovación y emprendimiento II</span>
       </div>
     </footer>
   );
