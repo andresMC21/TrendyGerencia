@@ -250,7 +250,7 @@ Render despliega la rama **`main`**. Para publicar lo que está en `develop`:
 2. En Render: *Blueprints* → el blueprint de Trendy → *Sync* (crea `trendy-web` la primera vez y aplica los cambios de `render.yml`).
 3. Comprobar `https://trendy-app-web-un9c.onrender.com/api/health` y abrir la URL del sitio `trendy-web` que muestra Render.
 
-En producción **no** se ejecuta el seed, porque crearía cuentas con contraseñas públicas. Para una demostración, se puede correr `npm run seed` desde el *Shell* del servicio de la API y luego cambiar esas contraseñas.
+El despliegue de demostración ejecuta las migraciones y el seed antes de iniciar la API: `npm run migration:run:prod && node dist/seed/seed.js && npm run start:prod`. Carga las cuentas de prueba de este README y los productos de ejemplo. Los IDs fijos evitan duplicados, pero cada arranque repone los valores de prueba; las contraseñas existentes se conservan.
 
 ## Estructura del proyecto
 

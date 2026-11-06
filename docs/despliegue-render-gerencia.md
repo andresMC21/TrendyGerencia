@@ -34,12 +34,21 @@ envía el SHA exacto del commit probado mediante el parámetro `ref`. Un job
 antiguo se omite si ya hay un commit más reciente en `main`. Los pull requests
 y los pushes a `develop` no disparan los Deploy Hooks.
 
-La API ejecuta las migraciones antes
-de arrancar. La web compila con `VITE_API_URL` apuntando a la nueva API e incluye
+La API ejecuta las migraciones y el seed antes de arrancar:
+`npm run migration:run:prod && node dist/seed/seed.js && npm run start:prod`.
+La web compila con `VITE_API_URL` apuntando a la nueva API e incluye
 una reescritura de todas sus rutas a `index.html`.
 
 Las credenciales de la base de datos y el secreto JWT están configurados en
-Render; no deben guardarse en Git. No se ejecuta el seed de cuentas de prueba.
+Render; no deben guardarse en Git.
+
+Este despliegue es de demostración: el seed carga cinco usuarios, tres productos,
+una transacción y una reseña. Dos productos están disponibles y uno vendido.
+Los IDs fijos evitan duplicados; en cada arranque se reponen los valores de
+prueba, conservando las contraseñas existentes. Incluye cuentas con las
+contraseñas de prueba documentadas en el README.
+
+Acceso de demostración: `demo@trendy.local` / `Trendy123`.
 
 ## Configurar los secretos de GitHub Actions
 

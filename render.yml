@@ -19,10 +19,8 @@ services:
     branch: main
     autoDeployTrigger: off
     buildCommand: npm ci --include=dev && npm run build
-    # No se ejecuta el seed en producción: crearía cuentas con contraseñas
-    # públicas (admin@trendy.local / Admin1234). Para una demo, ejecútalo a mano
-    # desde el Shell de Render con `npm run seed` y cambia esas contraseñas.
-    startCommand: npm run migration:run:prod && npm run start:prod
+    # Entorno de demostración: carga los datos de prueba en cada arranque.
+    startCommand: npm run migration:run:prod && node dist/seed/seed.js && npm run start:prod
     healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
