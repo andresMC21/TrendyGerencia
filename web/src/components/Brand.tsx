@@ -1,5 +1,8 @@
-import { Link, useNavigate } from 'react-router';
+import { useState } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router';
 import { useSession } from '../lib/session';
+import { useTheme } from '../lib/theme';
+import { PullLamp } from './PullLamp';
 
 export function Logo() {
   return (
@@ -22,32 +25,44 @@ export function Logo() {
 }
 
 export function Header() {
+  const { theme, toggle } = useTheme();
+  const [menuOpen, setMenuOpen] = useState(false);
   const { user, logout } = useSession();
   const navigate = useNavigate();
 
   return (
     <header className="site-header">
+      <a className="skip-link" href="#contenido">Ir al contenido</a>
       <div className="container header-inner">
         <Logo />
-        <nav className="header-nav">
+        <div className="header-lamp">
+          <span>{theme === 'dark' ? 'Enciende el día' : 'Baja la luz'}</span>
+          <PullLamp on={theme === 'light'} onToggle={toggle} label={theme === 'dark' ? 'Tira para activar el modo claro' : 'Tira para activar el modo oscuro'} />
+        </div>
+        <button className="mobile-menu-button" type="button" aria-expanded={menuOpen} aria-controls="main-navigation" onClick={() => setMenuOpen(!menuOpen)}>
+          {menuOpen ? 'Cerrar' : 'Menú'} <span aria-hidden="true">{menuOpen ? '×' : '☰'}</span>
+        </button>
+        <nav id="main-navigation" aria-label="Navegación principal" className={`header-nav${menuOpen ? ' is-open' : ''}`} onClick={(event) => {
+          if ((event.target as HTMLElement).closest('a')) setMenuOpen(false);
+        }} onKeyDown={(event) => { if (event.key === 'Escape') { setMenuOpen(false); document.querySelector<HTMLButtonElement>('.mobile-menu-button')?.focus(); } }}>
           <span className="city-tag">Cali, CO</span>
-          <Link to="/explorar" className="nav-link">
+          <NavLink to="/explorar" className="nav-link">
             Explorar
-          </Link>
+          </NavLink>
           {user ? (
             <>
-              <Link to="/inicio" className="nav-link">
+              <NavLink to="/inicio" className="nav-link">
                 Mi Trendy
-              </Link>
-              <Link to="/publicar" className="nav-link">
+              </NavLink>
+              <NavLink to="/publicar" className="nav-link">
                 Publicar
-              </Link>
-              <Link to="/transacciones" className="nav-link">
+              </NavLink>
+              <NavLink to="/transacciones" className="nav-link">
                 Transacciones
-              </Link>
-              <Link to="/perfil" className="nav-link">
+              </NavLink>
+              <NavLink to="/perfil" className="nav-link">
                 Mi perfil
-              </Link>
+              </NavLink>
               <button
                 className="btn btn-ghost"
                 onClick={() => {
@@ -61,9 +76,9 @@ export function Header() {
             </>
           ) : (
             <>
-              <Link to="/ingresar" className="nav-link">
+              <NavLink to="/ingresar" className="nav-link">
                 Ingresar
-              </Link>
+              </NavLink>
               <Link to="/registro" className="btn btn-primary btn-sm">
                 Crear cuenta
               </Link>

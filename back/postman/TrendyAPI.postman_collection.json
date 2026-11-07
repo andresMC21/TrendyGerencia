@@ -3282,7 +3282,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Bicicleta MTB {{neighborhoodId}}\",\n  \"description\": \"Rin 26, cambios Shimano, poco uso\",\n  \"price\": 250000,\n  \"acceptsBarter\": true,\n  \"category\": \"deportes\",\n  \"condition\": \"COMO_NUEVO\",\n  \"location\": {\n    \"lat\": 3.4516,\n    \"lng\": -76.532\n  },\n  \"neighborhoodId\": \"{{neighborhoodId}}\",\n  \"estimatedWeightKg\": 14.5\n}",
+              "raw": "{\n  \"title\": \"Bicicleta MTB {{neighborhoodId}}\",\n  \"description\": \"Rin 26, cambios Shimano, poco uso\",\n  \"price\": 250000,\n  \"acceptsBarter\": true,\n  \"category\": \"deportes\",\n  \"condition\": \"COMO_NUEVO\",\n  \"location\": {\n    \"lat\": 3.4516,\n    \"lng\": -76.532\n  },\n  \"neighborhoodId\": \"{{neighborhoodId}}\",\n  \"estimatedWeightKg\": 14.5,\n  \"photoUrl\": \"/images/products/bicicleta.jpg\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3297,7 +3297,8 @@
               "path": [
                 "products"
               ]
-            }
+            },
+            "description": "\n\nphotoUrl: optional JPEG/PNG/WebP data URL (max 900000 characters) or catalog path /images/products/*.jpg. Web publishing requires a photograph; legacy clients may omit it. JSON body limit: 1 MB."
           },
           "response": []
         },
@@ -3391,7 +3392,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Bicicleta MTB {{neighborhoodId}}\",\n  \"description\": \"Rin 26, cambios Shimano, poco uso\",\n  \"price\": 250000,\n  \"acceptsBarter\": true,\n  \"category\": \"deportes\",\n  \"condition\": \"COMO_NUEVO\",\n  \"location\": {\n    \"lat\": 3.4516,\n    \"lng\": -76.532\n  },\n  \"neighborhoodId\": \"{{neighborhoodId}}\",\n  \"estimatedWeightKg\": 14.5\n}",
+              "raw": "{\n  \"title\": \"Bicicleta MTB {{neighborhoodId}}\",\n  \"description\": \"Rin 26, cambios Shimano, poco uso\",\n  \"price\": 250000,\n  \"acceptsBarter\": true,\n  \"category\": \"deportes\",\n  \"condition\": \"COMO_NUEVO\",\n  \"location\": {\n    \"lat\": 3.4516,\n    \"lng\": -76.532\n  },\n  \"neighborhoodId\": \"{{neighborhoodId}}\",\n  \"estimatedWeightKg\": 14.5,\n  \"photoUrl\": \"/images/products/bicicleta.jpg\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3406,7 +3407,8 @@
               "path": [
                 "products"
               ]
-            }
+            },
+            "description": "\n\nphotoUrl: optional JPEG/PNG/WebP data URL (max 900000 characters) or catalog path /images/products/*.jpg. Web publishing requires a photograph; legacy clients may omit it. JSON body limit: 1 MB."
           },
           "response": []
         },
@@ -3446,7 +3448,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Patineta {{neighborhoodId}}\",\n  \"description\": \"Rin 26, cambios Shimano, poco uso\",\n  \"price\": 80000,\n  \"acceptsBarter\": true,\n  \"category\": \"deportes\",\n  \"condition\": \"COMO_NUEVO\",\n  \"location\": {\n    \"lat\": 3.4516,\n    \"lng\": -76.532\n  },\n  \"neighborhoodId\": \"{{neighborhoodId}}\",\n  \"estimatedWeightKg\": 14.5\n}",
+              "raw": "{\n  \"title\": \"Patineta {{neighborhoodId}}\",\n  \"description\": \"Rin 26, cambios Shimano, poco uso\",\n  \"price\": 80000,\n  \"acceptsBarter\": true,\n  \"category\": \"deportes\",\n  \"condition\": \"COMO_NUEVO\",\n  \"location\": {\n    \"lat\": 3.4516,\n    \"lng\": -76.532\n  },\n  \"neighborhoodId\": \"{{neighborhoodId}}\",\n  \"estimatedWeightKg\": 14.5,\n  \"photoUrl\": \"/images/products/bicicleta.jpg\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3461,7 +3463,8 @@
               "path": [
                 "products"
               ]
-            }
+            },
+            "description": "\n\nphotoUrl: optional JPEG/PNG/WebP data URL (max 900000 characters) or catalog path /images/products/*.jpg. Web publishing requires a photograph; legacy clients may omit it. JSON body limit: 1 MB."
           },
           "response": []
         },
@@ -3501,7 +3504,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Libro {{neighborhoodId}}\",\n  \"description\": \"Rin 26, cambios Shimano, poco uso\",\n  \"price\": 0,\n  \"acceptsBarter\": true,\n  \"category\": \"libros\",\n  \"condition\": \"USADO\",\n  \"location\": {\n    \"lat\": 3.5,\n    \"lng\": -76.6\n  },\n  \"neighborhoodId\": \"{{neighborhoodId}}\",\n  \"estimatedWeightKg\": 14.5\n}",
+              "raw": "{\n  \"title\": \"Libro {{neighborhoodId}}\",\n  \"description\": \"Rin 26, cambios Shimano, poco uso\",\n  \"price\": 0,\n  \"acceptsBarter\": true,\n  \"category\": \"libros\",\n  \"condition\": \"USADO\",\n  \"location\": {\n    \"lat\": 3.5,\n    \"lng\": -76.6\n  },\n  \"neighborhoodId\": \"{{neighborhoodId}}\",\n  \"estimatedWeightKg\": 14.5,\n  \"photoUrl\": \"/images/products/bicicleta.jpg\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3516,7 +3519,8 @@
               "path": [
                 "products"
               ]
-            }
+            },
+            "description": "\n\nphotoUrl: optional JPEG/PNG/WebP data URL (max 900000 characters) or catalog path /images/products/*.jpg. Web publishing requires a photograph; legacy clients may omit it. JSON body limit: 1 MB."
           },
           "response": []
         },
@@ -3556,7 +3560,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Lámpara {{neighborhoodId}}\",\n  \"description\": \"Rin 26, cambios Shimano, poco uso\",\n  \"price\": 0,\n  \"acceptsBarter\": true,\n  \"category\": \"hogar\",\n  \"condition\": \"COMO_NUEVO\",\n  \"location\": {\n    \"lat\": 3.4516,\n    \"lng\": -76.532\n  },\n  \"neighborhoodId\": \"{{neighborhoodId}}\",\n  \"estimatedWeightKg\": 14.5\n}",
+              "raw": "{\n  \"title\": \"Lámpara {{neighborhoodId}}\",\n  \"description\": \"Rin 26, cambios Shimano, poco uso\",\n  \"price\": 0,\n  \"acceptsBarter\": true,\n  \"category\": \"hogar\",\n  \"condition\": \"COMO_NUEVO\",\n  \"location\": {\n    \"lat\": 3.4516,\n    \"lng\": -76.532\n  },\n  \"neighborhoodId\": \"{{neighborhoodId}}\",\n  \"estimatedWeightKg\": 14.5,\n  \"photoUrl\": \"/images/products/bicicleta.jpg\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3571,7 +3575,8 @@
               "path": [
                 "products"
               ]
-            }
+            },
+            "description": "\n\nphotoUrl: optional JPEG/PNG/WebP data URL (max 900000 characters) or catalog path /images/products/*.jpg. Web publishing requires a photograph; legacy clients may omit it. JSON body limit: 1 MB."
           },
           "response": []
         },

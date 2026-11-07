@@ -224,6 +224,7 @@ export class ProductService {
     const product = this.productRepository.create({
       title: dto.title,
       description: dto.description,
+      photoUrl: dto.photoUrl ?? null,
       category: dto.category,
       condition: dto.condition,
       neighborhoodId: dto.neighborhoodId,

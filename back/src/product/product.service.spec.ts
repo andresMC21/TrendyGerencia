@@ -87,6 +87,16 @@ describe('ProductService', () => {
 
   // ───────── create ─────────
   describe('create', () => {
+    it('guarda la fotografia y la devuelve en el contrato publico', async () => {
+      const photoUrl = 'data:image/jpeg;base64,/9j/2Q==';
+      const result = await service.create('seller-1', {
+        title: 'Camara', description: 'Usada', category: 'tecnologia',
+        condition: ProductCondition.USED, neighborhoodId: 'granada',
+        location: { lat: 3.4, lng: -76.5 }, photoUrl,
+      });
+      expect(productRepo.save).toHaveBeenCalledWith(expect.objectContaining({ photoUrl }));
+      expect(result.photoUrl).toBe(photoUrl);
+    });
     it('guarda con GeoJSON [lng, lat], valores por defecto y devuelve el DTO', async () => {
       // Arrange
       const dto = {
@@ -142,6 +152,7 @@ describe('ProductService', () => {
       // Assert
       const created = productRepo.create.mock.calls[0][0];
       expect(created).toEqual({
+        photoUrl: null,
         title: 'Bici',
         description: 'd',
         category: 'deportes',

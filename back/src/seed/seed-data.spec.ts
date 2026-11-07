@@ -11,6 +11,13 @@ const unique = (values: readonly string[]) =>
   new Set(values).size === values.length;
 
 describe('seed data', () => {
+  it('incluye fotografias locales y variedad realista de precios y barrios', () => {
+    expect(seedProducts.length).toBeGreaterThanOrEqual(15);
+    expect(seedProducts.every((product) => /^\/images\/products\/[a-z0-9-]+\.jpg$/.test(product.photoUrl))).toBe(true);
+    expect(new Set(seedProducts.map((product) => product.neighborhoodId)).size).toBeGreaterThanOrEqual(6);
+    expect(seedProducts.some((product) => product.price === 0)).toBe(true);
+    expect(seedProducts.some((product) => product.acceptsBarter)).toBe(true);
+  });
   it('usa ids y emails unicos para que la semilla sea idempotente', () => {
     // Act
     const ids = [

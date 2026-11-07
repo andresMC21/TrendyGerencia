@@ -27,6 +27,7 @@ async function bootstrap() {
     });
 
     // API configuration
+    app.useBodyParser('json', { limit: '1mb' });
     app.setGlobalPrefix('api');
     app.enableCors();
     app.useGlobalPipes(

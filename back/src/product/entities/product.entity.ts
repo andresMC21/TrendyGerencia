@@ -42,6 +42,9 @@ export class Product {
   @Column({ type: 'text' })
   description: string;
 
+  @Column({ type: 'text', nullable: true })
+  photoUrl: string | null;
+
   /** 0 si es donación o trueque */
   @Column({ type: 'numeric', precision: 12, scale: 2, default: 0, transformer: numericTransformer })
   price: number;
