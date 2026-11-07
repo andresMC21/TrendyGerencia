@@ -39,6 +39,20 @@ export const NEIGHBORHOOD_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
  * validar, de modo que un valor formado solo por espacios se rechaza.
  */
 export class CreateProductDto {
+  @ApiPropertyOptional({
+    type: String,
+    maxLength: 900000,
+    example: '/images/products/bicicleta.jpg',
+    description: 'Fotografía JPEG, PNG o WebP en data URL base64 (máximo 900000 caracteres), o recurso del catálogo /images/products/*.jpg. La web exige una foto al publicar; es opcional para clientes anteriores.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(900000)
+  @Matches(/^(?:data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}|\/images\/products\/[a-z0-9-]+\.jpg)$/, {
+    message: 'photoUrl must be a JPEG, PNG or WebP image data URL or a catalog image path',
+  })
+  photoUrl?: string;
+
   @ApiProperty({
     type: String,
     example: 'Bicicleta MTB {{neighborhoodId}}',

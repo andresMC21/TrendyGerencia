@@ -77,6 +77,7 @@ export type ProductCondition = 'NUEVO' | 'COMO_NUEVO' | 'USADO';
 
 /** HU-08 · Cuerpo de POST /products (vendedor y estado los fija el servidor). */
 export type CreateProductBody = {
+  photoUrl: string;
   title: string;
   description: string;
   category: string;
@@ -88,6 +89,7 @@ export type CreateProductBody = {
 };
 
 export type Product = {
+  photoUrl?: string | null;
   id: string;
   sellerId?: string;
   title: string;

@@ -5,6 +5,7 @@ import { Alert } from '../components/Form';
 import { RetirarPublicacion } from '../components/RetirarPublicacion';
 import { ApiError, productApi, transactionApi, type ProductDetail, type Transaction } from '../lib/api';
 import { useSession } from '../lib/session';
+import { ProductPhoto } from '../components/ProductPhoto';
 import { barrio, CONDICION, ESTADO_PRODUCTO, fecha, iniciales, precio } from '../lib/format';
 
 type Estado =
@@ -76,6 +77,7 @@ function Detalle({ p }: { p: ProductDetail }) {
 
   return (
     <article className="product-detail">
+      <ProductPhoto src={p.photoUrl} title={p.title} detail />
       <div className="product-top">
         <span className="product-cat">{p.category}</span>
         <span className={`chip chip--${estado.tone}`}>{estado.label}</span>

@@ -30,6 +30,14 @@ describe('CreateProductDto (HU-08)', () => {
   const validate = (body: unknown) =>
     pipe.transform(body, { type: 'body', metatype: CreateProductDto });
 
+  it.each(['data:image/jpeg;base64,/9j/2Q==', 'data:image/png;base64,aGVsbG8=', '/images/products/bicicleta.jpg'])('acepta fotografia raster o recurso del catalogo: %s', async (photoUrl) => {
+    await expect(validate(validBody({ photoUrl }))).resolves.toMatchObject({ photoUrl });
+  });
+
+  it.each(['javascript:alert(1)', 'data:image/svg+xml;base64,PHN2Zz4=', '/images/products/../secret.jpg', 'data:image/jpeg;base64,not valid', 'data:image/jpeg;base64,' + 'A'.repeat(900000)])('rechaza fotografia insegura, invalida o demasiado grande', async (photoUrl) => {
+    await expect(validate(validBody({ photoUrl }))).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   /** Devuelve la lista de mensajes del 400 producido por el pipe. */
   const messagesFor = async (body: unknown): Promise<string[]> => {
     try {

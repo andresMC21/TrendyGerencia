@@ -47,6 +47,7 @@ export function mapServerValidation(messages: string[]): RegisterErrors {
  */
 export type ProductField =
   | 'title'
+  | 'photoUrl'
   | 'description'
   | 'category'
   | 'condition'
@@ -58,6 +59,7 @@ export type ProductErrors = Partial<Record<ProductField, string>>;
 const MAX_PRICE = 9_999_999_999;
 
 export function validateProduct(values: {
+  photoUrl: string;
   title: string;
   description: string;
   category: string;
@@ -68,6 +70,7 @@ export function validateProduct(values: {
 }): ProductErrors {
   const errors: ProductErrors = {};
   const title = values.title.trim();
+  if (!values.photoUrl) errors.photoUrl = 'Agrega una fotografía del producto.';
   const description = values.description.trim();
 
   if (title.length < 3) errors.title = 'Escribe un título (mínimo 3 caracteres).';
@@ -104,6 +107,7 @@ export function validateProduct(values: {
 }
 
 const PRODUCT_SERVER_MESSAGES: Record<ProductField, string> = {
+  photoUrl: 'Revisa la fotografía: debe ser una imagen válida de tamaño permitido.',
   title: 'Revisa el título (entre 3 y 120 caracteres).',
   description: 'Revisa la descripción (máximo 2000 caracteres).',
   category: 'Revisa la categoría.',
