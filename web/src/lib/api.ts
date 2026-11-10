@@ -136,6 +136,33 @@ export const authApi = {
     apiRequest<{ message: string }>('/user/logout', { method: 'POST', token }),
 };
 
+/** HU-07 · Perfil y reputación de otra persona (sin correo ni datos de autenticación). */
+export type PublicReview = {
+  rating: number;
+  comment: string | null;
+  reviewerName: string;
+  createdAt: string;
+};
+
+export type PublicProfile = {
+  id: string;
+  fullName: string;
+  info: string | null;
+  photoUrl: string | null;
+  verificationStatus: UserProfile['verificationStatus'];
+  ratingAverage: number;
+  reviewsCount: number;
+  availableProductsCount: number;
+  recentReviews: PublicReview[];
+  memberSince: string;
+};
+
+export const userApi = {
+  /** HU-07 · Requiere sesión (401 sin token); 404 si no existe o está inactivo. */
+  publicProfile: (token: string, id: string) =>
+    apiRequest<PublicProfile>(`/user/${encodeURIComponent(id)}`, { token }),
+};
+
 export const productApi = {
   feed: ({ limit = 12, ...filters }: FeedFilters = {}) => {
     const query = new URLSearchParams({ limit: String(limit) });

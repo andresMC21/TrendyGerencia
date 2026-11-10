@@ -225,10 +225,10 @@ npm run test:cov    # unitarias + cobertura
 
 | Tipo | Herramienta | Resultado |
 |---|---|---|
-| Unitarias | Jest | 25 suites, 326 pruebas pasan |
-| Cobertura | Jest | Sentencias 90.9 % · Ramas 80.8 % · Funciones 85.4 % · Líneas 90.4 % (umbral exigido: 80 %) |
-| Integración | Jest + Supertest + PostGIS | 4 suites, 73 pruebas pasan (health, usuarios, productos, transacciones) |
-| Manuales / regresión | Postman (Newman) | 160 requests, 452 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
+| Unitarias | Jest | 25 suites, 329 pruebas pasan |
+| Cobertura | Jest | Sentencias 90.2 % · Ramas 81.2 % · Funciones 83.4 % · Líneas 89.8 % (umbral exigido: 80 %) |
+| Integración | Jest + Supertest + PostGIS | 4 suites, 76 pruebas pasan (health, usuarios, productos, transacciones) |
+| Manuales / regresión | Postman (Newman) | 161 requests, 458 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
 
 ### Pruebas de integración
 

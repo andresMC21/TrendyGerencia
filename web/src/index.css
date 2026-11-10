@@ -894,6 +894,75 @@ h3 {
   color: var(--muted);
 }
 
+/* ---------- HU-07 · Perfil y reputación de otra persona ---------- */
+.seller-box__link {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.public-profile__name {
+  margin: 0 0 6px;
+  font-family: var(--font-title);
+  font-size: 24px;
+  color: var(--navy);
+}
+.reputation {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--panel-soft);
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin: 16px 0;
+}
+.reputation strong {
+  display: block;
+  color: var(--navy);
+}
+.reputation > div:last-child span {
+  font-size: 14px;
+  color: var(--muted);
+}
+.reputation__score {
+  display: grid;
+  justify-items: center;
+  min-width: 84px;
+}
+.reputation__score strong {
+  font-family: var(--font-title);
+  font-size: 34px;
+  line-height: 1;
+}
+.reputation__stars {
+  color: var(--orange);
+  letter-spacing: 2px;
+}
+.review-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.review-item {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.review-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+  color: var(--muted);
+}
+.review-item p {
+  margin: 6px 0 0;
+}
+
 /* ---------- HU-08 · Publicar un producto ---------- */
 .form-row {
   display: grid;

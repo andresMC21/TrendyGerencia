@@ -606,6 +606,41 @@ describe('Transactions (e2e)', () => {
       expect(await productStatus(product)).toBe('SOLD');
     });
 
+    it('HU-07 · tras la reseña del comprador, el perfil del vendedor muestra su reputación', async () => {
+      // Arrange: compra completada
+      const product = await newProduct();
+      const tx = await reserve(product);
+      await agreePoint(tx);
+      await confirmExchange(tx, tokenBuyer).expect(200);
+      const done = await confirmExchange(tx, tokenSeller).expect(200);
+      const sellerId = done.body.sellerId as string;
+      const before = await http
+        .get(`/api/user/${sellerId}`)
+        .set(auth(tokenBuyer))
+        .expect(200);
+
+      // Act
+      await http
+        .post('/api/review')
+        .set(auth(tokenBuyer))
+        .send({ transactionId: tx, rating: 4, comment: 'Puntual y amable' })
+        .expect(201);
+      const res = await http
+        .get(`/api/user/${sellerId}`)
+        .set(auth(tokenBuyer))
+        .expect(200);
+
+      // Assert
+      expect(res.body.reviewsCount).toBe(before.body.reviewsCount + 1);
+      expect(res.body.ratingAverage).toBeGreaterThan(0);
+      expect(res.body.recentReviews[0]).toMatchObject({
+        rating: 4,
+        comment: 'Puntual y amable',
+        reviewerName: 'Transaction E2E buyer',
+      });
+      expect(res.body).not.toHaveProperty('email');
+    });
+
     it('si los dos confirman a la vez, el intercambio queda completado una sola vez', async () => {
       // Arrange
       const product = await newProduct();

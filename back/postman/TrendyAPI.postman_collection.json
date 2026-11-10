@@ -1512,15 +1512,14 @@
           "response": []
         },
         {
-          "name": "GET /user/:id público sin token → 200",
+          "name": "GET /user/:id sin token → 401 (HU-07 criterio 1)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
-                  "pm.test(\"Es el vendedor\", function () { pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get(\"sellerId\")); });"
+                  "pm.test(\"Status 401\", function () { pm.response.to.have.status(401); });"
                 ]
               }
             }
@@ -1528,6 +1527,49 @@
           "request": {
             "auth": {
               "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/{{sellerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "user",
+                "{{sellerId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET /user/:id con sesión: perfil y reputación del vendedor (HU-07)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "const u = pm.response.json();",
+                  "pm.test(\"Es el vendedor\", function () { pm.expect(u.id).to.eql(pm.collectionVariables.get(\"sellerId\")); });",
+                  "pm.test(\"Criterio 2: ratingAverage y reviewsCount numéricos\", function () { pm.expect(u.ratingAverage).to.be.a(\"number\"); pm.expect(u.reviewsCount).to.be.a(\"number\"); pm.expect(u.recentReviews).to.be.an(\"array\"); pm.expect(u.availableProductsCount).to.be.a(\"number\"); });",
+                  "pm.test(\"Criterio 3: sin contraseña, correo, rol ni datos de autenticación\", function () { [\"password\",\"email\",\"role\",\"isActive\",\"tokenVersion\",\"token\"].forEach(function (k) { pm.expect(u).to.not.have.property(k); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenBuyer}}",
+                  "type": "string"
+                }
+              ]
             },
             "method": "GET",
             "header": [],

@@ -123,6 +123,13 @@ function Detalle({ p }: { p: ProductDetail }) {
                 }`
               : 'Vendedor sin calificaciones todavía'}
           </span>
+          <Link
+            to={`/usuario/${p.seller.id}`}
+            className="seller-box__link"
+            data-testid="ver-perfil-vendedor"
+          >
+            Ver perfil y reputación →
+          </Link>
         </div>
       </div>
       <IniciarTransaccion p={producto} onProductChange={setProducto} />

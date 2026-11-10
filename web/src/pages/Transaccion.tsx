@@ -128,11 +128,19 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
       <dl className="profile-data profile-data--plain">
         <div>
           <dt>Comprador</dt>
-          <dd>{tx.buyer?.fullName ?? tx.buyerId}</dd>
+          <dd>
+            <Link to={`/usuario/${tx.buyerId}`} data-testid="perfil-comprador">
+              {tx.buyer?.fullName ?? 'Ver perfil'}
+            </Link>
+          </dd>
         </div>
         <div>
           <dt>Vendedor</dt>
-          <dd>{tx.seller?.fullName ?? tx.sellerId}</dd>
+          <dd>
+            <Link to={`/usuario/${tx.sellerId}`} data-testid="perfil-vendedor">
+              {tx.seller?.fullName ?? 'Ver perfil'}
+            </Link>
+          </dd>
         </div>
         {tx.message && (
           <div>
