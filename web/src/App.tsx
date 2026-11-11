@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { useSession } from './lib/session';
 import Explorar from './pages/Explorar';
+import Favoritos from './pages/Favoritos';
 import Ingresar from './pages/Ingresar';
 import Inicio from './pages/Inicio';
 import Landing from './pages/Landing';
@@ -74,6 +75,14 @@ export default function App() {
         element={
           <SoloUsuarios>
             <MisPublicaciones />
+          </SoloUsuarios>
+        }
+      />
+      <Route
+        path="/favoritos"
+        element={
+          <SoloUsuarios>
+            <Favoritos />
           </SoloUsuarios>
         }
       />

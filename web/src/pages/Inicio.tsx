@@ -8,11 +8,13 @@ import { productApi, type Product } from '../lib/api';
 import { barrioGuardado } from '../lib/barrios';
 import { barrio, fecha, ROL, VERIFICACION } from '../lib/format';
 import { useSession } from '../lib/session';
+import { useFavoritos } from '../lib/useFavoritos';
 
 export default function Inicio() {
   const { user, isNewAccount, dismissWelcome } = useSession();
   const [products, setProducts] = useState<Product[] | null>(null);
   const [feedError, setFeedError] = useState(false);
+  const favoritos = useFavoritos();
 
   useEffect(() => {
     productApi
@@ -85,6 +87,9 @@ export default function Inicio() {
               <Link to="/mis-publicaciones" className="btn btn-outline btn-block profile-link">
                 Mis publicaciones
               </Link>
+              <Link to="/favoritos" className="btn btn-outline btn-block profile-link">
+                Mis favoritos
+              </Link>
             </aside>
 
             <section>
@@ -103,12 +108,13 @@ export default function Inicio() {
                   Ver todos los productos
                 </Link>
               </div>
+              {favoritos.error && <Alert tone="error">{favoritos.error}</Alert>}
               {feedError && <Alert tone="info">No pudimos cargar las publicaciones por ahora.</Alert>}
               {products?.length === 0 && <Alert tone="info">Aún no hay publicaciones en Cali.</Alert>}
               {products === null && !feedError && <div className="feed-loading">Cargando…</div>}
               <div className="feed">
                 {products?.map((p) => (
-                  <ProductCard key={p.id} product={p} />
+                  <ProductCard key={p.id} product={p} favorito={favoritos.paraTarjeta(p)} />
                 ))}
               </div>
             </section>

@@ -203,7 +203,7 @@ La colección `postman/trendy-api.postman_collection.json` cubre todos los endpo
 |---|---|---|
 | Registro e inicio de sesión | `POST /user/register`, `POST /user/login` | cualquiera |
 | Rutas protegidas (401 sin token) | `GET /user/me` | cualquiera |
-| Perfil, contraseña, correo | `PATCH /user/me`, `/me/password`, `/me/email` | cualquiera |
+| Perfil, contraseña, correo (HU-05: exigen la contraseña actual; 403 si no coincide) | `PATCH /user/me`, `/me/password`, `/me/email` · web: `/perfil` | cualquiera |
 | Solicitar verificación de identidad | `POST /user/me/verification` | `carlos` |
 | Aprobar o rechazar verificaciones | `GET /moderation/verifications`, `PATCH /moderation/verifications/:userId` | `moderador` o `admin` |
 | Administrar usuarios y **roles** | `/admin/users` (listar, editar, `/role`, `/active`, `DELETE`) | `admin` (el `moderador` solo lee) |
@@ -211,7 +211,7 @@ La colección `postman/trendy-api.postman_collection.json` cubre todos los endpo
 | Publicar y editar productos | `POST /products`, `PUT /products/:id` | `ana` |
 | Retirar una publicación (HU-13, borrado lógico → `REMOVED`) y ver mis publicaciones | `DELETE /products/:id`, `GET /products/mine` · web: `/mis-publicaciones` | dueño (`ana`); otro `USER` recibe 403 |
 | Feed por barrio / cercanía / filtros | `GET /products?neighborhoodId=…&lat=…&lng=…&radius=…` | público |
-| Favoritos | `POST /products/:id/favorite` | cualquiera autenticado |
+| Favoritos (HU-14: marcar sin duplicar, quitar y ver mi lista) | `PUT` y `DELETE /products/:id/favorite`, `GET /products/favorites` (`POST` alterna) · web: corazón en `/explorar`, `/inicio` y en cada producto, y lista en `/favoritos` | cualquiera autenticado |
 | Compra: reservar → el comprador propone punto → el vendedor acepta → vendido + recibido | `POST /transactions`, `POST /transactions/:id/meeting-proposal`, `POST /transactions/:id/meeting-proposal/accept` (o `/reject`), `POST /transactions/:id/confirm-exchange` (cada uno), `PUT /transactions/:id/status` para cancelar | `carlos` compra, `ana` vende |
 | Reseñas tras una compra completada | `POST /review`, `GET /review` | comprador y vendedor |
 

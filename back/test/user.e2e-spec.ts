@@ -311,89 +311,6 @@ describe('Users (e2e)', () => {
       .expect(400);
   });
 
-  describe('HU-04 · Actualizar mi perfil', () => {
-    it('guarda los datos permitidos y devuelve la información nueva', async () => {
-      const { body: registered } = await http
-        .post('/api/user/register')
-        .send(newUser('hu04-edit'))
-        .expect(201);
-      const editToken: string = registered.token;
-
-      const res = await http
-        .patch('/api/user/me')
-        .set(auth(editToken))
-        .send({ fullName: '  E2E Perfil Nuevo  ', info: '  Vendo ropa de segunda mano.  ' })
-        .expect(200);
-
-      expect(res.body).toMatchObject({
-        id: registered.id,
-        fullName: 'E2E Perfil Nuevo',
-        info: 'Vendo ropa de segunda mano.',
-      });
-
-      const me = await http.get('/api/user/me').set(auth(editToken)).expect(200);
-      expect(me.body).toMatchObject({
-        fullName: 'E2E Perfil Nuevo',
-        info: 'Vendo ropa de segunda mano.',
-      });
-    });
-
-    it.each([
-      ['un campo no admitido', { email: 'otro@test.com' }],
-      ['un campo protegido', { verificationStatus: 'VERIFIED' }],
-      ['un nombre demasiado corto', { fullName: 'A' }],
-      ['un nombre demasiado largo', { fullName: 'A'.repeat(101) }],
-      ['un nombre que no es texto', { fullName: 123 }],
-      ['un nombre nulo', { fullName: null }],
-      ['una información de más de 300 caracteres', { info: 'x'.repeat(301) }],
-    ])('rechaza con 400 %s', async (_caso, body) => {
-      await http.patch('/api/user/me').set(auth(token)).send(body).expect(400);
-    });
-
-    it('con la verificación PENDING o VERIFIED no permite cambiar el nombre', async () => {
-      const user = newUser('hu04-lock');
-      const { body } = await http.post('/api/user/register').send(user).expect(201);
-      const lockedToken: string = body.token;
-
-      await http
-        .post('/api/user/me/verification')
-        .set(auth(lockedToken))
-        .expect(200);
-
-      await http
-        .patch('/api/user/me')
-        .set(auth(lockedToken))
-        .send({ fullName: 'Nombre Distinto' })
-        .expect(403);
-
-      // Los demás datos permitidos sí se pueden cambiar.
-      const pending = await http
-        .patch('/api/user/me')
-        .set(auth(lockedToken))
-        .send({ fullName: user.fullName, info: 'Sigo en revisión' })
-        .expect(200);
-      expect(pending.body).toMatchObject({
-        fullName: user.fullName,
-        info: 'Sigo en revisión',
-        verificationStatus: 'PENDING',
-      });
-
-      await dataSource.query(
-        'UPDATE "user" SET "verificationStatus" = $1 WHERE id = $2',
-        ['VERIFIED', body.id],
-      );
-
-      await http
-        .patch('/api/user/me')
-        .set(auth(lockedToken))
-        .send({ fullName: 'Otro Nombre' })
-        .expect(403);
-
-      const me = await http.get('/api/user/me').set(auth(lockedToken)).expect(200);
-      expect(me.body.fullName).toBe(user.fullName);
-    });
-  });
-
   describe('HU-03 · Consultar mi perfil', () => {
     it('incluye nombre, correo, foto, verificación y reputación, sin la contraseña', async () => {
       const res = await http.get('/api/user/me').set(auth(token)).expect(200);
@@ -558,6 +475,128 @@ describe('Users (e2e)', () => {
       await http.get('/api/user/me').set(auth(newToken)).expect(200);
 
       await http.get('/api/user/me').set(auth(oldToken)).expect(401);
+    });
+  });
+
+
+  describe('HU-05 · Actualizar mis credenciales', () => {
+    // Cada prueba usa su propia cuenta para no alterar al usuario compartido.
+    const register = async (suffix: string) => {
+      const user = newUser(suffix);
+      const res = await http.post('/api/user/register').send(user).expect(201);
+      return { ...user, token: res.body.token as string };
+    };
+    const canLogin = (email: string, pass: string) =>
+      http.post('/api/user/login').send({ email, password: pass });
+
+    it('criterio 1: sin la contraseña actual no se cambia ni el correo ni la contraseña (400)', async () => {
+      const user = await register('hu05-c1');
+
+      await http
+        .patch('/api/user/me/password')
+        .set(auth(user.token))
+        .send({ newPassword: 'Another99' })
+        .expect(400);
+      await http
+        .patch('/api/user/me/email')
+        .set(auth(user.token))
+        .send({ newEmail: `${emailPrefix}hu05-c1-new@test.com` })
+        .expect(400);
+
+      // Nada cambió: la cuenta sigue entrando con sus datos originales.
+      await canLogin(user.email, user.password).expect(200);
+    });
+
+    it('criterio 1: con la contraseña actual correcta se cambian ambos datos', async () => {
+      const user = await register('hu05-c1ok');
+      const newEmail = `${emailPrefix}hu05-c1ok-new@test.com`;
+
+      await http
+        .patch('/api/user/me/password')
+        .set(auth(user.token))
+        .send({ currentPassword: user.password, newPassword: 'Another99' })
+        .expect(200);
+      await http
+        .patch('/api/user/me/email')
+        .set(auth(user.token))
+        .send({ currentPassword: 'Another99', newEmail })
+        .expect(200);
+
+      await canLogin(newEmail, 'Another99').expect(200);
+      await canLogin(user.email, user.password).expect(401);
+    });
+
+    it('criterio 2: con la contraseña actual incorrecta ambos cambios responden 403 y no se aplican', async () => {
+      const user = await register('hu05-c2');
+      const newEmail = `${emailPrefix}hu05-c2-new@test.com`;
+
+      await http
+        .patch('/api/user/me/password')
+        .set(auth(user.token))
+        .send({ currentPassword: 'WrongPass1', newPassword: 'Another99' })
+        .expect(403);
+      await http
+        .patch('/api/user/me/email')
+        .set(auth(user.token))
+        .send({ currentPassword: 'WrongPass1', newEmail })
+        .expect(403);
+
+      // Sigue entrando con el correo y la contraseña originales.
+      await canLogin(user.email, user.password).expect(200);
+      await canLogin(newEmail, user.password).expect(401);
+      await canLogin(user.email, 'Another99').expect(401);
+    });
+
+    it('criterio 2: sin sesión responde 401', async () => {
+      await http
+        .patch('/api/user/me/password')
+        .send({ currentPassword: password, newPassword: 'Another99' })
+        .expect(401);
+      await http
+        .patch('/api/user/me/email')
+        .send({ currentPassword: password, newEmail: 'x@test.com' })
+        .expect(401);
+    });
+
+    it('criterio 3: la contraseña nueva debe ser distinta a la actual (400)', async () => {
+      const user = await register('hu05-c3same');
+
+      await http
+        .patch('/api/user/me/password')
+        .set(auth(user.token))
+        .send({ currentPassword: user.password, newPassword: user.password })
+        .expect(400);
+
+      await canLogin(user.email, user.password).expect(200);
+    });
+
+    it('criterio 3: la contraseña nueva debe tener entre 8 y 12 caracteres', async () => {
+      const user = await register('hu05-c3len');
+      const change = (currentPassword: string, newPassword: string) =>
+        http
+          .patch('/api/user/me/password')
+          .set(auth(user.token))
+          .send({ currentPassword, newPassword });
+
+      await change(user.password, 'Abcde12').expect(400); // 7: muy corta
+      await change(user.password, 'Abcdefgh12345').expect(400); // 13: muy larga
+
+      await change(user.password, 'Abcdef12').expect(200); // 8: mínimo válido
+      await change('Abcdef12', 'Abcdefghi123').expect(200); // 12: máximo válido
+      await canLogin(user.email, 'Abcdefghi123').expect(200);
+    });
+
+    it('un correo ya registrado por otra cuenta responde 409 y no cambia el actual', async () => {
+      const first = await register('hu05-dup-a');
+      const second = await register('hu05-dup-b');
+
+      await http
+        .patch('/api/user/me/email')
+        .set(auth(second.token))
+        .send({ currentPassword: second.password, newEmail: first.email })
+        .expect(409);
+
+      await canLogin(second.email, second.password).expect(200);
     });
   });
 

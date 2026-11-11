@@ -15,6 +15,9 @@ describe('ProductController', () => {
     remove: jest.fn().mockResolvedValue(undefined),
     findMine: jest.fn().mockResolvedValue('mine'),
     toggleFavorite: jest.fn().mockResolvedValue({ isFavorite: true }),
+    addFavorite: jest.fn().mockResolvedValue({ isFavorite: true }),
+    removeFavorite: jest.fn().mockResolvedValue({ isFavorite: false }),
+    findFavorites: jest.fn().mockResolvedValue('favs'),
   };
   const user = { id: 'u1', role: [ValidRoles.USER] } as User;
 
@@ -107,5 +110,32 @@ describe('ProductController', () => {
     // Assert
     expect(result).toEqual({ isFavorite: true });
     expect(service.toggleFavorite).toHaveBeenCalledWith(productId, 'u1');
+  });
+
+  it('addFavorite (HU-14)', async () => {
+    // Act
+    const result = await controller.addFavorite('p1', user);
+
+    // Assert
+    expect(result).toEqual({ isFavorite: true });
+    expect(service.addFavorite).toHaveBeenCalledWith('p1', 'u1');
+  });
+
+  it('removeFavorite (HU-14)', async () => {
+    // Act
+    const result = await controller.removeFavorite('p1', user);
+
+    // Assert
+    expect(result).toEqual({ isFavorite: false });
+    expect(service.removeFavorite).toHaveBeenCalledWith('p1', 'u1');
+  });
+
+  it('findFavorites (HU-14)', async () => {
+    // Act
+    const result = await controller.findFavorites(user);
+
+    // Assert
+    expect(result).toBe('favs');
+    expect(service.findFavorites).toHaveBeenCalledWith('u1');
   });
 });

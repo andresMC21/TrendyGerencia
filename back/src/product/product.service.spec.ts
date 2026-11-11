@@ -21,7 +21,7 @@ const makeQb = () => {
   [
     'where', 'andWhere', 'leftJoinAndSelect', 'leftJoin', 'innerJoin',
     'select', 'addSelect', 'orderBy', 'addOrderBy', 'offset', 'limit',
-    'groupBy', 'relation', 'of',
+    'groupBy', 'relation', 'of', 'insert', 'into', 'values', 'orIgnore',
   ].forEach((m) => (qb[m] = jest.fn().mockReturnValue(qb)));
   qb.getCount = jest.fn().mockResolvedValue(0);
   qb.getOne = jest.fn();
@@ -29,6 +29,7 @@ const makeQb = () => {
   qb.getRawMany = jest.fn().mockResolvedValue([]);
   qb.getRawAndEntities = jest.fn().mockResolvedValue({ entities: [], raw: [] });
   qb.add = jest.fn().mockResolvedValue(undefined);
+  qb.execute = jest.fn().mockResolvedValue(undefined);
   qb.remove = jest.fn().mockResolvedValue(undefined);
   return qb;
 };
@@ -75,6 +76,7 @@ describe('ProductService', () => {
     qb = makeQb();
     Object.assign(productRepo, {
       createQueryBuilder: jest.fn().mockReturnValue(qb),
+      manager: { createQueryBuilder: jest.fn().mockReturnValue(qb) },
       create: jest.fn((x) => ({ ...x })),
       save: jest.fn(async (x) => ({ id: 'p1', viewsCount: 0, createdAt: new Date(), updatedAt: new Date(), ...x })),
       findOne: jest.fn(),
@@ -688,6 +690,107 @@ describe('ProductService', () => {
       // Assert
       expect(await service.toggleFavorite('p1', 'u1')).toEqual({ isFavorite: false });
       expect(qb.remove).toHaveBeenCalledWith('u1');
+    });
+  });
+
+  // ───────── HU-14 · gestionar favoritos ─────────
+  describe('addFavorite (HU-14)', () => {
+    it('404 si el producto no existe o fue retirado', async () => {
+      // Arrange
+      productRepo.findOneBy.mockResolvedValue(null);
+
+      // Act + Assert
+      await expect(service.addFavorite('x', 'u1')).rejects.toBeInstanceOf(NotFoundException);
+      productRepo.findOneBy.mockResolvedValue(makeProduct({ status: ProductStatus.REMOVED }));
+      await expect(service.addFavorite('p1', 'u1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(qb.execute).not.toHaveBeenCalled();
+    });
+    it('inserta la combinación usuario-producto y devuelve isFavorite: true', async () => {
+      // Arrange
+      productRepo.findOneBy.mockResolvedValue(makeProduct());
+
+      // Act
+      const result = await service.addFavorite('p1', 'u1');
+
+      // Assert
+      expect(result).toEqual({ isFavorite: true });
+      expect(qb.into).toHaveBeenCalledWith('product_favorites', ['productId', 'userId']);
+      expect(qb.values).toHaveBeenCalledWith({ productId: 'p1', userId: 'u1' });
+      expect(qb.execute).toHaveBeenCalledTimes(1);
+    });
+    it('no duplica: el INSERT ignora el conflicto, así que repetir no falla', async () => {
+      // Arrange
+      productRepo.findOneBy.mockResolvedValue(makeProduct());
+
+      // Act
+      await service.addFavorite('p1', 'u1');
+      const again = await service.addFavorite('p1', 'u1');
+
+      // Assert
+      expect(again).toEqual({ isFavorite: true });
+      expect(qb.orIgnore).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('removeFavorite (HU-14)', () => {
+    it('404 si el producto no existe', async () => {
+      // Arrange
+      productRepo.findOneBy.mockResolvedValue(null);
+
+      // Act + Assert
+      await expect(service.removeFavorite('x', 'u1')).rejects.toBeInstanceOf(NotFoundException);
+      expect(qb.remove).not.toHaveBeenCalled();
+    });
+    it('quita solo la relación del usuario y no toca la publicación', async () => {
+      // Arrange
+      productRepo.findOneBy.mockResolvedValue(makeProduct());
+
+      // Act
+      const result = await service.removeFavorite('p1', 'u1');
+
+      // Assert
+      expect(result).toEqual({ isFavorite: false });
+      expect(qb.of).toHaveBeenCalledWith('p1');
+      expect(qb.remove).toHaveBeenCalledWith('u1');
+      expect(productRepo.update).not.toHaveBeenCalled();
+      expect(productRepo.save).not.toHaveBeenCalled();
+    });
+    it('permite limpiar un producto que el vendedor ya retiró', async () => {
+      // Arrange
+      productRepo.findOneBy.mockResolvedValue(makeProduct({ status: ProductStatus.REMOVED }));
+
+      // Act
+      const result = await service.removeFavorite('p1', 'u1');
+
+      // Assert
+      expect(result).toEqual({ isFavorite: false });
+      expect(qb.remove).toHaveBeenCalledWith('u1');
+    });
+  });
+
+  describe('findFavorites (HU-14)', () => {
+    it('devuelve lista vacía si no hay favoritos', async () => {
+      // Arrange
+      qb.getMany.mockResolvedValue([]);
+
+      // Act
+      const result = await service.findFavorites('u1');
+
+      // Assert
+      expect(result).toEqual([]);
+    });
+    it('lista solo los favoritos del usuario, sin retirados, con su conteo', async () => {
+      // Arrange
+      qb.getMany.mockResolvedValue([makeProduct({ id: 'p1' }), makeProduct({ id: 'p2' })]);
+      qb.getRawMany.mockResolvedValue([{ id: 'p1', count: '3' }]);
+
+      // Act
+      const result = await service.findFavorites('u1');
+
+      // Assert
+      expect(qb.innerJoin).toHaveBeenCalledWith('product.favoritedBy', 'fan', 'fan.id = :userId', { userId: 'u1' });
+      expect(qb.where).toHaveBeenCalledWith('product.status != :removed', { removed: ProductStatus.REMOVED });
+      expect(result.map((p) => [p.id, p.favoritesCount])).toEqual([['p1', 3], ['p2', 0]]);
     });
   });
 

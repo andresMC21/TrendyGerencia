@@ -6,6 +6,7 @@ import { ProductCard } from '../components/ProductCard';
 import { productApi, type Product, type ProductCondition } from '../lib/api';
 import { BARRIOS, CATEGORIAS, guardarBarrio } from '../lib/barrios';
 import { barrio, CATEGORIA, CONDICION } from '../lib/format';
+import { useFavoritos } from '../lib/useFavoritos';
 
 const POR_PAGINA = 12;
 
@@ -24,6 +25,7 @@ const paginaDe = (valor: string | null) =>
  */
 export default function Explorar() {
   const [params, setParams] = useSearchParams();
+  const favoritos = useFavoritos();
   const barrioId = delCatalogo(params.get('barrio'), BARRIOS.map((b) => b.id));
   const categoria = delCatalogo(params.get('categoria'), CATEGORIAS);
   const condicion = delCatalogo(params.get('condicion'), Object.keys(CONDICION));
@@ -142,6 +144,7 @@ export default function Explorar() {
             )}
           </div>
 
+          {favoritos.error && <Alert tone="error">{favoritos.error}</Alert>}
           {feedError && <Alert tone="info">No pudimos cargar las publicaciones por ahora.</Alert>}
           {products?.length === 0 && (
             <Alert tone="info">
@@ -151,7 +154,7 @@ export default function Explorar() {
           {products === null && !feedError && <div className="feed-loading" role="status">Buscando publicaciones…</div>}
           <div className="feed">
             {products?.map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard key={p.id} product={p} favorito={favoritos.paraTarjeta(p)} />
             ))}
           </div>
 

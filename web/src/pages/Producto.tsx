@@ -108,7 +108,7 @@ function Detalle({ p }: { p: ProductDetail }) {
         <div>
           <dt>Visitas · Favoritos</dt>
           <dd>
-            {p.viewsCount} · {p.favoritesCount}
+            {producto.viewsCount} · {producto.favoritesCount}
           </dd>
         </div>
       </dl>
@@ -127,8 +127,92 @@ function Detalle({ p }: { p: ProductDetail }) {
           </span>
         </div>
       </div>
+      <Favorito
+        p={producto}
+        onCountChange={(delta) =>
+          setProducto((actual) => ({
+            ...actual,
+            favoritesCount: Math.max(0, actual.favoritesCount + delta),
+          }))
+        }
+      />
       <IniciarTransaccion p={producto} onProductChange={setProducto} />
     </article>
+  );
+}
+
+/**
+ * HU-14 · Guardar o quitar el producto de mis favoritos. Usa PUT y DELETE, que son
+ * idempotentes: un doble clic o un reintento nunca duplica ni falla.
+ */
+function Favorito({ p, onCountChange }: {
+  p: ProductDetail;
+  onCountChange: (delta: number) => void;
+}) {
+  const { user, token } = useSession();
+  // null = todavía no sabemos si ya lo tengo en favoritos.
+  const [esFavorito, setEsFavorito] = useState<boolean | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState('');
+  const inFlight = useRef(false);
+
+  useEffect(() => {
+    if (!token) return;
+    let activo = true;
+    productApi
+      .favorites(token)
+      .then((lista) => activo && setEsFavorito(lista.some((f) => f.id === p.id)))
+      .catch(() => activo && setEsFavorito(false));
+    return () => {
+      activo = false;
+    };
+  }, [token, p.id]);
+
+  // Quien publicó el producto no lo guarda como favorito; los visitantes ven el aviso de ingreso.
+  if (!user || !token || user.id === p.seller.id) return null;
+
+  async function alternar() {
+    if (!token || inFlight.current || esFavorito === null) return;
+    const quiere = !esFavorito;
+    inFlight.current = true;
+    setEnviando(true);
+    setError('');
+    try {
+      if (quiere) await productApi.addFavorite(token, p.id);
+      else await productApi.removeFavorite(token, p.id);
+      setEsFavorito(quiere);
+      onCountChange(quiere ? 1 : -1);
+    } catch (err) {
+      setError(
+        err instanceof ApiError && err.status === 401
+          ? 'Tu sesión expiró. Vuelve a ingresar para usar tus favoritos.'
+          : err instanceof ApiError && err.status === 404
+            ? 'Este producto ya no está publicado.'
+            : 'No pudimos actualizar tus favoritos. Inténtalo de nuevo.',
+      );
+    } finally {
+      inFlight.current = false;
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <section className="favorite-box" aria-label="Favoritos">
+      {error && <Alert tone="error">{error}</Alert>}
+      <div className="tx-actions">
+        <button
+          type="button"
+          className={`btn ${esFavorito ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => void alternar()}
+          disabled={enviando || esFavorito === null}
+          aria-pressed={esFavorito === true}
+          data-testid="boton-favorito"
+        >
+          {esFavorito ? '♥ Guardado en favoritos' : '♡ Guardar en favoritos'}
+        </button>
+        {esFavorito && <Link to="/favoritos">Ver mis favoritos</Link>}
+      </div>
+    </section>
   );
 }
 

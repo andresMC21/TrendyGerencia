@@ -369,6 +369,74 @@ export class ProductService {
   }
 
   /**
+   * HU-14 · PUT /products/:id/favorite — marca el producto como favorito.
+   *
+   * Es idempotente: la tabla product_favorites tiene clave primaria
+   * (productId, userId) y el INSERT usa ON CONFLICT DO NOTHING, así que marcar
+   * de nuevo no duplica ni falla, ni siquiera con dos peticiones simultáneas.
+   */
+  async addFavorite(id: string, userId: string): Promise<{ isFavorite: boolean }> {
+    await this.assertPublished(id);
+    await this.productRepository.manager
+      .createQueryBuilder()
+      .insert()
+      .into('product_favorites', ['productId', 'userId'])
+      .values({ productId: id, userId })
+      .orIgnore()
+      .execute();
+    return { isFavorite: true };
+  }
+
+  /**
+   * HU-14 · DELETE /products/:id/favorite — quita el producto de mis favoritos.
+   *
+   * Solo borra la fila de la tabla intermedia: la publicación no se toca.
+   * También es idempotente (quitar algo que no era favorito responde igual).
+   * Basta con que el producto exista: si el vendedor lo retiró, el usuario
+   * aún puede limpiarlo de sus favoritos.
+   */
+  async removeFavorite(id: string, userId: string): Promise<{ isFavorite: boolean }> {
+    const product = await this.productRepository.findOneBy({ id });
+    if (!product) {
+      throw new NotFoundException(`Product with id ${id} not found`);
+    }
+    await this.productRepository
+      .createQueryBuilder()
+      .relation(Product, 'favoritedBy')
+      .of(id)
+      .remove(userId);
+    return { isFavorite: false };
+  }
+
+  /**
+   * HU-14 · GET /products/favorites — mis favoritos, del producto publicado
+   * más reciente al más antiguo. Los productos retirados (REMOVED) no se
+   * listan, igual que en el feed, pero su fila de favorito se conserva.
+   */
+  async findFavorites(userId: string): Promise<ProductDto[]> {
+    const products = await this.productRepository
+      .createQueryBuilder('product')
+      .innerJoin('product.favoritedBy', 'fan', 'fan.id = :userId', { userId })
+      .where('product.status != :removed', { removed: ProductStatus.REMOVED })
+      .orderBy('product.createdAt', 'DESC')
+      .getMany();
+    const counts = await this.countFavorites(products.map((p) => p.id));
+    return products.map((product) =>
+      ProductDto.fromEntity(product, {
+        favoritesCount: counts.get(product.id) ?? 0,
+      }),
+    );
+  }
+
+  /** 404 si el producto no existe o fue retirado. */
+  private async assertPublished(id: string): Promise<void> {
+    const product = await this.productRepository.findOneBy({ id });
+    if (!product || product.status === ProductStatus.REMOVED) {
+      throw new NotFoundException(`Product with id ${id} not found`);
+    }
+  }
+
+  /**
    * Lo usa TransactionService: reserva (RESERVED), venta (SOLD) o liberación (AVAILABLE).
    *
    * Con `manager` el cambio se hace dentro de la transacción de base de datos

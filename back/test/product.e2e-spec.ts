@@ -258,4 +258,163 @@ describe('Products (e2e)', () => {
 
     expect(byId.body.total).toBe(0);
   });
+
+  describe('HU-14 · Gestionar favoritos', () => {
+    let favId: string;
+    let tokenOther: string;
+    const favRows = async (pid: string) =>
+      (await app
+        .get(DataSource)
+        .query(
+          'SELECT "userId" FROM product_favorites WHERE "productId" = $1',
+          [pid],
+        )) as { userId: string }[];
+
+    beforeAll(async () => {
+      // Producto propio de este bloque, independiente del resto de pruebas.
+      const created = await http
+        .post('/api/products')
+        .set(auth(tokenSeller))
+        .send(body({ title: 'Favorito HU-14' }))
+        .expect(201);
+      favId = created.body.id;
+      tokenOther = await newUser('3');
+    });
+
+    it('exige sesión: sin JWT responde 401', async () => {
+      await http.put(`/api/products/${favId}/favorite`).expect(401);
+      await http.delete(`/api/products/${favId}/favorite`).expect(401);
+      await http.get('/api/products/favorites').expect(401);
+    });
+
+    it('criterio 1: puedo marcar un producto y aparece en mi lista (y solo en la mía)', async () => {
+      const res = await http
+        .put(`/api/products/${favId}/favorite`)
+        .set(auth(tokenBuyer))
+        .expect(200);
+      expect(res.body).toEqual({ isFavorite: true });
+
+      const mine = await http
+        .get('/api/products/favorites')
+        .set(auth(tokenBuyer))
+        .expect(200);
+      expect(mine.body.map((p: { id: string }) => p.id)).toEqual([favId]);
+      expect(mine.body[0].favoritesCount).toBe(1);
+
+      // La lista es autenticada y personal: otro usuario no la ve.
+      const other = await http
+        .get('/api/products/favorites')
+        .set(auth(tokenOther))
+        .expect(200);
+      expect(other.body).toEqual([]);
+    });
+
+    it('criterio 1: marcar un producto inexistente (404) o con id inválido (400)', async () => {
+      await http
+        .put('/api/products/00000000-0000-4000-8000-000000000000/favorite')
+        .set(auth(tokenBuyer))
+        .expect(404);
+      await http
+        .put('/api/products/no-es-uuid/favorite')
+        .set(auth(tokenBuyer))
+        .expect(400);
+    });
+
+    it('criterio 2: marcarlo de nuevo no duplica la combinación usuario-producto', async () => {
+      await http
+        .put(`/api/products/${favId}/favorite`)
+        .set(auth(tokenBuyer))
+        .expect(200);
+      await http
+        .put(`/api/products/${favId}/favorite`)
+        .set(auth(tokenBuyer))
+        .expect(200);
+
+      expect(await favRows(favId)).toHaveLength(1);
+      expect(
+        (await http.get(`/api/products/${favId}`)).body.favoritesCount,
+      ).toBe(1);
+    });
+
+    it('criterio 2: varias peticiones simultáneas tampoco duplican ni fallan', async () => {
+      const responses = await Promise.all(
+        Array.from({ length: 5 }, () =>
+          http.put(`/api/products/${favId}/favorite`).set(auth(tokenOther)),
+        ),
+      );
+
+      expect(responses.map((r) => r.status)).toEqual([200, 200, 200, 200, 200]);
+      // Dos usuarios (comprador y otro), una fila por cada uno.
+      expect(await favRows(favId)).toHaveLength(2);
+    });
+
+    it('criterio 3: retirarlo de favoritos no afecta la publicación', async () => {
+      const before = (await http.get(`/api/products/${favId}`)).body;
+
+      const res = await http
+        .delete(`/api/products/${favId}/favorite`)
+        .set(auth(tokenBuyer))
+        .expect(200);
+      expect(res.body).toEqual({ isFavorite: false });
+
+      // Ya no está en mi lista...
+      const mine = await http
+        .get('/api/products/favorites')
+        .set(auth(tokenBuyer))
+        .expect(200);
+      expect(mine.body).toEqual([]);
+
+      // ...pero la publicación sigue igual, y el favorito de otro usuario se conserva.
+      const after = (await http.get(`/api/products/${favId}`).expect(200)).body;
+      expect(after).toMatchObject({
+        id: favId,
+        title: before.title,
+        status: before.status,
+        price: before.price,
+      });
+      expect(after.favoritesCount).toBe(1);
+      expect(await favRows(favId)).toHaveLength(1);
+    });
+
+    it('criterio 3: quitar algo que no era favorito responde igual (idempotente)', async () => {
+      const res = await http
+        .delete(`/api/products/${favId}/favorite`)
+        .set(auth(tokenBuyer))
+        .expect(200);
+      expect(res.body).toEqual({ isFavorite: false });
+
+      await http
+        .delete('/api/products/00000000-0000-4000-8000-000000000000/favorite')
+        .set(auth(tokenBuyer))
+        .expect(404);
+    });
+
+    it('un producto retirado por su vendedor sale de mi lista pero puedo limpiarlo', async () => {
+      await http
+        .put(`/api/products/${favId}/favorite`)
+        .set(auth(tokenBuyer))
+        .expect(200);
+
+      await http
+        .delete(`/api/products/${favId}`)
+        .set(auth(tokenSeller))
+        .expect(204);
+
+      const mine = await http
+        .get('/api/products/favorites')
+        .set(auth(tokenBuyer))
+        .expect(200);
+      expect(mine.body).toEqual([]);
+
+      // Retirado: ya no se puede marcar, pero sí quitar de favoritos.
+      await http
+        .put(`/api/products/${favId}/favorite`)
+        .set(auth(tokenBuyer))
+        .expect(404);
+      await http
+        .delete(`/api/products/${favId}/favorite`)
+        .set(auth(tokenBuyer))
+        .expect(200);
+    });
+  });
 });

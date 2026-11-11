@@ -131,11 +131,31 @@ export const authApi = {
   login: (email: string, password: string) =>
     apiRequest<LoginResponse>('/user/login', { method: 'POST', body: { email, password } }),
   me: (token: string) => apiRequest<UserProfile>('/user/me', { token }),
-  /** HU-03/HU-04 · actualizar datos del perfil propio (nombre, información, foto). */
+  /** HU-03 · actualizar datos del perfil propio (por ejemplo, la foto). */
   updateMe: (token: string, body: { photoUrl?: string | null; info?: string; fullName?: string }) =>
     apiRequest<UserProfile>('/user/me', { method: 'PATCH', token, body }),
   logout: (token: string) =>
     apiRequest<{ message: string }>('/user/logout', { method: 'POST', token }),
+  /**
+   * HU-05 · cambiar la contraseña. Exige la contraseña actual: 403 si no coincide,
+   * 400 si la nueva es igual a la actual o no tiene entre 8 y 12 caracteres.
+   */
+  changePassword: (token: string, currentPassword: string, newPassword: string) =>
+    apiRequest<{ message: string }>('/user/me/password', {
+      method: 'PATCH',
+      token,
+      body: { currentPassword, newPassword },
+    }),
+  /**
+   * HU-05 · cambiar el correo. Exige la contraseña actual: 403 si no coincide,
+   * 409 si el correo ya está registrado, 400 si no es válido o es el mismo.
+   */
+  changeEmail: (token: string, currentPassword: string, newEmail: string) =>
+    apiRequest<UserProfile>('/user/me/email', {
+      method: 'PATCH',
+      token,
+      body: { currentPassword, newEmail },
+    }),
 };
 
 export const productApi = {
@@ -159,6 +179,20 @@ export const productApi = {
    */
   remove: (token: string, id: string) =>
     apiRequest<void>(`/products/${encodeURIComponent(id)}`, { method: 'DELETE', token }),
+  /** HU-14 · mis productos favoritos (del más reciente al más antiguo). */
+  favorites: (token: string) => apiRequest<Product[]>('/products/favorites', { token }),
+  /** HU-14 · marcar como favorito. Es idempotente: repetirlo no duplica. */
+  addFavorite: (token: string, id: string) =>
+    apiRequest<{ isFavorite: boolean }>(`/products/${encodeURIComponent(id)}/favorite`, {
+      method: 'PUT',
+      token,
+    }),
+  /** HU-14 · quitar de favoritos; la publicación no se modifica. */
+  removeFavorite: (token: string, id: string) =>
+    apiRequest<{ isFavorite: boolean }>(`/products/${encodeURIComponent(id)}/favorite`, {
+      method: 'DELETE',
+      token,
+    }),
 };
 
 export type TransactionStatus = 'PENDING' | 'AGREED_POINT' | 'COMPLETED' | 'CANCELLED';

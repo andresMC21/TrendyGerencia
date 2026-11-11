@@ -456,3 +456,15 @@ h1, h2, h3 { font-weight: 600; }
 [data-theme='dark'] .nebula-haze::after { background: radial-gradient(ellipse at 50% 48%, transparent 18%, #0e1b2844 80%); }
 @keyframes nebula-breathe { from { transform: translate3d(-1%, -.8%, 0) rotate(-3deg) scale(1); } to { transform: translate3d(1%, .8%, 0) rotate(3deg) scale(1.05); } }
 @media (prefers-reduced-motion: no-preference) { .nebula-haze { animation: nebula-breathe 32s ease-in-out infinite alternate; } }
+
+/* HU-14 · favoritos: tarjeta del producto con su botón «Quitar» debajo, y el botón del detalle. */
+.fav-item { display: flex; flex-direction: column; gap: 10px; }
+.fav-item .product { flex: 1; }
+.favorite-box { margin-top: 20px; }
+
+/* HU-14 · corazón de favoritos dentro de la tarjeta de producto. */
+.fav-heart { margin-left: auto; width: 34px; height: 34px; flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid var(--muted); background: transparent; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer; transition: color .2s, background .2s, border-color .2s, transform .2s; }
+.fav-heart:hover:not(:disabled) { color: var(--red); border-color: var(--red); transform: scale(1.08); }
+.fav-heart:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+.fav-heart--on { color: var(--red); background: var(--red-soft); border-color: var(--red); }
+.fav-heart:disabled { opacity: .6; cursor: progress; }

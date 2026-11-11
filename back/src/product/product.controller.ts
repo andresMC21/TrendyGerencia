@@ -170,6 +170,26 @@ export class ProductController {
     return this.productService.findMine(user.id);
   }
 
+  // Va antes de ':id' para que «favorites» no se interprete como un id.
+  @Get('favorites')
+  @Auth()
+  @ApiOperation({
+    summary: 'Mis favoritos (HU-14)',
+    description:
+      'Requiere JWT. Devuelve los productos que el usuario autenticado marcó como favoritos, del más reciente al más antiguo. Los productos retirados (REMOVED) no se listan.',
+  })
+  @ApiOkResponse({
+    type: ProductDto,
+    isArray: true,
+    description: 'Favoritos del usuario autenticado.',
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Error inesperado al consultar los favoritos.',
+  })
+  findFavorites(@GetUser() user: User): Promise<ProductDto[]> {
+    return this.productService.findFavorites(user.id);
+  }
+
   @Get(':id')
   @ApiOperation({
     summary: 'Detalle de un producto',
@@ -353,5 +373,73 @@ export class ProductController {
     @GetUser() user: User,
   ): Promise<FavoriteResultDto> {
     return this.productService.toggleFavorite(id, user.id);
+  }
+
+  @Put(':id/favorite')
+  @Auth()
+  @ApiOperation({
+    summary: 'Marcar como favorito (HU-14)',
+    description:
+      'Requiere JWT. Agrega el producto a los favoritos del usuario autenticado. Es idempotente: repetirlo no duplica la combinación usuario-producto y devuelve isFavorite: true.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    format: 'uuid',
+    example: '00000000-0000-4000-8000-000000000000',
+    description: 'Identificador UUID del producto que se desea marcar.',
+  })
+  @ApiOkResponse({
+    type: FavoriteResultDto,
+    description: 'El producto quedó en favoritos (isFavorite: true).',
+  })
+  @ApiBadRequestResponse({
+    description: 'El identificador del producto no tiene formato UUID.',
+  })
+  @ApiNotFoundResponse({
+    description: 'No existe un producto con ese identificador o fue retirado.',
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Error inesperado al marcar el favorito.',
+  })
+  addFavorite(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ): Promise<FavoriteResultDto> {
+    return this.productService.addFavorite(id, user.id);
+  }
+
+  @Delete(':id/favorite')
+  @Auth()
+  @ApiOperation({
+    summary: 'Quitar de favoritos (HU-14)',
+    description:
+      'Requiere JWT. Retira el producto de los favoritos del usuario autenticado sin modificar la publicación. Es idempotente: quitar algo que no era favorito devuelve isFavorite: false.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: String,
+    format: 'uuid',
+    example: '00000000-0000-4000-8000-000000000000',
+    description: 'Identificador UUID del producto que se desea quitar.',
+  })
+  @ApiOkResponse({
+    type: FavoriteResultDto,
+    description: 'El producto ya no está en favoritos (isFavorite: false).',
+  })
+  @ApiBadRequestResponse({
+    description: 'El identificador del producto no tiene formato UUID.',
+  })
+  @ApiNotFoundResponse({
+    description: 'No existe un producto con ese identificador.',
+  })
+  @ApiInternalServerErrorResponse({
+    description: 'Error inesperado al quitar el favorito.',
+  })
+  removeFavorite(
+    @Param('id', ParseUUIDPipe) id: string,
+    @GetUser() user: User,
+  ): Promise<FavoriteResultDto> {
+    return this.productService.removeFavorite(id, user.id);
   }
 }
