@@ -1,3 +1,4 @@
+import { FavoriteIcon } from './FavoriteIcon';
 import { Link } from 'react-router';
 import type { Product } from '../lib/api';
 import { barrio, CATEGORIA, CONDICION, precio } from '../lib/format';

@@ -1,3 +1,4 @@
+import { FavoriteIcon } from '../components/FavoriteIcon';
 import { Skeleton } from '../components/Skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
@@ -208,6 +209,7 @@ function Favorito({ p, onCountChange }: {
           className={`btn ${esFavorito ? 'btn-primary' : 'btn-outline'}`}
           onClick={() => void alternar()}
           disabled={enviando || esFavorito === null}
+          aria-label={esFavorito ? "Quitar de favoritos" : "Guardar en favoritos"}
           aria-pressed={esFavorito === true}
           data-testid="boton-favorito"
         >
