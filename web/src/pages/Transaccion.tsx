@@ -1,3 +1,4 @@
+import { TransactionSteps } from '../components/TransactionSteps';
 import { Skeleton } from '../components/Skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
@@ -109,6 +110,7 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
 
   return (
     <article className="product-detail">
+      <TransactionSteps status={tx.status} celebrate />
       <div className="product-top">
         <span className="product-cat">{soyComprador ? 'Compra' : 'Venta'}</span>
         <span className={`chip chip--${e.tone}`} data-testid="transaccion-estado">

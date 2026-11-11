@@ -1,3 +1,4 @@
+import { TransactionSteps } from '../components/TransactionSteps';
 import { Skeleton } from '../components/Skeleton';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
@@ -66,6 +67,7 @@ export default function Transacciones() {
                       <span className="tx-meta">
                         {soyComprador ? 'Compras a' : 'Vendes a'} {otro ?? 'otro usuario'}
                       </span>
+                      <TransactionSteps status={t.status} />
                       <MetaAcuerdo tx={t} userId={user?.id} otro={otro} />
                     </Link>
                   </li>
