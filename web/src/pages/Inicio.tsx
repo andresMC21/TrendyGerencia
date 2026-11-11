@@ -1,3 +1,4 @@
+import { Skeleton } from '../components/Skeleton';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -111,7 +112,7 @@ export default function Inicio() {
               {favoritos.error && <Alert tone="error">{favoritos.error}</Alert>}
               {feedError && <Alert tone="info">No pudimos cargar las publicaciones por ahora.</Alert>}
               {products?.length === 0 && <Alert tone="info">Aún no hay publicaciones en Cali.</Alert>}
-              {products === null && !feedError && <div className="feed-loading">Cargando…</div>}
+              {products === null && !feedError && <Skeleton kind="products" />}
               <div className="feed">
                 {products?.map((p) => (
                   <ProductCard key={p.id} product={p} favorito={favoritos.paraTarjeta(p)} />

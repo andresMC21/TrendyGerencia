@@ -1,3 +1,4 @@
+import { Skeleton } from '../components/Skeleton';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Footer, Header } from '../components/Brand';
@@ -85,7 +86,7 @@ export default function MisPublicaciones() {
             </div>
           )}
           {problema && <Alert tone="error">{problema}</Alert>}
-          {estado.tipo === 'cargando' && <div className="feed-loading">Cargando publicaciones…</div>}
+          {estado.tipo === 'cargando' && <Skeleton kind="products" />}
           {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
 
           {estado.tipo === 'ok' && estado.items.length === 0 && (

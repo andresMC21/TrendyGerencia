@@ -1,3 +1,4 @@
+import { Skeleton } from '../components/Skeleton';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Footer, Header } from '../components/Brand';
@@ -79,7 +80,7 @@ export default function Favoritos() {
             </div>
           )}
           {problema && <Alert tone="error">{problema}</Alert>}
-          {estado.tipo === 'cargando' && <div className="feed-loading">Cargando favoritos…</div>}
+          {estado.tipo === 'cargando' && <Skeleton kind="products" />}
           {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
 
           {estado.tipo === 'ok' && estado.items.length === 0 && (

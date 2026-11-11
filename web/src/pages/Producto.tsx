@@ -1,3 +1,4 @@
+import { Skeleton } from '../components/Skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Footer, Header } from '../components/Brand';
@@ -49,7 +50,7 @@ function ProductoPagina({ id }: { id: string }) {
             ← Volver a las publicaciones
           </Link>
 
-          {estado.tipo === 'cargando' && <div className="feed-loading">Cargando producto…</div>}
+          {estado.tipo === 'cargando' && <Skeleton kind="detail" />}
 
           {estado.tipo === 'no-existe' && (
             <Alert tone="info">

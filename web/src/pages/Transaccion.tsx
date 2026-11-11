@@ -1,3 +1,4 @@
+import { Skeleton } from '../components/Skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { Footer, Header } from '../components/Brand';
@@ -77,7 +78,7 @@ function TransaccionPagina({ id }: { id: string }) {
             ← Volver a mis transacciones
           </Link>
 
-          {estado.tipo === 'cargando' && <div className="feed-loading">Cargando transacción…</div>}
+          {estado.tipo === 'cargando' && <Skeleton kind="transactions" />}
           {estado.tipo === 'ajena' && (
             <Alert tone="error">
               No participas en esta transacción, así que no puedes verla ni modificarla.

@@ -1320,3 +1320,13 @@ h3 {
 .profile-link + .profile-link {
   margin-top: 8px;
 }
+
+/* Loading placeholders keep the content silhouette stable. */
+.sr-loading { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.skeleton-stack { display: grid; gap: 18px; }
+.skeleton-card { padding: 20px; border: 1px solid var(--glass-border); border-radius: 18px; }
+.skeleton-block { position: relative; overflow: hidden; height: 14px; border-radius: 8px; background: color-mix(in srgb, var(--muted) 16%, transparent); margin-bottom: 14px; }
+.skeleton-photo { height: 190px; }.skeleton-title { width: 75%; height: 24px; }.skeleton-short { width: 45%; }
+.skeletons--detail .skeleton-photo { height: 360px; }
+@media (prefers-reduced-motion: no-preference) { .skeleton-block::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent, #ffffff45, transparent); animation: skeleton-shimmer 1.6s infinite; } }
+@keyframes skeleton-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }

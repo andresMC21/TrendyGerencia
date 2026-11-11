@@ -1,3 +1,4 @@
+import { Skeleton } from '../components/Skeleton';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Footer, Header } from '../components/Brand';
@@ -40,7 +41,7 @@ export default function Transacciones() {
             el horario de entrega.
           </p>
 
-          {estado.tipo === 'cargando' && <div className="feed-loading">Cargando transacciones…</div>}
+          {estado.tipo === 'cargando' && <Skeleton kind="transactions" />}
           {estado.tipo === 'error' && (
             <Alert tone="error">No pudimos cargar tus transacciones. Inténtalo de nuevo.</Alert>
           )}
