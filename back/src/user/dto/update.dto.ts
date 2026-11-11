@@ -5,6 +5,7 @@ import { RegisterUserDto } from './register.dto';
 
 export class UpdateUserDto extends PartialType(
   PickType(RegisterUserDto, ['fullName'] as const),
+  { skipNullProperties: false },
 ) {
   @ApiPropertyOptional({
     type: String,

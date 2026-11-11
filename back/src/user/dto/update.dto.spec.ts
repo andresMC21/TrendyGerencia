@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validateSync } from 'class-validator';
 import { UpdateUserDto } from './update.dto';
@@ -32,6 +33,7 @@ describe('UpdateUserDto (HU-04)', () => {
     ['fullName de 1 carácter', { fullName: 'A' }],
     ['fullName de 101 caracteres', { fullName: 'a'.repeat(101) }],
     ['fullName no string', { fullName: 123 }],
+    ['fullName null', { fullName: null }],
     ['info no string', { info: 42 }],
     ['campo extra email', { email: 'x@trendy.test' }],
     ['campo extra verificationStatus', { verificationStatus: 'VERIFIED' }],
@@ -47,5 +49,20 @@ describe('UpdateUserDto (HU-04)', () => {
     const { dto, errors } = run({ photoUrl: null });
     expect(errors).toHaveLength(0);
     expect(dto.photoUrl).toBeNull();
+  });
+
+  it('el ValidationPipe rechaza fullName null con 400', async () => {
+    const pipe = new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    });
+    try {
+      await pipe.transform({ fullName: null }, { type: 'body', metatype: UpdateUserDto });
+      throw new Error('Se esperaba rechazar el nombre nulo');
+    } catch (error) {
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect((error as BadRequestException).getStatus()).toBe(400);
+    }
   });
 });

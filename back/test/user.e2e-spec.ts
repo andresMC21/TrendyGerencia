@@ -344,6 +344,7 @@ describe('Users (e2e)', () => {
       ['un nombre demasiado corto', { fullName: 'A' }],
       ['un nombre demasiado largo', { fullName: 'A'.repeat(101) }],
       ['un nombre que no es texto', { fullName: 123 }],
+      ['un nombre nulo', { fullName: null }],
       ['una información de más de 300 caracteres', { info: 'x'.repeat(301) }],
     ])('rechaza con 400 %s', async (_caso, body) => {
       await http.patch('/api/user/me').set(auth(token)).send(body).expect(400);

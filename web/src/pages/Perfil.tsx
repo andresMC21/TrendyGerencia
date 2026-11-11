@@ -32,6 +32,11 @@ export default function Perfil() {
             ← Volver a Mi Trendy
           </Link>
           <h1 className="dash-title">Mi perfil</h1>
+          <div className="tx-actions">
+            <a className="btn btn-primary" href="#editar-perfil">
+              Editar mi perfil
+            </a>
+          </div>
 
           <section className="profile-card profile-card--full" aria-label="Datos de mi perfil">
             <div className="profile-head">
@@ -146,7 +151,7 @@ function DatosDelPerfil() {
   }
 
   return (
-    <section className="form-card photo-card" aria-label="Editar mis datos">
+    <section id="editar-perfil" className="form-card photo-card" aria-label="Editar mis datos" tabIndex={-1}>
       <h2 className="detail-h">Editar mis datos</h2>
       {error && <Alert tone="error">{error}</Alert>}
       {ok && <Alert tone="success">{ok}</Alert>}
