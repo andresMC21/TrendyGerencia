@@ -64,7 +64,7 @@ export default function Ingresar() {
               <span>{revealed ? 'Tira de nuevo para apagar.' : 'Tira del cordón hacia abajo o toca la lámpara.'}</span>
             </div>
           <section id="login-fields" className="form-card login-form" hidden={!revealed}>
-            <Link to="/explorar" className="login-back">← Seguir explorando</Link>
+            <Link viewTransition to="/explorar" className="login-back">← Seguir explorando</Link>
             <div className="login-welcome-icon" aria-hidden="true">↗</div>
             <span className="form-kicker">BIENVENIDO A TRENDY</span>
             <h1>Qué bueno verte.</h1>
@@ -109,7 +109,7 @@ export default function Ingresar() {
             </form>
 
             <p className="form-foot">
-              ¿Eres nuevo? <Link to="/registro">Crea tu cuenta</Link>
+              ¿Eres nuevo? <Link viewTransition to="/registro">Crea tu cuenta</Link>
             </p>
             <p className="login-privacy">Tu próximo hallazgo está a un paso.</p>
           </section>

@@ -6,7 +6,7 @@ import { PullLamp } from './PullLamp';
 
 export function Logo() {
   return (
-    <Link to="/" className="logo" aria-label="Trendy, ir al inicio">
+    <Link viewTransition to="/" className="logo" aria-label="Trendy, ir al inicio">
       <svg viewBox="0 0 64 64" width="34" height="34" aria-hidden="true">
         <rect width="64" height="64" rx="14" fill="#1A3272" />
         <path
@@ -46,21 +46,21 @@ export function Header() {
           if ((event.target as HTMLElement).closest('a')) setMenuOpen(false);
         }} onKeyDown={(event) => { if (event.key === 'Escape') { setMenuOpen(false); document.querySelector<HTMLButtonElement>('.mobile-menu-button')?.focus(); } }}>
           <span className="city-tag">Cali, CO</span>
-          <NavLink to="/explorar" className="nav-link">
+          <NavLink viewTransition to="/explorar" className="nav-link">
             Explorar
           </NavLink>
           {user ? (
             <>
-              <NavLink to="/inicio" className="nav-link">
+              <NavLink viewTransition to="/inicio" className="nav-link">
                 Mi Trendy
               </NavLink>
-              <NavLink to="/publicar" className="nav-link">
+              <NavLink viewTransition to="/publicar" className="nav-link">
                 Publicar
               </NavLink>
-              <NavLink to="/transacciones" className="nav-link">
+              <NavLink viewTransition to="/transacciones" className="nav-link">
                 Transacciones
               </NavLink>
-              <NavLink to="/perfil" className="nav-link">
+              <NavLink viewTransition to="/perfil" className="nav-link">
                 Mi perfil
               </NavLink>
               <button
@@ -76,10 +76,10 @@ export function Header() {
             </>
           ) : (
             <>
-              <NavLink to="/ingresar" className="nav-link">
+              <NavLink viewTransition to="/ingresar" className="nav-link">
                 Ingresar
               </NavLink>
-              <Link to="/registro" className="btn btn-primary btn-sm">
+              <Link viewTransition to="/registro" className="btn btn-primary btn-sm">
                 Crear cuenta
               </Link>
             </>

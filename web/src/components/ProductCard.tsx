@@ -1,3 +1,4 @@
+import { FavoriteIcon } from './FavoriteIcon';
 import { Link } from 'react-router';
 import type { Product } from '../lib/api';
 import { barrio, CATEGORIA, CONDICION, precio } from '../lib/format';
@@ -10,8 +11,17 @@ import { ProductPhoto } from './ProductPhoto';
  */
 export function ProductCard({ product: p, favorito }: { product: Product; favorito?: FavoritoDeTarjeta }) {
   return (
-    <article className="product">
-      <Link to={`/producto/${p.id}`} className="product-photo-link" aria-label={`Ver ${p.title}`}><ProductPhoto src={p.photoUrl} title={p.title} /></Link>
+    <article className="product product-interactive" onPointerMove={(event) => {
+      if (!window.matchMedia('(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)').matches) return;
+      const box = event.currentTarget.getBoundingClientRect();
+      const x = (event.clientX - box.left) / box.width;
+      const y = (event.clientY - box.top) / box.height;
+      event.currentTarget.style.setProperty('--x', `${x * 100}%`);
+      event.currentTarget.style.setProperty('--y', `${y * 100}%`);
+      event.currentTarget.style.setProperty('--rx', `${(0.5 - y) * 8}deg`);
+      event.currentTarget.style.setProperty('--ry', `${(x - 0.5) * 8}deg`);
+    }} onPointerLeave={(event) => { event.currentTarget.style.setProperty('--rx', '0deg'); event.currentTarget.style.setProperty('--ry', '0deg'); }}>
+      <Link viewTransition to={`/producto/${p.id}`} state={{ photoUrl: p.photoUrl, title: p.title }} className="product-photo-link" aria-label={`Ver ${p.title}`}><ProductPhoto transitionId={p.id} src={p.photoUrl} title={p.title} /></Link>
       <div className="product-top">
         <span className="product-cat">{CATEGORIA[p.category] ?? p.category}</span>
         {p.acceptsBarter && <span className="chip chip--orange">Acepta trueque</span>}
@@ -26,12 +36,12 @@ export function ProductCard({ product: p, favorito }: { product: Product; favori
             title={favorito.activo ? 'Quitar de favoritos' : 'Guardar en favoritos'}
             data-testid={`corazon-${p.id}`}
           >
-            {favorito.activo ? '♥' : '♡'}
+            <FavoriteIcon active={favorito.activo} />
           </button>
         )}
       </div>
       <h3>
-        <Link to={`/producto/${p.id}`} className="product-link">
+        <Link viewTransition to={`/producto/${p.id}`} state={{ photoUrl: p.photoUrl, title: p.title }} className="product-link">
           {p.title}
         </Link>
       </h3>
@@ -42,7 +52,7 @@ export function ProductCard({ product: p, favorito }: { product: Product; favori
           {barrio(p.neighborhoodId)} · {CONDICION[p.condition] ?? p.condition}
         </span>
       </div>
-      <Link to={`/producto/${p.id}`} className="product-more">
+      <Link viewTransition to={`/producto/${p.id}`} state={{ photoUrl: p.photoUrl, title: p.title }} className="product-more">
         Ver producto →
       </Link>
     </article>

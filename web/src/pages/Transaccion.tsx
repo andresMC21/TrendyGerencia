@@ -1,3 +1,6 @@
+import { notify } from '../lib/toast';
+import { TransactionSteps } from '../components/TransactionSteps';
+import { Skeleton } from '../components/Skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { Footer, Header } from '../components/Brand';
@@ -73,11 +76,11 @@ function TransaccionPagina({ id }: { id: string }) {
       <Header />
       <main className="dashboard">
         <div className="container container--narrow">
-          <Link to="/transacciones" className="back-link">
+          <Link viewTransition to="/transacciones" className="back-link">
             ← Volver a mis transacciones
           </Link>
 
-          {estado.tipo === 'cargando' && <div className="feed-loading">Cargando transacción…</div>}
+          {estado.tipo === 'cargando' && <Skeleton kind="transactions" />}
           {estado.tipo === 'ajena' && (
             <Alert tone="error">
               No participas en esta transacción, así que no puedes verla ni modificarla.
@@ -108,6 +111,7 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
 
   return (
     <article className="product-detail">
+      <TransactionSteps status={tx.status} celebrate />
       <div className="product-top">
         <span className="product-cat">{soyComprador ? 'Compra' : 'Venta'}</span>
         <span className={`chip chip--${e.tone}`} data-testid="transaccion-estado">
@@ -117,7 +121,7 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
 
       <h1>
         {tx.product ? (
-          <Link to={`/producto/${tx.productId}`} className="product-link">
+          <Link viewTransition to={`/producto/${tx.productId}`} className="product-link">
             {tx.product.title}
           </Link>
         ) : (
@@ -299,6 +303,7 @@ function CerrarIntercambio({
           : await transactionApi.updateStatus(token, tx.id, 'CANCELLED');
       setPendiente(null);
       onChange({ ...tx, ...updated });
+      notify('Transacción actualizada.');
     } catch (err) {
       setPendiente(null);
       if (err instanceof ApiError && err.status === 401) {
@@ -451,6 +456,7 @@ function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void
       // Aceptar lleva a «Acordado por los dos» y el rechazo se muestra desde los datos
       // de la transacción, así que ambos lados lo ven sin un aviso local.
       onChange({ ...tx, ...updated });
+      notify('Transacción actualizada.');
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setError(`${otro} cambió la propuesta o la transacción cambió de estado. Revisa la versión actual.`);
@@ -657,6 +663,7 @@ function ProponerEncuentro({
       const updated = await transactionApi.proposeMeeting(token, tx.id, safePointId, fecha.toISOString());
       // El POST devuelve la transacción; se conservan las relaciones ya cargadas.
       onChange({ ...tx, ...updated });
+      notify('Transacción actualizada.');
       onDone();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {

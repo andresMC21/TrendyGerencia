@@ -1,3 +1,4 @@
+import { notify } from '../lib/toast';
 import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Dot, Footer, Header } from '../components/Brand';
@@ -127,6 +128,7 @@ export default function Publicar() {
         acceptsBarter,
       });
       setPublicado(creado);
+      notify('Publicación creada.');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setSessionExpired(true);
@@ -205,7 +207,7 @@ export default function Publicar() {
                 {formError && <Alert tone="error">{formError}</Alert>}
                 {sessionExpired && (
                   <Alert tone="error">
-                    Tu sesión expiró. <Link to="/ingresar">Vuelve a ingresar</Link> para publicar.
+                    Tu sesión expiró. <Link viewTransition to="/ingresar">Vuelve a ingresar</Link> para publicar.
                   </Alert>
                 )}
 
@@ -382,7 +384,7 @@ function Publicado({ p, onOtro }: { p: Product; onOtro: () => void }) {
         </div>
       </article>
       <div className="publish-actions">
-        <Link to={`/producto/${p.id}`} className="btn btn-primary">
+        <Link viewTransition to={`/producto/${p.id}`} className="btn btn-primary">
           Ver publicación
         </Link>
         <button type="button" className="btn btn-outline" onClick={onOtro}>

@@ -1,6 +1,5 @@
-import type { ReactNode } from 'react';
-import { Navigate, Route, Routes } from 'react-router';
-import { useSession } from './lib/session';
+import { createRoutesFromElements, Navigate, Route } from 'react-router';
+import { SoloInvitados, SoloUsuarios } from './components/RouteGuards';
 import Explorar from './pages/Explorar';
 import Favoritos from './pages/Favoritos';
 import Ingresar from './pages/Ingresar';
@@ -14,21 +13,8 @@ import Registro from './pages/Registro';
 import Transaccion from './pages/Transaccion';
 import Transacciones from './pages/Transacciones';
 
-function SoloInvitados({ children }: { children: ReactNode }) {
-  const { user, loading } = useSession();
-  if (loading) return <div className="page-loading" />;
-  return user ? <Navigate to="/inicio" replace /> : children;
-}
-
-function SoloUsuarios({ children }: { children: ReactNode }) {
-  const { user, loading } = useSession();
-  if (loading) return <div className="page-loading" />;
-  return user ? children : <Navigate to="/ingresar" replace />;
-}
-
-export default function App() {
-  return (
-    <Routes>
+export const routes = createRoutesFromElements(
+    <>
       <Route path="/" element={<Landing />} />
       <Route
         path="/registro"
@@ -105,6 +91,5 @@ export default function App() {
       <Route path="/explorar" element={<Explorar />} />
       <Route path="/producto/:id" element={<Producto />} />
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  );
-}
+    </>
+);

@@ -1,3 +1,6 @@
+import { EmptyState } from '../components/EmptyState';
+import { TransactionSteps } from '../components/TransactionSteps';
+import { Skeleton } from '../components/Skeleton';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { Footer, Header } from '../components/Brand';
@@ -40,14 +43,14 @@ export default function Transacciones() {
             el horario de entrega.
           </p>
 
-          {estado.tipo === 'cargando' && <div className="feed-loading">Cargando transacciones…</div>}
+          {estado.tipo === 'cargando' && <Skeleton kind="transactions" />}
           {estado.tipo === 'error' && (
             <Alert tone="error">No pudimos cargar tus transacciones. Inténtalo de nuevo.</Alert>
           )}
           {estado.tipo === 'ok' && estado.items.length === 0 && (
-            <Alert tone="info">
-              Todavía no tienes transacciones. <Link to="/inicio">Explora las publicaciones</Link>.
-            </Alert>
+            <EmptyState kind="transactions">
+              Todavía no tienes transacciones. <Link viewTransition to="/inicio">Explora las publicaciones</Link>.
+            </EmptyState>
           )}
           {estado.tipo === 'ok' && estado.items.length > 0 && (
             <ul className="tx-list" data-testid="transacciones-lista">
@@ -57,7 +60,7 @@ export default function Transacciones() {
                 const otro = soyComprador ? t.seller?.fullName : t.buyer?.fullName;
                 return (
                   <li key={t.id}>
-                    <Link to={`/transacciones/${t.id}`} className="tx-item">
+                    <Link viewTransition to={`/transacciones/${t.id}`} className="tx-item">
                       <div className="product-top">
                         <strong>{t.product?.title ?? 'Producto'}</strong>
                         <span className={`chip chip--${e.tone}`}>{e.label}</span>
@@ -65,6 +68,7 @@ export default function Transacciones() {
                       <span className="tx-meta">
                         {soyComprador ? 'Compras a' : 'Vendes a'} {otro ?? 'otro usuario'}
                       </span>
+                      <TransactionSteps status={t.status} />
                       <MetaAcuerdo tx={t} userId={user?.id} otro={otro} />
                     </Link>
                   </li>

@@ -1,3 +1,4 @@
+import { notify } from './toast';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, productApi, type Product } from './api';
 import { useSession } from './session';
@@ -49,6 +50,7 @@ export function useFavoritos() {
     try {
       if (quiere) await productApi.addFavorite(token, p.id);
       else await productApi.removeFavorite(token, p.id);
+      notify(quiere ? 'Guardado en favoritos.' : 'Eliminado de favoritos.');
       setIds((previos) => {
         const siguientes = new Set(previos);
         if (quiere) siguientes.add(p.id);

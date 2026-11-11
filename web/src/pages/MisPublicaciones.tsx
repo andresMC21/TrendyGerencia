@@ -1,3 +1,5 @@
+import { EmptyState } from '../components/EmptyState';
+import { Skeleton } from '../components/Skeleton';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { Footer, Header } from '../components/Brand';
@@ -70,7 +72,7 @@ export default function MisPublicaciones() {
       <Header />
       <main className="dashboard">
         <div className="container container--narrow">
-          <Link to="/inicio" className="back-link">
+          <Link viewTransition to="/inicio" className="back-link">
             ← Volver a Mi Trendy
           </Link>
           <h1 className="dash-title">Mis publicaciones</h1>
@@ -85,13 +87,13 @@ export default function MisPublicaciones() {
             </div>
           )}
           {problema && <Alert tone="error">{problema}</Alert>}
-          {estado.tipo === 'cargando' && <div className="feed-loading">Cargando publicaciones…</div>}
+          {estado.tipo === 'cargando' && <Skeleton kind="products" />}
           {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
 
           {estado.tipo === 'ok' && estado.items.length === 0 && (
-            <Alert tone="info">
-              Aún no has publicado nada. <Link to="/publicar">Publica tu primer artículo</Link>.
-            </Alert>
+            <EmptyState kind="publications">
+              Aún no has publicado nada. <Link viewTransition to="/publicar">Publica tu primer artículo</Link>.
+            </EmptyState>
           )}
 
           {activas.length > 0 && (
@@ -140,7 +142,7 @@ function MiPublicacion({
       <div className="my-product-main">
         <div className="my-product-head">
           {visible ? (
-            <Link to={`/producto/${p.id}`}>
+            <Link viewTransition to={`/producto/${p.id}`}>
               <strong>{p.title}</strong>
             </Link>
           ) : (
@@ -157,7 +159,7 @@ function MiPublicacion({
         {status === 'RESERVED' && (
           <span className="tx-meta tx-meta--todo">
             Reservado: para retirarlo, primero cancela la transacción en{' '}
-            <Link to="/transacciones">Transacciones</Link>.
+            <Link viewTransition to="/transacciones">Transacciones</Link>.
           </span>
         )}
         {status === 'REMOVED' && (

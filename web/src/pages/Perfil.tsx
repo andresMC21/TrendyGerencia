@@ -1,3 +1,5 @@
+import { notify } from '../lib/toast';
+import { Rating } from '../components/Rating';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -32,7 +34,7 @@ export default function Perfil() {
       <Header />
       <main className="dashboard">
         <div className="container container--narrow">
-          <Link to="/inicio" className="back-link">
+          <Link viewTransition to="/inicio" className="back-link">
             ← Volver a Mi Trendy
           </Link>
           <h1 className="dash-title">Mi perfil</h1>
@@ -82,9 +84,7 @@ export default function Perfil() {
                 <dt>Calificación</dt>
                 <dd data-testid="perfil-rating">
                   {hayResenas
-                    ? `★ ${Number(user.ratingAverage).toFixed(1)} · ${user.reviewsCount} ${
-                        user.reviewsCount === 1 ? 'reseña' : 'reseñas'
-                      }`
+                    ? <Rating value={Number(user.ratingAverage)} count={user.reviewsCount} />
                     : 'Sin calificaciones todavía'}
                 </dd>
               </div>
@@ -138,6 +138,7 @@ function DatosDelPerfil() {
     try {
       const perfil = await authApi.updateMe(token, body);
       setProfile(perfil);
+      notify('Perfil guardado.');
       setFullName(perfil.fullName);
       setInfo(perfil.info ?? '');
       setOk('Guardamos los cambios de tu perfil.');
@@ -213,6 +214,7 @@ function FotoDePerfil() {
     try {
       const perfil = await authApi.updateMe(token, { photoUrl });
       setProfile(perfil);
+      notify('Perfil guardado.');
       setUrl(perfil.photoUrl ?? '');
       setOk(photoUrl ? 'Foto actualizada.' : 'Quitaste tu foto de perfil.');
     } catch (err) {
@@ -289,6 +291,7 @@ function CambiarCorreo() {
     try {
       const perfil = await authApi.changeEmail(token, currentPassword, newEmail.trim().toLowerCase());
       setProfile(perfil);
+      notify('Perfil guardado.');
       setCurrentPassword('');
       setNewEmail('');
       setOk(`Listo: desde ahora ingresas con ${perfil.email}.`);
