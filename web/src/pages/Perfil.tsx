@@ -1,4 +1,4 @@
-import { notify } from '../components/Toast';
+import { notify } from '../lib/toast';
 import { Rating } from '../components/Rating';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';

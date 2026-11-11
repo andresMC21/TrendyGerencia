@@ -1,3 +1,4 @@
+import { EmptyState } from '../components/EmptyState';
 import { Skeleton } from '../components/Skeleton';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router';
@@ -148,9 +149,9 @@ export default function Explorar() {
           {favoritos.error && <Alert tone="error">{favoritos.error}</Alert>}
           {feedError && <Alert tone="info">No pudimos cargar las publicaciones por ahora.</Alert>}
           {products?.length === 0 && (
-            <Alert tone="info">
+            <EmptyState kind="search">
               {hayFiltros ? 'No hay productos con estos filtros.' : 'Aún no hay publicaciones en Cali.'}
-            </Alert>
+            </EmptyState>
           )}
           {products === null && !feedError && <Skeleton kind="products" />}
           <div className="feed">

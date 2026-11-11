@@ -1,4 +1,4 @@
-import { notify } from '../components/Toast';
+import { notify } from '../lib/toast';
 import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Dot, Footer, Header } from '../components/Brand';

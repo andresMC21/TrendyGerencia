@@ -1,3 +1,4 @@
+import { EmptyState } from '../components/EmptyState';
 import { Skeleton } from '../components/Skeleton';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
@@ -84,10 +85,10 @@ export default function Favoritos() {
           {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
 
           {estado.tipo === 'ok' && estado.items.length === 0 && (
-            <Alert tone="info">
+            <EmptyState kind="favorites">
               Aún no tienes favoritos. <Link viewTransition to="/explorar">Explora los productos</Link> y guarda los
               que te interesen.
-            </Alert>
+            </EmptyState>
           )}
 
           {estado.tipo === 'ok' && estado.items.length > 0 && (

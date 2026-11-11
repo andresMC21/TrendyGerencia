@@ -1,3 +1,4 @@
+import { EmptyState } from '../components/EmptyState';
 import { Skeleton } from '../components/Skeleton';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
@@ -90,9 +91,9 @@ export default function MisPublicaciones() {
           {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
 
           {estado.tipo === 'ok' && estado.items.length === 0 && (
-            <Alert tone="info">
+            <EmptyState kind="publications">
               Aún no has publicado nada. <Link viewTransition to="/publicar">Publica tu primer artículo</Link>.
-            </Alert>
+            </EmptyState>
           )}
 
           {activas.length > 0 && (

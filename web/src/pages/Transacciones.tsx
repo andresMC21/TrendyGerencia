@@ -1,3 +1,4 @@
+import { EmptyState } from '../components/EmptyState';
 import { TransactionSteps } from '../components/TransactionSteps';
 import { Skeleton } from '../components/Skeleton';
 import { useEffect, useState } from 'react';
@@ -47,9 +48,9 @@ export default function Transacciones() {
             <Alert tone="error">No pudimos cargar tus transacciones. Inténtalo de nuevo.</Alert>
           )}
           {estado.tipo === 'ok' && estado.items.length === 0 && (
-            <Alert tone="info">
+            <EmptyState kind="transactions">
               Todavía no tienes transacciones. <Link viewTransition to="/inicio">Explora las publicaciones</Link>.
-            </Alert>
+            </EmptyState>
           )}
           {estado.tipo === 'ok' && estado.items.length > 0 && (
             <ul className="tx-list" data-testid="transacciones-lista">

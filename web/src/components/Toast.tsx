@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-export function notify(message: string) { window.dispatchEvent(new CustomEvent('trendy:toast', { detail: message })); }
 export function Toast() {
  const [toast, setToast] = useState<{message: string; id: number} | null>(null);
  const sequence = useRef(0);

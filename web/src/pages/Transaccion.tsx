@@ -1,4 +1,4 @@
-import { notify } from '../components/Toast';
+import { notify } from '../lib/toast';
 import { TransactionSteps } from '../components/TransactionSteps';
 import { Skeleton } from '../components/Skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';

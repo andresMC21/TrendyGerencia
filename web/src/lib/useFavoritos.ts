@@ -1,4 +1,4 @@
-import { notify } from '../components/Toast';
+import { notify } from './toast';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, productApi, type Product } from './api';
 import { useSession } from './session';

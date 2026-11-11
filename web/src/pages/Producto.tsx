@@ -1,4 +1,4 @@
-import { notify } from '../components/Toast';
+import { notify } from '../lib/toast';
 import { Rating } from '../components/Rating';
 import { FavoriteIcon } from '../components/FavoriteIcon';
 import { Skeleton } from '../components/Skeleton';
@@ -55,7 +55,7 @@ function ProductoPagina({ id }: { id: string }) {
             ← Volver a las publicaciones
           </Link>
 
-          {estado.tipo === 'cargando' && <><ProductPhoto transitionId={id} src={preview?.photoUrl} title={preview?.title ?? "Producto"} detail /><Skeleton kind="transactions" /></>}
+          {estado.tipo === 'cargando' && (preview?.photoUrl ? <><ProductPhoto transitionId={id} src={preview?.photoUrl} title={preview?.title ?? "Producto"} detail /><Skeleton kind="transactions" /></> : <Skeleton kind="detail" />)}
 
           {estado.tipo === 'no-existe' && (
             <Alert tone="info">
