@@ -36,7 +36,7 @@ export function ProductCard({ product: p, favorito }: { product: Product; favori
             title={favorito.activo ? 'Quitar de favoritos' : 'Guardar en favoritos'}
             data-testid={`corazon-${p.id}`}
           >
-            {favorito.activo ? '♥' : '♡'}
+            <FavoriteIcon active={favorito.activo} />
           </button>
         )}
       </div>

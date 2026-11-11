@@ -1,3 +1,4 @@
+import { Rating } from '../components/Rating';
 import { FavoriteIcon } from '../components/FavoriteIcon';
 import { Skeleton } from '../components/Skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -124,9 +125,7 @@ function Detalle({ p }: { p: ProductDetail }) {
           <strong>{p.seller.fullName}</strong>
           <span>
             {tieneRating
-              ? `★ ${Number(p.seller.ratingAverage).toFixed(1)} · ${p.seller.reviewsCount} ${
-                  p.seller.reviewsCount === 1 ? 'reseña' : 'reseñas'
-                }`
+              ? <Rating value={Number(p.seller.ratingAverage)} count={p.seller.reviewsCount} />
               : 'Vendedor sin calificaciones todavía'}
           </span>
         </div>
@@ -213,7 +212,7 @@ function Favorito({ p, onCountChange }: {
           aria-pressed={esFavorito === true}
           data-testid="boton-favorito"
         >
-          {esFavorito ? '♥ Guardado en favoritos' : '♡ Guardar en favoritos'}
+          <FavoriteIcon active={esFavorito === true} />{esFavorito ? 'Guardado en favoritos' : 'Guardar en favoritos'}
         </button>
         {esFavorito && <Link viewTransition to="/favoritos">Ver mis favoritos</Link>}
       </div>

@@ -1,3 +1,4 @@
+import { Rating } from '../components/Rating';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
@@ -82,9 +83,7 @@ export default function Perfil() {
                 <dt>Calificación</dt>
                 <dd data-testid="perfil-rating">
                   {hayResenas
-                    ? `★ ${Number(user.ratingAverage).toFixed(1)} · ${user.reviewsCount} ${
-                        user.reviewsCount === 1 ? 'reseña' : 'reseñas'
-                      }`
+                    ? <Rating value={Number(user.ratingAverage)} count={user.reviewsCount} />
                     : 'Sin calificaciones todavía'}
                 </dd>
               </div>

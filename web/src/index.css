@@ -1376,3 +1376,7 @@ h3 {
  .tx-confetti i { animation: transaction-confetti 1.4s ease-out both; }
 }
 @keyframes transaction-confetti { 0% { opacity: 1; transform: translate(0, 0); } 40% { opacity: 1; transform: translate(var(--dx), var(--dy)) rotate(var(--turn)); } 100% { opacity: 0; transform: translate(var(--dx), 60px) rotate(var(--turn)); } }
+
+.rating { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.rating-stars { display: inline-flex; color: #288b91; gap: 2px; }.rating-stars svg { width: 19px; height: 19px; fill: currentColor; }.rating-stars .star-base { fill: color-mix(in srgb, var(--muted) 25%, transparent); }
+html[data-theme="dark"] .rating-stars { color: #7bc9c7; }
