@@ -41,6 +41,30 @@ export function mapServerValidation(messages: string[]): RegisterErrors {
   return errors;
 }
 
+/** HU-04 · Reglas de UpdateUserDto (backend) para los datos editables del perfil. */
+export type ProfileErrors = Partial<Record<'fullName' | 'info', string>>;
+
+export function validateProfile(values: { fullName: string; info: string }): ProfileErrors {
+  const errors: ProfileErrors = {};
+  const name = values.fullName.trim();
+
+  if (name.length < 2) errors.fullName = 'Escribe tu nombre (mínimo 2 caracteres).';
+  else if (name.length > 100) errors.fullName = 'El nombre admite máximo 100 caracteres.';
+
+  if (values.info.trim().length > 300) errors.info = 'La descripción admite máximo 300 caracteres.';
+
+  return errors;
+}
+
+export function mapServerProfileValidation(messages: string[]): ProfileErrors {
+  const errors: ProfileErrors = {};
+  for (const m of messages) {
+    if (m.startsWith('fullName')) errors.fullName = 'Revisa tu nombre (entre 2 y 100 caracteres).';
+    else if (m.startsWith('info')) errors.info = 'La descripción admite máximo 300 caracteres.';
+  }
+  return errors;
+}
+
 /**
  * HU-08 · Reglas de CreateProductDto (backend) para avisar antes de enviar.
  * Los textos se evalúan recortados, igual que en el servidor.
