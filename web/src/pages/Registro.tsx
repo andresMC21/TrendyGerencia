@@ -124,7 +124,7 @@ export default function Registro() {
               />
               {emailTaken && (
                 <p className="inline-link">
-                  ¿Es tuyo? <Link to="/ingresar">Inicia sesión aquí</Link>
+                  ¿Es tuyo? <Link viewTransition to="/ingresar">Inicia sesión aquí</Link>
                 </p>
               )}
               <Field
@@ -148,7 +148,7 @@ export default function Registro() {
             </form>
 
             <p className="form-foot">
-              ¿Ya tienes cuenta? <Link to="/ingresar">Inicia sesión</Link>
+              ¿Ya tienes cuenta? <Link viewTransition to="/ingresar">Inicia sesión</Link>
             </p>
           </section>
         </div>

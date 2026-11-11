@@ -65,7 +65,7 @@ export default function Favoritos() {
       <Header />
       <main className="dashboard">
         <div className="container">
-          <Link to="/inicio" className="back-link">
+          <Link viewTransition to="/inicio" className="back-link">
             ← Volver a Mi Trendy
           </Link>
           <h1 className="dash-title">Mis favoritos</h1>
@@ -85,7 +85,7 @@ export default function Favoritos() {
 
           {estado.tipo === 'ok' && estado.items.length === 0 && (
             <Alert tone="info">
-              Aún no tienes favoritos. <Link to="/explorar">Explora los productos</Link> y guarda los
+              Aún no tienes favoritos. <Link viewTransition to="/explorar">Explora los productos</Link> y guarda los
               que te interesen.
             </Alert>
           )}

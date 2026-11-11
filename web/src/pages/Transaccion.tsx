@@ -74,7 +74,7 @@ function TransaccionPagina({ id }: { id: string }) {
       <Header />
       <main className="dashboard">
         <div className="container container--narrow">
-          <Link to="/transacciones" className="back-link">
+          <Link viewTransition to="/transacciones" className="back-link">
             ← Volver a mis transacciones
           </Link>
 
@@ -118,7 +118,7 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
 
       <h1>
         {tx.product ? (
-          <Link to={`/producto/${tx.productId}`} className="product-link">
+          <Link viewTransition to={`/producto/${tx.productId}`} className="product-link">
             {tx.product.title}
           </Link>
         ) : (

@@ -11,7 +11,7 @@ import { ProductPhoto } from './ProductPhoto';
 export function ProductCard({ product: p, favorito }: { product: Product; favorito?: FavoritoDeTarjeta }) {
   return (
     <article className="product">
-      <Link to={`/producto/${p.id}`} className="product-photo-link" aria-label={`Ver ${p.title}`}><ProductPhoto src={p.photoUrl} title={p.title} /></Link>
+      <Link viewTransition to={`/producto/${p.id}`} state={{ photoUrl: p.photoUrl, title: p.title }} onClick={(event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) document.documentElement.dataset.productTransition = p.id; }} className="product-photo-link" aria-label={`Ver ${p.title}`}><ProductPhoto transitionId={p.id} src={p.photoUrl} title={p.title} /></Link>
       <div className="product-top">
         <span className="product-cat">{CATEGORIA[p.category] ?? p.category}</span>
         {p.acceptsBarter && <span className="chip chip--orange">Acepta trueque</span>}
@@ -31,7 +31,7 @@ export function ProductCard({ product: p, favorito }: { product: Product; favori
         )}
       </div>
       <h3>
-        <Link to={`/producto/${p.id}`} className="product-link">
+        <Link viewTransition to={`/producto/${p.id}`} className="product-link">
           {p.title}
         </Link>
       </h3>
@@ -42,7 +42,7 @@ export function ProductCard({ product: p, favorito }: { product: Product; favori
           {barrio(p.neighborhoodId)} · {CONDICION[p.condition] ?? p.condition}
         </span>
       </div>
-      <Link to={`/producto/${p.id}`} className="product-more">
+      <Link viewTransition to={`/producto/${p.id}`} className="product-more">
         Ver producto →
       </Link>
     </article>

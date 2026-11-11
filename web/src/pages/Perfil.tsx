@@ -32,7 +32,7 @@ export default function Perfil() {
       <Header />
       <main className="dashboard">
         <div className="container container--narrow">
-          <Link to="/inicio" className="back-link">
+          <Link viewTransition to="/inicio" className="back-link">
             ← Volver a Mi Trendy
           </Link>
           <h1 className="dash-title">Mi perfil</h1>

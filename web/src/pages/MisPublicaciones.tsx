@@ -71,7 +71,7 @@ export default function MisPublicaciones() {
       <Header />
       <main className="dashboard">
         <div className="container container--narrow">
-          <Link to="/inicio" className="back-link">
+          <Link viewTransition to="/inicio" className="back-link">
             ← Volver a Mi Trendy
           </Link>
           <h1 className="dash-title">Mis publicaciones</h1>
@@ -91,7 +91,7 @@ export default function MisPublicaciones() {
 
           {estado.tipo === 'ok' && estado.items.length === 0 && (
             <Alert tone="info">
-              Aún no has publicado nada. <Link to="/publicar">Publica tu primer artículo</Link>.
+              Aún no has publicado nada. <Link viewTransition to="/publicar">Publica tu primer artículo</Link>.
             </Alert>
           )}
 
@@ -141,7 +141,7 @@ function MiPublicacion({
       <div className="my-product-main">
         <div className="my-product-head">
           {visible ? (
-            <Link to={`/producto/${p.id}`}>
+            <Link viewTransition to={`/producto/${p.id}`}>
               <strong>{p.title}</strong>
             </Link>
           ) : (
@@ -158,7 +158,7 @@ function MiPublicacion({
         {status === 'RESERVED' && (
           <span className="tx-meta tx-meta--todo">
             Reservado: para retirarlo, primero cancela la transacción en{' '}
-            <Link to="/transacciones">Transacciones</Link>.
+            <Link viewTransition to="/transacciones">Transacciones</Link>.
           </span>
         )}
         {status === 'REMOVED' && (

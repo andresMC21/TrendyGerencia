@@ -1,6 +1,6 @@
 import { Skeleton } from '../components/Skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { Footer, Header } from '../components/Brand';
 import { Alert } from '../components/Form';
 import { RetirarPublicacion } from '../components/RetirarPublicacion';
@@ -24,6 +24,8 @@ export default function Producto() {
 
 function ProductoPagina({ id }: { id: string }) {
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
+  const { state } = useLocation();
+  const preview = state as { photoUrl?: string; title?: string } | null;
 
   useEffect(() => {
     let activo = true;
@@ -46,16 +48,16 @@ function ProductoPagina({ id }: { id: string }) {
       <Header />
       <main className="dashboard">
         <div className="container container--narrow">
-          <Link to="/explorar" className="back-link">
+          <Link viewTransition to="/explorar" className="back-link">
             ← Volver a las publicaciones
           </Link>
 
-          {estado.tipo === 'cargando' && <Skeleton kind="detail" />}
+          {estado.tipo === 'cargando' && <><ProductPhoto transitionId={id} src={preview?.photoUrl} title={preview?.title ?? "Producto"} detail /><Skeleton kind="transactions" /></>}
 
           {estado.tipo === 'no-existe' && (
             <Alert tone="info">
               Este producto no existe o ya no está publicado.{' '}
-              <Link to="/explorar">Ver otras publicaciones</Link>
+              <Link viewTransition to="/explorar">Ver otras publicaciones</Link>
             </Alert>
           )}
 
@@ -78,7 +80,7 @@ function Detalle({ p }: { p: ProductDetail }) {
 
   return (
     <article className="product-detail">
-      <ProductPhoto src={p.photoUrl} title={p.title} detail />
+      <ProductPhoto transitionId={p.id} src={p.photoUrl} title={p.title} detail />
       <div className="product-top">
         <span className="product-cat">{p.category}</span>
         <span className={`chip chip--${estado.tone}`}>{estado.label}</span>
@@ -211,7 +213,7 @@ function Favorito({ p, onCountChange }: {
         >
           {esFavorito ? '♥ Guardado en favoritos' : '♡ Guardar en favoritos'}
         </button>
-        {esFavorito && <Link to="/favoritos">Ver mis favoritos</Link>}
+        {esFavorito && <Link viewTransition to="/favoritos">Ver mis favoritos</Link>}
       </div>
     </section>
   );
@@ -255,7 +257,7 @@ function IniciarTransaccion({ p, onProductChange }: {
   }
 
   if (loading) return <p role="status">Comprobando sesión…</p>;
-  if (!user || !token) return <Alert tone="info"><Link to="/ingresar">Ingresa a tu cuenta</Link> para iniciar una compra o un trueque.</Alert>;
+  if (!user || !token) return <Alert tone="info"><Link viewTransition to="/ingresar">Ingresa a tu cuenta</Link> para iniciar una compra o un trueque.</Alert>;
   if (user.id === p.seller.id) return <MiProducto p={p} onProductChange={onProductChange} />;
 
   return (
@@ -266,7 +268,7 @@ function IniciarTransaccion({ p, onProductChange }: {
         <Alert tone="success">
           Transacción iniciada en estado PENDING (pendiente) con {p.seller.fullName}.
           {' '}El producto quedó reservado. Referencia: {transaction.id}.{' '}
-          <Link to={`/transacciones/${transaction.id}`}>Acordar punto seguro y horario</Link>
+          <Link viewTransition to={`/transacciones/${transaction.id}`}>Acordar punto seguro y horario</Link>
         </Alert>
       ) : p.status !== 'AVAILABLE' ? (
         <Alert tone="info">Este producto ya no está disponible para iniciar una transacción.</Alert>
@@ -311,7 +313,7 @@ function MiProducto({ p, onProductChange }: {
         <>
           <p className="field-hint">
             Si ya no quieres ofrecer este artículo, retíralo: dejará de aparecer en Trendy y se
-            conservará en <Link to="/mis-publicaciones">tu historial</Link>.
+            conservará en <Link viewTransition to="/mis-publicaciones">tu historial</Link>.
           </p>
           <RetirarPublicacion
             productId={p.id}
@@ -328,7 +330,7 @@ function MiProducto({ p, onProductChange }: {
           {p.status === 'RESERVED'
             ? 'Está reservada en una transacción. Para retirarla, primero cancela la transacción en '
             : 'Esta publicación ya no está disponible. Revisa '}
-          <Link to={p.status === 'RESERVED' ? '/transacciones' : '/mis-publicaciones'}>
+          <Link viewTransition to={p.status === 'RESERVED' ? '/transacciones' : '/mis-publicaciones'}>
             {p.status === 'RESERVED' ? 'Transacciones' : 'Mis publicaciones'}
           </Link>
           .

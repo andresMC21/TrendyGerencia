@@ -82,13 +82,13 @@ export default function Inicio() {
                   <dd>{fecha(user.createdAt)}</dd>
                 </div>
               </dl>
-              <Link to="/perfil" className="btn btn-outline btn-block profile-link">
+              <Link viewTransition to="/perfil" className="btn btn-outline btn-block profile-link">
                 Ver mi perfil
               </Link>
-              <Link to="/mis-publicaciones" className="btn btn-outline btn-block profile-link">
+              <Link viewTransition to="/mis-publicaciones" className="btn btn-outline btn-block profile-link">
                 Mis publicaciones
               </Link>
-              <Link to="/favoritos" className="btn btn-outline btn-block profile-link">
+              <Link viewTransition to="/favoritos" className="btn btn-outline btn-block profile-link">
                 Mis favoritos
               </Link>
             </aside>
@@ -99,13 +99,13 @@ export default function Inicio() {
                 <span>Lo más reciente de toda Cali</span>
               </div>
               <div className="feed-actions">
-                <Link
+                <Link viewTransition
                   to={miBarrio ? `/explorar?barrio=${miBarrio}` : '/explorar'}
                   className="btn btn-primary btn-sm"
                 >
                   {miBarrio ? `Productos de ${barrio(miBarrio)}` : 'Productos de mi barrio'}
                 </Link>
-                <Link to="/explorar" className="btn btn-outline btn-sm">
+                <Link viewTransition to="/explorar" className="btn btn-outline btn-sm">
                   Ver todos los productos
                 </Link>
               </div>

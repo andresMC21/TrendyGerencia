@@ -47,7 +47,7 @@ export default function Transacciones() {
           )}
           {estado.tipo === 'ok' && estado.items.length === 0 && (
             <Alert tone="info">
-              Todavía no tienes transacciones. <Link to="/inicio">Explora las publicaciones</Link>.
+              Todavía no tienes transacciones. <Link viewTransition to="/inicio">Explora las publicaciones</Link>.
             </Alert>
           )}
           {estado.tipo === 'ok' && estado.items.length > 0 && (
@@ -58,7 +58,7 @@ export default function Transacciones() {
                 const otro = soyComprador ? t.seller?.fullName : t.buyer?.fullName;
                 return (
                   <li key={t.id}>
-                    <Link to={`/transacciones/${t.id}`} className="tx-item">
+                    <Link viewTransition to={`/transacciones/${t.id}`} className="tx-item">
                       <div className="product-top">
                         <strong>{t.product?.title ?? 'Producto'}</strong>
                         <span className={`chip chip--${e.tone}`}>{e.label}</span>

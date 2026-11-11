@@ -1330,3 +1330,11 @@ h3 {
 .skeletons--detail .skeleton-photo { height: 360px; }
 @media (prefers-reduced-motion: no-preference) { .skeleton-block::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent, #ffffff45, transparent); animation: skeleton-shimmer 1.6s infinite; } }
 @keyframes skeleton-shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+/* Only the selected listing participates in the shared photo transition. */
+
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 250ms; }
+  ::view-transition-group(*) { animation-duration: 250ms; }
+}
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
