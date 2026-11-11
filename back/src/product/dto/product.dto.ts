@@ -34,6 +34,9 @@ export class ProductDto {
   })
   description: string;
 
+  @ApiProperty({ type: String, nullable: true, description: 'Fotografía del producto: data URL o ruta del catálogo. Null para publicaciones antiguas sin foto.' })
+  photoUrl: string | null;
+
   @ApiProperty({
     type: Number,
     example: 250000,
@@ -135,6 +138,7 @@ export class ProductDto {
     dto.sellerId = product.sellerId;
     dto.title = product.title;
     dto.description = product.description;
+    dto.photoUrl = product.photoUrl ?? null;
     dto.price = product.price;
     dto.acceptsBarter = product.acceptsBarter;
     dto.category = product.category;

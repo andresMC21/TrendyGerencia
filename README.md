@@ -152,6 +152,16 @@ Los archivos `.env` reales no se suben al repositorio (están en `.gitignore`); 
 
 ## Usuarios de prueba (seed)
 
+### Interfaz, fotografías y nuevos datos de demostración
+
+- La lámpara del encabezado alterna entre modo claro y oscuro: arrastra el cordón hacia abajo, haz clic o usa Enter/Espacio. La preferencia se conserva en este navegador; inicialmente se respeta el tema del sistema.
+- En `/ingresar`, el formulario comienza oculto. La lámpara central lo muestra u oculta con la misma interacción. La lámpara del encabezado cambia únicamente el tema.
+- Publicar desde la web requiere una fotografía JPG, PNG o WebP de hasta 10 MB. Se muestra una vista previa y se reduce localmente a JPEG de hasta 1200 px, antes de enviarla. Se almacena en PostgreSQL como data URL; no necesita un servicio externo de almacenamiento.
+- `POST /api/products` y `PUT /api/products/:id` aceptan `photoUrl`: data URL JPEG/PNG/WebP de hasta 900000 caracteres, o ruta del catálogo `/images/products/*.jpg`. El campo sigue siendo opcional para clientes anteriores. Las lecturas devuelven `photoUrl: null` para productos antiguos sin fotografía. El límite del cuerpo JSON de la API es 1 MB.
+- Ejecuta `npm run migration:run` y luego `npm run seed` desde `back/`. La nueva migración añade una columna nullable sin eliminar publicaciones. El seed incluye 15 productos con precios en COP, detalles de uso, trueques, donaciones y barrios de Cali; conserva los estados y las visitas de productos existentes.
+- Los perfiles y las publicaciones de demostración son ficticios. Las fotografías son referencias, no objetos realmente a la venta; se sirven desde `web/public/images/products/` con fuentes en `SOURCES.md`.
+- Nuevas cuentas: `valentina@trendy.local` / `Valen2026`, `santiago@trendy.local` / `Santi2026`, `luisa@trendy.local` / `Luisa2026`, `andres@trendy.local` / `Andres2026`. La cuenta `demo@trendy.local` / `Trendy123` continúa disponible.
+
 | Correo | Contraseña | Rol | Notas |
 |---|---|---|---|
 | `admin@trendy.local` | `Admin1234` | ADMIN | Usuario administrador inicial |

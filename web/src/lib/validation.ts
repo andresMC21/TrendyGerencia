@@ -41,12 +41,37 @@ export function mapServerValidation(messages: string[]): RegisterErrors {
   return errors;
 }
 
+/** HU-04 · Reglas de UpdateUserDto (backend) para los datos editables del perfil. */
+export type ProfileErrors = Partial<Record<'fullName' | 'info', string>>;
+
+export function validateProfile(values: { fullName: string; info: string }): ProfileErrors {
+  const errors: ProfileErrors = {};
+  const name = values.fullName.trim();
+
+  if (name.length < 2) errors.fullName = 'Escribe tu nombre (mínimo 2 caracteres).';
+  else if (name.length > 100) errors.fullName = 'El nombre admite máximo 100 caracteres.';
+
+  if (values.info.trim().length > 300) errors.info = 'La descripción admite máximo 300 caracteres.';
+
+  return errors;
+}
+
+export function mapServerProfileValidation(messages: string[]): ProfileErrors {
+  const errors: ProfileErrors = {};
+  for (const m of messages) {
+    if (m.startsWith('fullName')) errors.fullName = 'Revisa tu nombre (entre 2 y 100 caracteres).';
+    else if (m.startsWith('info')) errors.info = 'La descripción admite máximo 300 caracteres.';
+  }
+  return errors;
+}
+
 /**
  * HU-08 · Reglas de CreateProductDto (backend) para avisar antes de enviar.
  * Los textos se evalúan recortados, igual que en el servidor.
  */
 export type ProductField =
   | 'title'
+  | 'photoUrl'
   | 'description'
   | 'category'
   | 'condition'
@@ -58,6 +83,7 @@ export type ProductErrors = Partial<Record<ProductField, string>>;
 const MAX_PRICE = 9_999_999_999;
 
 export function validateProduct(values: {
+  photoUrl: string;
   title: string;
   description: string;
   category: string;
@@ -68,6 +94,7 @@ export function validateProduct(values: {
 }): ProductErrors {
   const errors: ProductErrors = {};
   const title = values.title.trim();
+  if (!values.photoUrl) errors.photoUrl = 'Agrega una fotografía del producto.';
   const description = values.description.trim();
 
   if (title.length < 3) errors.title = 'Escribe un título (mínimo 3 caracteres).';
@@ -104,6 +131,7 @@ export function validateProduct(values: {
 }
 
 const PRODUCT_SERVER_MESSAGES: Record<ProductField, string> = {
+  photoUrl: 'Revisa la fotografía: debe ser una imagen válida de tamaño permitido.',
   title: 'Revisa el título (entre 3 y 120 caracteres).',
   description: 'Revisa la descripción (máximo 2000 caracteres).',
   category: 'Revisa la categoría.',

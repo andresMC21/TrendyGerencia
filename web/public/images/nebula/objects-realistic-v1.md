@@ -1,0 +1,10 @@
+# Realistic objects for the Trendy nebula
+
+Asset: `objects-realistic-v1.png`, 1254 × 1254 pixels, RGBA with real transparency.
+Created using the built-in image generation tool. The source image remains unchanged;
+the canvas samples a 3 × 3 atlas directly, preserving its alpha channel.
+This is decorative generated imagery, not photographs of items actually offered for sale.
+
+## Final prompt
+
+Create one production-ready transparent PNG sprite atlas for the animated background of an elegant second-hand marketplace website. Square canvas, precisely aligned 3 columns by 3 rows of equally sized invisible cells. Nine distinct PHOTOREALISTIC miniature product photography cutouts, one centered in each cell, all fully contained in the central 68 percent of their cell with very generous clear transparent gutters. Row 1: a vintage mirrorless camera with lens; over-ear black and cream headphones; a single off-white casual sneaker. Row 2: an elegant walnut and gray upholstered chair; a small leafy green houseplant in a terracotta pot; two stacked used hardcover books with cream and muted teal covers. Row 3: a brass and charcoal desk lamp; a silver vintage city bicycle with brown saddle; a small natural wood acoustic guitar. Camera sees each real object at a tasteful three-quarter angle. Real photographic materials, tactile wood grain, leather, fabric, brushed metal, authentic natural proportions, high detail and believable studio lighting. These must look like photographed real objects, NOT icons, line drawings, cartoons, illustrations, flat vectors, plastic toys, or emoji. Consistent soft daylight, restrained natural palette. Absolutely transparent background and empty cell gutters; no environment, no floor, no rectangular photo backgrounds, no cell borders, no text or labels, no watermarks. No cast shadows beyond the actual object silhouettes. Keep every part of every object inside its own cell. This is one cohesive nine-cell texture atlas to be sampled at exact thirds by a web canvas renderer.

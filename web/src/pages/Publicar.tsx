@@ -12,6 +12,8 @@ import {
 import { BARRIOS, CATEGORIAS } from '../lib/barrios';
 import { barrio, CATEGORIA, CONDICION, precio } from '../lib/format';
 import { useSession } from '../lib/session';
+import { PhotoPicker } from '../components/PhotoPicker';
+import { ProductPhoto } from '../components/ProductPhoto';
 import {
   mapServerProductValidation,
   validateProduct,
@@ -28,6 +30,8 @@ const redondear = (v: number) => Math.round(v * 1000) / 1000;
 export default function Publicar() {
   const { token } = useSession();
   const [title, setTitle] = useState('');
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
   const [condition, setCondition] = useState<ProductCondition | ''>('');
@@ -91,9 +95,10 @@ export default function Publicar() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!token || inFlight.current) return;
+    if (!token || inFlight.current || preparingPhoto) return;
 
     const local = validateProduct({
+      photoUrl,
       title,
       description,
       category,
@@ -111,6 +116,7 @@ export default function Publicar() {
     setSending(true);
     try {
       const creado = await productApi.create(token, {
+        photoUrl,
         title: title.trim(),
         description: description.trim(),
         category,
@@ -141,6 +147,7 @@ export default function Publicar() {
 
   const reiniciar = () => {
     setTitle('');
+    setPhotoUrl('');
     setDescription('');
     setCategory('');
     setCondition('');
@@ -203,6 +210,7 @@ export default function Publicar() {
                 )}
 
                 <form onSubmit={onSubmit} noValidate aria-busy={sending}>
+                  <PhotoPicker value={photoUrl} onChange={(photo) => { setPhotoUrl(photo); clear('photoUrl'); }} onBusyChange={setPreparingPhoto} error={errors.photoUrl} disabled={sending} />
                   <Field
                     label="Título"
                     name="title"
@@ -337,8 +345,8 @@ export default function Publicar() {
                     Acepto trueque
                   </label>
 
-                  <button type="submit" className="btn btn-primary btn-block" disabled={sending}>
-                    {sending ? 'Publicando…' : 'Publicar producto'}
+                  <button type="submit" className="btn btn-primary btn-block" disabled={sending || preparingPhoto}>
+                    {preparingPhoto ? 'Preparando fotografía…' : sending ? 'Publicando…' : 'Publicar producto'}
                   </button>
                 </form>
               </>
@@ -359,6 +367,7 @@ function Publicado({ p, onOtro }: { p: Product; onOtro: () => void }) {
         {barrio(p.neighborhoodId)}.
       </Alert>
       <article className="product" data-testid="publicado">
+        <ProductPhoto src={p.photoUrl} title={p.title} />
         <div className="product-top">
           <span className="product-cat">{CATEGORIA[p.category] ?? p.category}</span>
           <span className="chip chip--green">Disponible</span>

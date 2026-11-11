@@ -148,7 +148,7 @@ export default function Explorar() {
               {hayFiltros ? 'No hay productos con estos filtros.' : 'Aún no hay publicaciones en Cali.'}
             </Alert>
           )}
-          {products === null && !feedError && <div className="feed-loading">Cargando…</div>}
+          {products === null && !feedError && <div className="feed-loading" role="status">Buscando publicaciones…</div>}
           <div className="feed">
             {products?.map((p) => (
               <ProductCard key={p.id} product={p} />

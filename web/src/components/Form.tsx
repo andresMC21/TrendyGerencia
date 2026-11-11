@@ -35,6 +35,8 @@ export function Field({
             className="field-toggle"
             onClick={() => setVisible((v) => !v)}
             aria-label={visible ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            aria-pressed={visible}
+            disabled={props.disabled}
           >
             {visible ? 'Ocultar' : 'Ver'}
           </button>

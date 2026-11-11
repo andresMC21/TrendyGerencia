@@ -1,148 +1,61 @@
-import { Link } from 'react-router';
-import { Dot, Footer, Header } from '../components/Brand';
+﻿import { Link } from 'react-router';
+import { Footer, Header } from '../components/Brand';
 import { useSession } from '../lib/session';
 
-const BENEFICIOS = [
-  'Reduce desorden y ansiedad en el hogar.',
-  'Disminuye exposición a estafas y robos.',
-  'Extiende la vida útil de objetos y baja el impacto ambiental.',
+const CATEGORIES = [
+  { id: 'hogar', title: 'Hogar', detail: 'Un nuevo lugar para lo cotidiano' },
+  { id: 'libros', title: 'Libros', detail: 'Historias que siguen su camino' },
+  { id: 'ropa', title: 'Ropa', detail: 'Otra forma de llevar tu estilo' },
+  { id: 'tecnologia', title: 'Tecnología', detail: 'Mucho más por hacer' },
 ];
-
-const PROPUESTA = [
-  {
-    tag: 'Seguridad y cercanía',
-    color: 'blue',
-    texto:
-      'Puntos de encuentro seguros recomendados según la ubicación de ambas partes y el riesgo de la zona, con objetos del mismo barrio, cerca de ti.',
-  },
-  {
-    tag: 'Confianza y agilidad',
-    color: 'green',
-    texto:
-      'Usuarios verificados y con reputación, y la capacidad de publicar un objeto en menos de un minuto.',
-  },
-  {
-    tag: 'Accesibilidad y sostenibilidad',
-    color: 'purple',
-    texto:
-      'Publicar e intercambiar sin costo, lo que contribuye a generar menos desorden en casa y menos residuos.',
-  },
-];
-
-const PASOS = [
-  {
-    n: '1',
-    titulo: 'Publica',
-    texto: 'Sube tu objeto con descripción, precio y fotos. Indica si aceptas trueque.',
-  },
-  {
-    n: '2',
-    titulo: 'Elige un punto seguro',
-    texto: 'Trendy te recomienda puntos de encuentro con su nivel de riesgo y la distancia.',
-  },
-  {
-    n: '3',
-    titulo: 'Encuéntrate y califica',
-    texto: 'Concreta la venta o el intercambio y deja una reseña para construir confianza.',
-  },
+const STEPS = [
+  { title: 'Haz espacio.', text: 'Describe lo que ya no usas, ponle precio y decide si aceptas trueque.' },
+  { title: 'Pónganse de acuerdo.', text: 'Elijan un punto de encuentro y un horario que les funcione a ambos.' },
+  { title: 'Que siga su historia.', text: 'Revisen el objeto en persona y confirmen juntos el intercambio.' },
 ];
 
 export default function Landing() {
   const { user } = useSession();
-
   return (
     <>
       <Header />
-      <main>
+      <main className="landing">
         <section className="hero">
           <div className="container hero-inner">
-            <p className="hero-lead">
-              Para los caleños que quieren vender o intercambiar objetos en desuso pero temen ser
-              víctimas de robos o estafas al reunirse con desconocidos, un espacio digital local:
-              donde cualquier persona publique objetos en desuso con descripción, precio y fotos, y
-              que recomiende automáticamente puntos de encuentro seguros según la ubicación de
-              comprador/vendedor y el nivel de riesgo de la zona.
-            </p>
-            <ul className="benefits">
-              {BENEFICIOS.map((b) => (
-                <li key={b}>
-                  <Dot />
-                  {b}
-                </li>
-              ))}
-            </ul>
-            <div className="hero-actions">
-              {user ? (
-                <Link to="/inicio" className="btn btn-primary btn-lg">
-                  Ir a mi Trendy
-                </Link>
-              ) : (
-                <>
-                  <Link to="/registro" className="btn btn-primary btn-lg">
-                    Crear mi cuenta
-                  </Link>
-                  <Link to="/ingresar" className="btn btn-outline btn-lg">
-                    Ya tengo cuenta
-                  </Link>
-                </>
-              )}
-              <Link to="/explorar" className="btn btn-outline btn-lg">
-                Explorar productos
+            <div className="hero-copy">
+              <p className="eyebrow"><span className="live-dot" /> De Cali, para Cali</p>
+              <h1>Las buenas cosas<br />merecen <em>otra vida.</em></h1>
+              <p className="hero-lead">Eso que ya no usas puede ser justo lo que alguien busca. Vende, encuentra e intercambia cerca de ti.</p>
+              <div className="hero-actions">
+                <Link to="/explorar" className="btn btn-primary btn-lg">Encuentra algo tuyo <span aria-hidden="true">↗</span></Link>
+                <Link to={user ? '/publicar' : '/registro'} className="btn btn-outline btn-lg">Quiero publicar</Link>
+              </div>
+              <p className="hero-note">Sin costo por publicar. Con mucho por descubrir.</p>
+            </div>
+            <div className="hero-showcase" aria-label="Explora objetos para darles una segunda vida">
+              <div className="showcase-orbit" aria-hidden="true" />
+              <Link to="/explorar?categoria=libros" className="showcase-card showcase-book">
+                <div className="book-art" aria-hidden="true"><span>OTRAS<br />FORMAS<br /><i>de vivir.</i></span></div>
+                <div className="showcase-caption"><span>Una lectura pendiente</span><span aria-hidden="true">↗</span></div>
               </Link>
+              <Link to="/explorar?categoria=hogar" className="showcase-note"><span className="eyebrow">Un nuevo comienzo</span><strong>Menos guardado.<br /><em>Más vivido.</em></strong><span>Explora objetos para tu hogar ↗</span></Link>
+              <span className="showcase-seal">Cerca de ti · Cali</span>
             </div>
           </div>
-          <span className="hero-bar" aria-hidden="true" />
         </section>
-
-        <section className="section">
+        <section className="section category-section">
           <div className="container">
-            <h2 className="section-title">Propuesta de valor</h2>
-            <p className="section-sub">
-              Una experiencia de intercambio y venta segura y ágil para el «ciudadano práctico» de
-              Cali.
-            </p>
-            <div className="test-cards">
-              {PROPUESTA.map((p) => (
-                <article key={p.tag} className={`test-card test-card--${p.color}`}>
-                  <h3>{p.tag}</h3>
-                  <p>{p.texto}</p>
-                </article>
-              ))}
+            <div className="section-heading"><div><p className="eyebrow">A tu manera</p><h2 className="section-title">¿Qué te gustaría encontrar?</h2></div><Link to="/explorar" className="text-link">Ver todo <span aria-hidden="true">↗</span></Link></div>
+            <div className="category-grid">
+              {CATEGORIES.map((category, index) => <Link key={category.id} to={'/explorar?categoria=' + category.id} className="category-card"><span className="category-number">0{index + 1}<span aria-hidden="true">↗</span></span><h3>{category.title}</h3><p>{category.detail}</p></Link>)}
             </div>
           </div>
         </section>
-
         <section className="section section--panel">
           <div className="container">
-            <h2 className="section-title">¿Cómo funciona?</h2>
-            <div className="steps">
-              {PASOS.map((p) => (
-                <div key={p.n} className="step">
-                  <span className="step-label">PASO {p.n}</span>
-                  <h3>{p.titulo}</h3>
-                  <p>{p.texto}</p>
-                </div>
-              ))}
-            </div>
-            <div className="risk-demo">
-              <span className="risk-demo-title">Puntos de encuentro recomendados</span>
-              <div className="risk-row">
-                <span className="risk-num risk-num--low">1</span>
-                <div>
-                  <strong>Parque Panamericano</strong>
-                  <small>Mismo barrio · a 1,2 km de ti</small>
-                </div>
-                <span className="risk risk--low">Riesgo BAJO</span>
-              </div>
-              <div className="risk-row">
-                <span className="risk-num risk-num--mid">2</span>
-                <div>
-                  <strong>Centro Comercial Centenario</strong>
-                  <small>Zona comercial · a 2,5 km</small>
-                </div>
-                <span className="risk risk--mid">Riesgo MEDIO</span>
-              </div>
-            </div>
+            <p className="eyebrow">Así de sencillo</p><h2 className="section-title">De tus manos a una nueva historia.</h2>
+            <div className="steps">{STEPS.map((step, index) => <article className="step" key={step.title}><span className="step-label">0{index + 1}</span><h3>{step.title}</h3><p>{step.text}</p></article>)}</div>
+            <div className="landing-invite"><p>Tu próximo hallazgo<br /><em>puede estar en tu barrio.</em></p><Link to="/explorar" className="btn btn-primary btn-lg">Empieza a explorar <span aria-hidden="true">↗</span></Link></div>
           </div>
         </section>
       </main>
