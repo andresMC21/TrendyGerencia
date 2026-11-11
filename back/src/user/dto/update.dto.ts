@@ -1,4 +1,5 @@
 import { ApiPropertyOptional, PartialType, PickType } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
 import { IsOptional, IsString, IsUrl, MaxLength, ValidateIf } from 'class-validator';
 import { RegisterUserDto } from './register.dto';
 
@@ -8,8 +9,10 @@ export class UpdateUserDto extends PartialType(
   @ApiPropertyOptional({
     type: String,
     maxLength: 300,
-    description: 'Información adicional del perfil, de hasta 300 caracteres.',
+    description:
+      'HU-04 · Información adicional del perfil, de hasta 300 caracteres; se eliminan los espacios externos.',
   })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsOptional()
   @IsString()
   @MaxLength(300)

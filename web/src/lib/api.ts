@@ -131,7 +131,7 @@ export const authApi = {
   login: (email: string, password: string) =>
     apiRequest<LoginResponse>('/user/login', { method: 'POST', body: { email, password } }),
   me: (token: string) => apiRequest<UserProfile>('/user/me', { token }),
-  /** HU-03 · actualizar datos del perfil propio (por ejemplo, la foto). */
+  /** HU-03/HU-04 · actualizar datos del perfil propio (nombre, información, foto). */
   updateMe: (token: string, body: { photoUrl?: string | null; info?: string; fullName?: string }) =>
     apiRequest<UserProfile>('/user/me', { method: 'PATCH', token, body }),
   logout: (token: string) =>

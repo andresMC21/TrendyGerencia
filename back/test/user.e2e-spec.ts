@@ -311,6 +311,88 @@ describe('Users (e2e)', () => {
       .expect(400);
   });
 
+  describe('HU-04 · Actualizar mi perfil', () => {
+    it('guarda los datos permitidos y devuelve la información nueva', async () => {
+      const { body: registered } = await http
+        .post('/api/user/register')
+        .send(newUser('hu04-edit'))
+        .expect(201);
+      const editToken: string = registered.token;
+
+      const res = await http
+        .patch('/api/user/me')
+        .set(auth(editToken))
+        .send({ fullName: '  E2E Perfil Nuevo  ', info: '  Vendo ropa de segunda mano.  ' })
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        id: registered.id,
+        fullName: 'E2E Perfil Nuevo',
+        info: 'Vendo ropa de segunda mano.',
+      });
+
+      const me = await http.get('/api/user/me').set(auth(editToken)).expect(200);
+      expect(me.body).toMatchObject({
+        fullName: 'E2E Perfil Nuevo',
+        info: 'Vendo ropa de segunda mano.',
+      });
+    });
+
+    it.each([
+      ['un campo no admitido', { email: 'otro@test.com' }],
+      ['un campo protegido', { verificationStatus: 'VERIFIED' }],
+      ['un nombre demasiado corto', { fullName: 'A' }],
+      ['un nombre demasiado largo', { fullName: 'A'.repeat(101) }],
+      ['un nombre que no es texto', { fullName: 123 }],
+      ['una información de más de 300 caracteres', { info: 'x'.repeat(301) }],
+    ])('rechaza con 400 %s', async (_caso, body) => {
+      await http.patch('/api/user/me').set(auth(token)).send(body).expect(400);
+    });
+
+    it('con la verificación PENDING o VERIFIED no permite cambiar el nombre', async () => {
+      const user = newUser('hu04-lock');
+      const { body } = await http.post('/api/user/register').send(user).expect(201);
+      const lockedToken: string = body.token;
+
+      await http
+        .post('/api/user/me/verification')
+        .set(auth(lockedToken))
+        .expect(200);
+
+      await http
+        .patch('/api/user/me')
+        .set(auth(lockedToken))
+        .send({ fullName: 'Nombre Distinto' })
+        .expect(403);
+
+      // Los demás datos permitidos sí se pueden cambiar.
+      const pending = await http
+        .patch('/api/user/me')
+        .set(auth(lockedToken))
+        .send({ fullName: user.fullName, info: 'Sigo en revisión' })
+        .expect(200);
+      expect(pending.body).toMatchObject({
+        fullName: user.fullName,
+        info: 'Sigo en revisión',
+        verificationStatus: 'PENDING',
+      });
+
+      await dataSource.query(
+        'UPDATE "user" SET "verificationStatus" = $1 WHERE id = $2',
+        ['VERIFIED', body.id],
+      );
+
+      await http
+        .patch('/api/user/me')
+        .set(auth(lockedToken))
+        .send({ fullName: 'Otro Nombre' })
+        .expect(403);
+
+      const me = await http.get('/api/user/me').set(auth(lockedToken)).expect(200);
+      expect(me.body.fullName).toBe(user.fullName);
+    });
+  });
+
   describe('HU-03 · Consultar mi perfil', () => {
     it('incluye nombre, correo, foto, verificación y reputación, sin la contraseña', async () => {
       const res = await http.get('/api/user/me').set(auth(token)).expect(200);
