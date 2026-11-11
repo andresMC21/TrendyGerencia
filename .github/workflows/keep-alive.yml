@@ -1,0 +1,35 @@
+# Mantiene despierta la API en Render. El plan gratuito duerme el servicio
+# tras 15 minutos sin tráfico y el siguiente acceso tarda unos 50 s en
+# arrancarlo (y vuelve a cargar los datos de demostración del seed).
+# GitHub solo ejecuta los cron desde la rama por defecto (main) y puede
+# retrasarlos unos minutos, por eso se llama cada 5 min y no cada 14.
+# El sitio web es estático y no se duerme; solo hace falta despertar la API.
+name: keep-alive
+
+permissions: {}
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: keep-alive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Ping /api/health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HEALTH_URL: https://trendy-gerencia-api.onrender.com/api/health
+    steps:
+      - name: Despertar la API
+        run: |
+          curl --fail --silent --show-error \
+            --retry 3 --retry-delay 20 --retry-all-errors \
+            --max-time 120 \
+            --output /dev/null \
+            --write-out 'HTTP %{http_code} en %{time_total}s\n' \
+            "$HEALTH_URL"
