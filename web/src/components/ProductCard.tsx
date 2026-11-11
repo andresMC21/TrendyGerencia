@@ -11,7 +11,16 @@ import { ProductPhoto } from './ProductPhoto';
  */
 export function ProductCard({ product: p, favorito }: { product: Product; favorito?: FavoritoDeTarjeta }) {
   return (
-    <article className="product">
+    <article className="product product-interactive" onPointerMove={(event) => {
+      if (!window.matchMedia('(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)').matches) return;
+      const box = event.currentTarget.getBoundingClientRect();
+      const x = (event.clientX - box.left) / box.width;
+      const y = (event.clientY - box.top) / box.height;
+      event.currentTarget.style.setProperty('--x', `${x * 100}%`);
+      event.currentTarget.style.setProperty('--y', `${y * 100}%`);
+      event.currentTarget.style.setProperty('--rx', `${(0.5 - y) * 8}deg`);
+      event.currentTarget.style.setProperty('--ry', `${(x - 0.5) * 8}deg`);
+    }} onPointerLeave={(event) => { event.currentTarget.style.setProperty('--rx', '0deg'); event.currentTarget.style.setProperty('--ry', '0deg'); }}>
       <Link viewTransition to={`/producto/${p.id}`} state={{ photoUrl: p.photoUrl, title: p.title }} onClick={(event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) document.documentElement.dataset.productTransition = p.id; }} className="product-photo-link" aria-label={`Ver ${p.title}`}><ProductPhoto transitionId={p.id} src={p.photoUrl} title={p.title} /></Link>
       <div className="product-top">
         <span className="product-cat">{CATEGORIA[p.category] ?? p.category}</span>
