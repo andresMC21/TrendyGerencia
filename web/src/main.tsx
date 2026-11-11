@@ -1,3 +1,4 @@
+import { Toast } from './components/Toast';
 import '@fontsource/open-sans/400.css';
 import '@fontsource/open-sans/600.css';
 import '@fontsource/open-sans/700.css';
@@ -21,6 +22,7 @@ createRoot(document.getElementById('root')!).render(
       <SessionProvider>
         <NebulaBackground />
         <App />
+        <Toast />
         <PageMotion />
       </SessionProvider>
     </BrowserRouter>

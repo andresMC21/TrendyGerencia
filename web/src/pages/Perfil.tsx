@@ -1,3 +1,4 @@
+import { notify } from '../components/Toast';
 import { Rating } from '../components/Rating';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
@@ -137,6 +138,7 @@ function DatosDelPerfil() {
     try {
       const perfil = await authApi.updateMe(token, body);
       setProfile(perfil);
+      notify('Perfil guardado.');
       setFullName(perfil.fullName);
       setInfo(perfil.info ?? '');
       setOk('Guardamos los cambios de tu perfil.');
@@ -212,6 +214,7 @@ function FotoDePerfil() {
     try {
       const perfil = await authApi.updateMe(token, { photoUrl });
       setProfile(perfil);
+      notify('Perfil guardado.');
       setUrl(perfil.photoUrl ?? '');
       setOk(photoUrl ? 'Foto actualizada.' : 'Quitaste tu foto de perfil.');
     } catch (err) {
@@ -288,6 +291,7 @@ function CambiarCorreo() {
     try {
       const perfil = await authApi.changeEmail(token, currentPassword, newEmail.trim().toLowerCase());
       setProfile(perfil);
+      notify('Perfil guardado.');
       setCurrentPassword('');
       setNewEmail('');
       setOk(`Listo: desde ahora ingresas con ${perfil.email}.`);

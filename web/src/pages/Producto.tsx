@@ -1,3 +1,4 @@
+import { notify } from '../components/Toast';
 import { Rating } from '../components/Rating';
 import { FavoriteIcon } from '../components/FavoriteIcon';
 import { Skeleton } from '../components/Skeleton';
@@ -184,6 +185,7 @@ function Favorito({ p, onCountChange }: {
       if (quiere) await productApi.addFavorite(token, p.id);
       else await productApi.removeFavorite(token, p.id);
       setEsFavorito(quiere);
+      notify(quiere ? 'Guardado en favoritos.' : 'Eliminado de favoritos.');
       onCountChange(quiere ? 1 : -1);
     } catch (err) {
       setError(

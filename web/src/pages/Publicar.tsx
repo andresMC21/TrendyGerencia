@@ -1,3 +1,4 @@
+import { notify } from '../components/Toast';
 import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Dot, Footer, Header } from '../components/Brand';
@@ -127,6 +128,7 @@ export default function Publicar() {
         acceptsBarter,
       });
       setPublicado(creado);
+      notify('Publicación creada.');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         setSessionExpired(true);

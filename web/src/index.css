@@ -1380,3 +1380,9 @@ h3 {
 .rating { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 .rating-stars { display: inline-flex; color: #288b91; gap: 2px; }.rating-stars svg { width: 19px; height: 19px; fill: currentColor; }.rating-stars .star-base { fill: color-mix(in srgb, var(--muted) 25%, transparent); }
 html[data-theme="dark"] .rating-stars { color: #7bc9c7; }
+
+.toast-region { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 1000; max-width: calc(100% - 32px); pointer-events: none; }
+.toast { display: flex; align-items: center; gap: 20px; padding: 14px 20px; border-radius: 16px; background: #173647; color: #fff; box-shadow: 0 8px 30px #0003; pointer-events: auto; }
+.toast button { color: inherit; background: transparent; border: 0; min-width: 32px; min-height: 32px; cursor: pointer; font-size: 24px; }
+@media (prefers-reduced-motion: no-preference) { .toast { animation: toast-arrive .25s ease-out; } }
+@keyframes toast-arrive { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }

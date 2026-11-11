@@ -1,3 +1,4 @@
+import { notify } from '../components/Toast';
 import { TransactionSteps } from '../components/TransactionSteps';
 import { Skeleton } from '../components/Skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -302,6 +303,7 @@ function CerrarIntercambio({
           : await transactionApi.updateStatus(token, tx.id, 'CANCELLED');
       setPendiente(null);
       onChange({ ...tx, ...updated });
+      notify('Transacción actualizada.');
     } catch (err) {
       setPendiente(null);
       if (err instanceof ApiError && err.status === 401) {
@@ -454,6 +456,7 @@ function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void
       // Aceptar lleva a «Acordado por los dos» y el rechazo se muestra desde los datos
       // de la transacción, así que ambos lados lo ven sin un aviso local.
       onChange({ ...tx, ...updated });
+      notify('Transacción actualizada.');
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setError(`${otro} cambió la propuesta o la transacción cambió de estado. Revisa la versión actual.`);
@@ -660,6 +663,7 @@ function ProponerEncuentro({
       const updated = await transactionApi.proposeMeeting(token, tx.id, safePointId, fecha.toISOString());
       // El POST devuelve la transacción; se conservan las relaciones ya cargadas.
       onChange({ ...tx, ...updated });
+      notify('Transacción actualizada.');
       onDone();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
