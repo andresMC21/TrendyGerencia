@@ -946,10 +946,11 @@ h3 {
   gap: 10px;
 }
 .review-item {
-  background: #fff;
-  border: 1px solid var(--line);
+  background: var(--glass, var(--paper));
+  border: 1px solid var(--glass-border, var(--line));
   border-radius: 10px;
   padding: 12px 14px;
+  color: var(--text);
 }
 .review-item__head {
   display: flex;
