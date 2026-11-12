@@ -55,6 +55,7 @@ describe('UserService', () => {
     preload: jest.fn(),
     update: jest.fn(),
     createQueryBuilder: jest.fn(),
+    manager: { find: jest.fn(), count: jest.fn() },
   };
   const jwtService = {
     sign: jest.fn(),
@@ -72,6 +73,10 @@ describe('UserService', () => {
       preload: jest.fn(async (value) => makeUser(value)),
       update: jest.fn().mockResolvedValue(undefined),
       createQueryBuilder: jest.fn().mockReturnValue(qb),
+      manager: {
+        find: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      },
     });
     jwtService.sign.mockReturnValue('signed-token');
 
@@ -393,6 +398,75 @@ describe('UserService', () => {
         isActive: true,
       });
       expect(result.id).toBe('user-1');
+    });
+
+    it('HU-07 · findPublicProfile presenta ratingAverage, reviewsCount y reseñas recientes (criterio 2)', async () => {
+      // Arrange
+      userRepository.findOneBy.mockResolvedValue(makeUser());
+      userRepository.manager.find.mockResolvedValue([
+        {
+          rating: 5,
+          comment: 'Todo bien',
+          createdAt: new Date('2026-10-20T10:00:00Z'),
+          reviewer: { fullName: 'Carlos Ruiz', email: 'carlos@x.com', password: 'h' },
+        },
+      ]);
+      userRepository.manager.count.mockResolvedValue(3);
+
+      // Act
+      const result = await service.findPublicProfile('user-1');
+
+      // Assert
+      expect(result).toMatchObject({
+        fullName: 'Ana Gomez',
+        ratingAverage: 4.5,
+        reviewsCount: 2,
+        availableProductsCount: 3,
+        verificationStatus: VerificationStatus.UNVERIFIED,
+        memberSince: new Date('2026-10-01T10:00:00Z'),
+        recentReviews: [
+          { rating: 5, comment: 'Todo bien', reviewerName: 'Carlos Ruiz' },
+        ],
+      });
+      expect(userRepository.manager.find).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          where: { targetUserId: 'user-1' },
+          order: { createdAt: 'DESC' },
+          take: 5,
+        }),
+      );
+    });
+
+    it('HU-07 · sin reseñas, ratingAverage es 0 y no null', async () => {
+      // Arrange
+      userRepository.findOneBy.mockResolvedValue(
+        makeUser({ ratingAverage: undefined, reviewsCount: 0 }),
+      );
+
+      // Act
+      const result = await service.findPublicProfile('user-1');
+
+      // Assert
+      expect(result.ratingAverage).toBe(0);
+      expect(result.reviewsCount).toBe(0);
+      expect(result.recentReviews).toEqual([]);
+    });
+
+    it('HU-07 · no expone contraseña, correo, rol ni datos de autenticación (criterio 3)', async () => {
+      // Arrange
+      userRepository.findOneBy.mockResolvedValue(makeUser());
+      userRepository.manager.find.mockResolvedValue([
+        { rating: 4, comment: null, createdAt: new Date(), reviewer: makeUser() },
+      ]);
+
+      // Act
+      const json = JSON.stringify(await service.findPublicProfile('user-1'));
+
+      // Assert
+      for (const secret of ['password', 'hash', 'email', 'ana@example.com', 'tokenVersion', 'role', 'isActive']) {
+        expect(json).not.toContain(secret);
+      }
     });
 
     it('findPublicProfile devuelve 404 si no existe usuario activo', async () => {

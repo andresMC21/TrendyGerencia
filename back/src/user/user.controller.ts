@@ -34,6 +34,7 @@ import {
 } from './dto/auth-response.dto';
 import { LoginUserDto } from './dto/login.dto';
 import { UserProfileDto } from './dto/profile.dto';
+import { PublicProfileDto } from './dto/public-profile.dto';
 import { RegisterUserDto } from './dto/register.dto';
 import { UpdateUserDto } from './dto/update.dto';
 import { User } from './entities/user.entity';
@@ -261,10 +262,11 @@ export class UserController {
   }
 
   @Get(':id')
+  @Auth()
   @ApiOperation({
-    summary: 'Consultar públicamente el perfil de un usuario activo',
+    summary: 'Consultar el perfil y la reputación de otra persona (HU-07)',
     description:
-      'No requiere autenticación; los usuarios inactivos no se exponen en este endpoint.',
+      'Requiere JWT. Devuelve nombre, foto, presentación, verificación, ratingAverage, reviewsCount, las 5 reseñas más recientes y cuántos productos tiene disponibles. No incluye correo, contraseña, rol, estado de la cuenta ni datos de autenticación. Los usuarios inactivos no se exponen.',
   })
   @ApiParam({
     name: 'id',
@@ -274,15 +276,16 @@ export class UserController {
     description: 'Identificador UUID del usuario.',
   })
   @ApiOkResponse({
-    type: UserProfileDto,
-    description: 'Se devuelve el perfil del usuario activo solicitado.',
+    type: PublicProfileDto,
+    description: 'Perfil público y reputación del usuario activo solicitado.',
   })
   @ApiBadRequestResponse({ description: 'El id no tiene formato UUID' })
+  @ApiUnauthorizedResponse({ description: 'Falta el JWT o no es válido' })
   @ApiNotFoundResponse({ description: 'Usuario inexistente o inactivo' })
   @ApiInternalServerErrorResponse({
     description: 'Error inesperado al consultar el usuario.',
   })
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<UserProfileDto> {
+  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<PublicProfileDto> {
     return this.userService.findPublicProfile(id);
   }
 }

@@ -129,6 +129,13 @@ function Detalle({ p }: { p: ProductDetail }) {
               ? <Rating value={Number(p.seller.ratingAverage)} count={p.seller.reviewsCount} />
               : 'Vendedor sin calificaciones todavía'}
           </span>
+          <Link
+            to={`/usuario/${p.seller.id}`}
+            className="seller-box__link"
+            data-testid="ver-perfil-vendedor"
+          >
+            Ver perfil y reputación →
+          </Link>
         </div>
       </div>
       <Favorito

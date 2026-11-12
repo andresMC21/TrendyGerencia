@@ -21,6 +21,7 @@ import { AdminUserQueryDto } from './dto/adminQuery.dto';
 import { LoginUserDto } from './dto/login.dto';
 import { PaginationDto } from './dto/pagination.dto';
 import { UserProfileDto } from './dto/profile.dto';
+import { PublicProfileDto } from './dto/public-profile.dto';
 import { RegisterUserDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/auth-response.dto';
 import { SearchUserDto } from './dto/search.dto';
@@ -28,6 +29,9 @@ import { SetActiveStatus } from './dto/activeStatus.dto';
 import { UpdateUserDto } from './dto/update.dto';
 import { ResolveVerification } from './dto/verification.dto';
 import { User } from './entities/user.entity';
+import { Product } from '../product/entities/product.entity';
+import { ProductStatus } from '../product/enums/product-status.enum';
+import { Review } from '../review/entities/review.entity';
 import { ValidRoles } from './enums/valid-roles.enum';
 import { VerificationStatus } from './enums/verification-status';
 import { JwtPayload } from './interfaces/jwt.interface';
@@ -261,14 +265,36 @@ export class UserService {
   // Consultas de perfil
   // ---------------------------------------------------------------------------
 
-  async findPublicProfile(id: string): Promise<UserProfileDto> {
+  /**
+   * HU-07 · Consultar el perfil y la reputación de otra persona.
+   *
+   * Devuelve solo lo que sirve para decidir un intercambio: nombre, foto,
+   * presentación, verificación, calificación promedio y cantidad de reseñas,
+   * las reseñas más recientes y cuántos productos tiene disponibles. Nunca el
+   * correo, la contraseña, el rol ni datos de autenticación. Las cuentas
+   * inactivas no se muestran (404).
+   */
+  async findPublicProfile(id: string): Promise<PublicProfileDto> {
     const user = await this.userRepository.findOneBy({ id, isActive: true });
 
     if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
     }
 
-    return this.toProfile(user);
+    const manager = this.userRepository.manager;
+    const [reviews, availableProductsCount] = await Promise.all([
+      manager.find(Review, {
+        where: { targetUserId: id },
+        relations: { reviewer: true },
+        order: { createdAt: 'DESC' },
+        take: 5,
+      }),
+      manager.count(Product, {
+        where: { sellerId: id, status: ProductStatus.AVAILABLE },
+      }),
+    ]);
+
+    return PublicProfileDto.from(user, reviews, availableProductsCount);
   }
 
   async findProfile(

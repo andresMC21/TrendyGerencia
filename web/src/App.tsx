@@ -7,6 +7,7 @@ import Inicio from './pages/Inicio';
 import Landing from './pages/Landing';
 import MisPublicaciones from './pages/MisPublicaciones';
 import Perfil from './pages/Perfil';
+import PerfilPublico from './pages/PerfilPublico';
 import Producto from './pages/Producto';
 import Publicar from './pages/Publicar';
 import Registro from './pages/Registro';
@@ -85,6 +86,14 @@ export const routes = createRoutesFromElements(
         element={
           <SoloUsuarios>
             <Transaccion />
+          </SoloUsuarios>
+        }
+      />
+      <Route
+        path="/usuario/:id"
+        element={
+          <SoloUsuarios>
+            <PerfilPublico />
           </SoloUsuarios>
         }
       />

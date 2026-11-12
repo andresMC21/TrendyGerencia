@@ -415,7 +415,7 @@ describe('Users (e2e)', () => {
       const url = 'https://images.example.com/fotos/perfil.jpg';
       await http.patch('/api/user/me').set(auth(token)).send({ photoUrl: url }).expect(200);
       expect((await http.get('/api/user/me').set(auth(token)).expect(200)).body.photoUrl).toBe(url);
-      expect((await http.get(`/api/user/${userId}`).expect(200)).body.photoUrl).toBe(url);
+      expect((await http.get(`/api/user/${userId}`).set(auth(token)).expect(200)).body.photoUrl).toBe(url);
 
       await http.patch('/api/user/me').set(auth(token)).send({ photoUrl: null }).expect(200);
       expect((await http.get('/api/user/me').set(auth(token)).expect(200)).body.photoUrl).toBeNull();
@@ -492,19 +492,55 @@ describe('Users (e2e)', () => {
       .expect(200);
   });
 
-  it('GET /user/:id devuelve el perfil público autenticado', async () => {
-    const res = await http
-      .get(`/api/user/${userId}`)
-      .set(auth(token))
-      .expect(200);
+  describe('HU-07 · Consultar otro perfil', () => {
+    it('criterio 1: sin sesión responde 401; con sesión válida devuelve el perfil', async () => {
+      await http.get(`/api/user/${userId}`).expect(401);
+      await http
+        .get(`/api/user/${userId}`)
+        .set(auth('token-invalido'))
+        .expect(401);
 
-    expect(res.body).toMatchObject({
-      id: userId,
-      email: `${emailPrefix}changed@test.com`,
-      fullName: 'E2E User Updated',
+      const res = await http
+        .get(`/api/user/${userId}`)
+        .set(auth(token))
+        .expect(200);
+      expect(res.body).toMatchObject({
+        id: userId,
+        fullName: 'E2E User Updated',
+      });
     });
 
-    expect(res.body.password).toBeUndefined();
+    it('criterio 2: presenta ratingAverage y reviewsCount como números', async () => {
+      const res = await http
+        .get(`/api/user/${userId}`)
+        .set(auth(token))
+        .expect(200);
+
+      expect(res.body.ratingAverage).toBe(0);
+      expect(res.body.reviewsCount).toBe(0);
+      expect(res.body.recentReviews).toEqual([]);
+      expect(typeof res.body.availableProductsCount).toBe('number');
+      expect(res.body.memberSince).toEqual(expect.any(String));
+    });
+
+    it('criterio 3: no expone contraseña, correo, rol ni datos de autenticación', async () => {
+      const res = await http
+        .get(`/api/user/${userId}`)
+        .set(auth(token))
+        .expect(200);
+
+      for (const field of [
+        'password',
+        'email',
+        'role',
+        'isActive',
+        'tokenVersion',
+        'token',
+      ]) {
+        expect(res.body).not.toHaveProperty(field);
+      }
+      expect(JSON.stringify(res.body)).not.toContain('@test.com');
+    });
   });
 
   it('GET /user/:id valida el UUID', async () => {

@@ -8,6 +8,7 @@ Toda la documentación del proyecto está en esta carpeta (`docs/`), junto con e
 | HU-02 | Iniciar sesión | `POST /user/login`, `@Auth()` | `/ingresar` | [HU-02](HU-02.md) |
 | HU-03 | Consultar mi perfil | `GET /user/me`, `PATCH /user/me` (foto) | `/perfil` | [HU-03](HU-03.md) |
 | HU-05 | Actualizar mis credenciales | `PATCH /user/me/email`, `PATCH /user/me/password` | `/perfil` | [HU-05](HU-05.md) |
+| HU-07 | Consultar otro perfil | `GET /user/:id` (con sesión; perfil público y reputación) | `/usuario/:id` | [HU-07](HU-07.md) |
 | HU-08 | Publicar un producto | `POST /products` | `/publicar` | [HU-08](HU-08.md) |
 | HU-09 | Explorar el barrio | `GET /products?neighborhoodId=` | `/explorar` | [HU-09](HU-09.md) |
 | HU-11 | Consultar un producto | `GET /products/:id` | `/producto/:id` | [HU-11](HU-11.md) |
