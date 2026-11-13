@@ -213,7 +213,7 @@ La colección `postman/trendy-api.postman_collection.json` cubre todos los endpo
 | Feed por barrio / cercanía / filtros | `GET /products?neighborhoodId=…&lat=…&lng=…&radius=…` | público |
 | Favoritos (HU-14: marcar sin duplicar, quitar y ver mi lista) | `PUT` y `DELETE /products/:id/favorite`, `GET /products/favorites` (`POST` alterna) · web: corazón en `/explorar`, `/inicio` y en cada producto, y lista en `/favoritos` | cualquiera autenticado |
 | Compra: reservar → el comprador propone punto → el vendedor acepta → vendido + recibido | `POST /transactions`, `POST /transactions/:id/meeting-proposal`, `POST /transactions/:id/meeting-proposal/accept` (o `/reject`), `POST /transactions/:id/confirm-exchange` (cada uno), `PUT /transactions/:id/status` para cancelar | `carlos` compra, `ana` vende |
-| Reseñas tras una compra completada | `POST /review`, `GET /review` | comprador y vendedor |
+| Calificar tras una compra completada (HU-18: 1 a 5 y comentario opcional, una por persona; editar o borrar recalcula el promedio) | `POST /review`, `PATCH` y `DELETE /review/:id`, `GET /review?transactionId=` · web: «Califica a…» en `/transacciones/:id` | comprador y vendedor |
 
 ### Explorar el barrio (HU-09)
 
@@ -235,10 +235,10 @@ npm run test:cov    # unitarias + cobertura
 
 | Tipo | Herramienta | Resultado |
 |---|---|---|
-| Unitarias | Jest | 26 suites, 362 pruebas pasan |
-| Cobertura | Jest | Sentencias 90.1 % · Ramas 81.3 % · Funciones 83.4 % · Líneas 89.7 % (umbral exigido: 80 %) |
-| Integración | Jest + Supertest + PostGIS | 4 suites, 100 pruebas pasan (health, usuarios, productos, transacciones) |
-| Manuales / regresión | Postman (Newman) | 161 requests, 458 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
+| Unitarias | Jest | 26 suites, 375 pruebas pasan |
+| Cobertura | Jest | Sentencias 90.6 % · Ramas 82.3 % · Funciones 83.9 % · Líneas 90.2 % (umbral exigido: 80 %) |
+| Integración | Jest + Supertest + PostGIS | 4 suites, 106 pruebas pasan (health, usuarios, productos, transacciones) |
+| Manuales / regresión | Postman (Newman) | 163 requests, 464 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
 
 ### Pruebas de integración
 

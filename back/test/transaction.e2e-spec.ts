@@ -766,6 +766,126 @@ describe('Transactions (e2e)', () => {
         final === 'COMPLETED' ? 'SOLD' : 'AVAILABLE',
       );
     });
+
+    describe('HU-18 · calificar una transacción', () => {
+      const completed = async () => {
+        const product = await newProduct();
+        const tx = await reserve(product);
+        await agreePoint(tx);
+        await confirmExchange(tx, tokenBuyer).expect(200);
+        const done = await confirmExchange(tx, tokenSeller).expect(200);
+        return { tx, sellerId: done.body.sellerId as string, buyerId: done.body.buyerId as string };
+      };
+      const review = (token: string, body: object) =>
+        http.post('/api/review').set(auth(token)).send(body);
+      const reputation = async (userId: string) => {
+        const res = await http.get(`/api/user/${userId}`).set(auth(tokenOther)).expect(200);
+        return { avg: res.body.ratingAverage as number, count: res.body.reviewsCount as number };
+      };
+
+      it('criterio 1: una transaccion completada admite calificacion de 1 a 5 y comentario opcional', async () => {
+        // Arrange
+        const { tx, sellerId, buyerId } = await completed();
+
+        // Act
+        const fromBuyer = await review(tokenBuyer, { transactionId: tx, rating: 5, comment: '  Todo perfecto  ' }).expect(201);
+        const fromSeller = await review(tokenSeller, { transactionId: tx, rating: 4 }).expect(201);
+
+        // Assert
+        expect(fromBuyer.body).toMatchObject({ rating: 5, comment: 'Todo perfecto', targetUser: { id: sellerId } });
+        expect(fromSeller.body).toMatchObject({ rating: 4, comment: null, targetUser: { id: buyerId } });
+      });
+
+      it('criterio 1: rechaza calificaciones fuera de 1 a 5, no enteras o comentarios muy largos', async () => {
+        // Arrange
+        const { tx } = await completed();
+
+        // Act / Assert
+        for (const rating of [0, 6, 2.5, '5']) {
+          await review(tokenBuyer, { transactionId: tx, rating }).expect(400);
+        }
+        await review(tokenBuyer, { transactionId: tx, rating: 3, comment: 'x'.repeat(1001) }).expect(400);
+      });
+
+      it('criterio 1: no se califica una transaccion sin completar ni la ajena', async () => {
+        // Arrange
+        const product = await newProduct();
+        const tx = await reserve(product);
+        await agreePoint(tx);
+
+        // Act / Assert
+        await review(tokenBuyer, { transactionId: tx, rating: 5 }).expect(409);
+        const { tx: done } = await completed();
+        await review(tokenOther, { transactionId: done, rating: 1 }).expect(403);
+        await http.post('/api/review').send({ transactionId: done, rating: 1 }).expect(401);
+      });
+
+      it('criterio 2: cada participante deja como maximo una resena por transaccion', async () => {
+        // Arrange
+        const { tx } = await completed();
+        await review(tokenBuyer, { transactionId: tx, rating: 5 }).expect(201);
+
+        // Act / Assert
+        await review(tokenBuyer, { transactionId: tx, rating: 1 }).expect(409);
+        const mine = await http
+          .get(`/api/review?transactionId=${tx}`)
+          .set(auth(tokenBuyer))
+          .expect(200);
+        expect(mine.body).toHaveLength(1);
+      });
+
+      it('criterio 2: si se envia dos veces a la vez, solo una se guarda y la otra responde 409', async () => {
+        // Arrange
+        const { tx, sellerId } = await completed();
+        const before = await reputation(sellerId);
+
+        // Act
+        const responses = await Promise.all([
+          review(tokenBuyer, { transactionId: tx, rating: 5 }),
+          review(tokenBuyer, { transactionId: tx, rating: 5 }),
+        ]);
+
+        // Assert
+        expect(responses.map((r) => r.status).sort()).toEqual([201, 409]);
+        expect((await reputation(sellerId)).count).toBe(before.count + 1);
+      });
+
+      it('criterio 3: crear, editar y borrar actualizan el promedio y el conteo de la persona', async () => {
+        // Arrange: un vendedor nuevo para controlar sus reseñas
+        const vendedor = await newUser(`hu18-${Date.now()}`);
+        const prod = await http
+          .post('/api/products')
+          .set(auth(vendedor))
+          .send(productBody({ title: 'Producto HU-18' }))
+          .expect(201);
+        const tx = (await http.post('/api/transactions').set(auth(tokenBuyer)).send({ productId: prod.body.id }).expect(201)).body.id as string;
+        const point = { safePointId: 'sp-1', scheduledTime: '2030-10-05T15:00:00Z' };
+        await http.post(`/api/transactions/${tx}/meeting-proposal`).set(auth(tokenBuyer)).send(point).expect(200);
+        await http.post(`/api/transactions/${tx}/meeting-proposal/accept`).set(auth(vendedor)).send(point).expect(200);
+        await confirmExchange(tx, tokenBuyer).expect(200);
+        const done = await confirmExchange(tx, vendedor).expect(200);
+        const sellerId = done.body.sellerId as string;
+        expect(await reputation(sellerId)).toEqual({ avg: 0, count: 0 });
+
+        // Act / Assert: crear
+        const created = await review(tokenBuyer, { transactionId: tx, rating: 4 }).expect(201);
+        expect(await reputation(sellerId)).toEqual({ avg: 4, count: 1 });
+
+        // editar (solo el autor)
+        await http.patch(`/api/review/${created.body.id}`).set(auth(vendedor)).send({ rating: 1 }).expect(403);
+        await http.patch(`/api/review/${created.body.id}`).set(auth(tokenBuyer)).send({ rating: 2, comment: 'Llegó tarde' }).expect(200);
+        expect(await reputation(sellerId)).toEqual({ avg: 2, count: 1 });
+
+        // borrar (solo el autor)
+        await http.delete(`/api/review/${created.body.id}`).set(auth(vendedor)).expect(403);
+        await http.delete(`/api/review/${created.body.id}`).set(auth(tokenBuyer)).expect(204);
+        expect(await reputation(sellerId)).toEqual({ avg: 0, count: 0 });
+
+        // tras borrar, puede volver a calificar
+        await review(tokenBuyer, { transactionId: tx, rating: 5 }).expect(201);
+        expect(await reputation(sellerId)).toEqual({ avg: 5, count: 1 });
+      });
+    });
   });
 
   describe('HU-13 · retirar una publicación', () => {

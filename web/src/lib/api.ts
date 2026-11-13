@@ -185,6 +185,38 @@ export const userApi = {
     apiRequest<PublicProfile>(`/user/${encodeURIComponent(id)}`, { token }),
 };
 
+/** HU-18 · Reseña de una transacción completada. */
+export type Review = {
+  id: string;
+  transactionId: string;
+  reviewer: { id: string; fullName: string };
+  targetUser: { id: string; fullName: string };
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+};
+
+export const reviewApi = {
+  /** Reseñas de esa transacción escritas o recibidas por el usuario (máx. 2). */
+  forTransaction: (token: string, transactionId: string) =>
+    apiRequest<Review[]>(`/review?transactionId=${encodeURIComponent(transactionId)}`, { token }),
+  /** 409 si la transacción no está completada o ya la calificó. */
+  create: (token: string, transactionId: string, rating: number, comment: string | null) =>
+    apiRequest<Review>('/review', {
+      method: 'POST',
+      token,
+      body: { transactionId, rating, ...(comment ? { comment } : {}) },
+    }),
+  update: (token: string, id: string, rating: number, comment: string | null) =>
+    apiRequest<Review>(`/review/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      token,
+      body: { rating, comment },
+    }),
+  remove: (token: string, id: string) =>
+    apiRequest<void>(`/review/${encodeURIComponent(id)}`, { method: 'DELETE', token }),
+};
+
 export const productApi = {
   feed: ({ limit = 12, ...filters }: FeedFilters = {}) => {
     const query = new URLSearchParams({ limit: String(limit) });

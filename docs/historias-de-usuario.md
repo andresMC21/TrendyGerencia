@@ -17,6 +17,7 @@ Toda la documentación del proyecto está en esta carpeta (`docs/`), junto con e
 | HU-15 | Iniciar una transacción | `POST /transactions` | `/producto/:id` | [HU-15](HU-15.md) |
 | HU-16 | Acordar una entrega | `POST /transactions/:id/meeting-proposal` (`/accept`, `/reject`) | `/transacciones/:id` | [HU-16](HU-16.md) |
 | HU-17 | Finalizar o cancelar intercambio | `POST /transactions/:id/confirm-exchange` (vendido / recibido), `PUT /transactions/:id/status` (cancelar) | `/transacciones/:id` | [HU-17](HU-17.md) |
+| HU-18 | Calificar una transacción | `POST /review`, `PATCH` y `DELETE /review/:id`, `GET /review?transactionId=` | `/transacciones/:id` (al completar) | [HU-18](HU-18.md) |
 
 ## Usuarios de prueba
 

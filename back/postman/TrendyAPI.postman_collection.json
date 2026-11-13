@@ -5941,6 +5941,98 @@
           "response": []
         },
         {
+          "name": "GET /review?transactionId=: solo las reseñas de esa transacción (HU-18)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", function () { pm.response.to.have.status(200); });",
+                  "const r = pm.response.json();",
+                  "pm.test(\"Solo reseñas de esa transacción\", function () { pm.expect(r.length).to.be.above(0); r.forEach(function (x) { pm.expect(x.transactionId).to.eql(pm.collectionVariables.get(\"transactionId\")); }); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenBuyer}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/review?transactionId={{transactionId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "review"
+              ],
+              "query": [
+                {
+                  "key": "transactionId",
+                  "value": "{{transactionId}}"
+                }
+              ]
+            },
+            "description": "Lista resenas hechas o recibidas por el usuario autenticado."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /review?transactionId=no-uuid → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{tokenBuyer}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/review?transactionId=no-es-uuid",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "review"
+              ],
+              "query": [
+                {
+                  "key": "transactionId",
+                  "value": "no-es-uuid"
+                }
+              ]
+            },
+            "description": "Lista resenas hechas o recibidas por el usuario autenticado."
+          },
+          "response": []
+        },
+        {
           "name": "GET /review/:id: detalle de resena",
           "event": [
             {
