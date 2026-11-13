@@ -1466,3 +1466,90 @@ html[data-theme="dark"] .empty-illustration, html[data-theme="dark"] .empty-stat
 @keyframes empty-float { from { transform: translateY(0); } to { transform: translateY(-6px); } }
 
 .product .fav-heart { transition: transform .2s, opacity .2s; }
+
+/* ---------- HU-18 · Calificar una transacción ---------- */
+.rate-exchange {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+.review-form {
+  display: grid;
+  gap: 10px;
+}
+.star-picker {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.star-picker legend {
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 6px;
+}
+.star-picker__stars {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.star-picker__star {
+  font-size: 34px;
+  line-height: 1;
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: var(--line);
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.star-picker__star.is-on {
+  color: #f0b429;
+}
+.star-picker__star:hover:not(:disabled),
+.star-picker__star:focus-visible {
+  transform: scale(1.15);
+}
+.star-picker__label {
+  margin-left: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.field-error {
+  margin: 0;
+  color: var(--red);
+  font-size: 14px;
+}
+.review-card {
+  display: grid;
+  gap: 6px;
+  background: var(--glass, var(--paper));
+  border: 1px solid var(--glass-border, var(--line));
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--text);
+}
+.review-card--mine {
+  border-left: 4px solid var(--green);
+}
+.review-card p {
+  margin: 0;
+}
+.review-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.review-card__head strong {
+  color: var(--navy);
+}
+.review-stars {
+  color: #f0b429;
+  letter-spacing: 2px;
+}
+.review-stars__off {
+  color: var(--line);
+}

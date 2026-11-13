@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -27,6 +28,7 @@ import { Auth } from '../user/decorators/auth.decorator';
 import { GetUser } from '../user/decorators/get-user.decorator';
 import { User } from '../user/entities/user.entity';
 import { CreateReviewDto } from './dto/create-review.dto';
+import { FindReviewsQueryDto } from './dto/find-reviews-query.dto';
 import { ReviewDto } from './dto/review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { ReviewService } from './review.service';
@@ -81,7 +83,7 @@ export class ReviewController {
   @ApiOperation({
     summary: 'Listar reseñas escritas o recibidas por el usuario autenticado',
     description:
-      'Requiere JWT. Devuelve reseñas escritas y recibidas por el usuario autenticado, ordenadas de la más reciente a la más antigua.',
+      'Requiere JWT. Devuelve reseñas escritas y recibidas por el usuario autenticado, ordenadas de la más reciente a la más antigua. Con ?transactionId=, solo las de esa transacción (HU-18).',
   })
   @ApiOkResponse({
     type: [ReviewDto],
@@ -91,8 +93,11 @@ export class ReviewController {
   @ApiInternalServerErrorResponse({
     description: 'Error inesperado al consultar las reseñas.',
   })
-  findAll(@GetUser() user: User): Promise<ReviewDto[]> {
-    return this.reviewService.findAll(user.id);
+  findAll(
+    @GetUser() user: User,
+    @Query() query: FindReviewsQueryDto,
+  ): Promise<ReviewDto[]> {
+    return this.reviewService.findAll(user.id, query.transactionId);
   }
 
   @Get(':id')
