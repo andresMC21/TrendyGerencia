@@ -394,6 +394,130 @@ describe('Users (e2e)', () => {
     });
   });
 
+  describe('HU-06 · Solicitar verificación', () => {
+    const register = async (suffix: string) => {
+      const user = newUser(`hu06-${suffix}`);
+      const { body } = await http.post('/api/user/register').send(user).expect(201);
+      return { id: body.id as string, token: body.token as string, user };
+    };
+
+    it('UNVERIFIED pasa a PENDING y la respuesta solo incluye el estado', async () => {
+      const account = await register('unverified');
+      const response = await http
+        .post('/api/user/me/verification')
+        .set(auth(account.token))
+        .expect(200);
+
+      expect(response.body).toEqual({ verificationStatus: 'PENDING' });
+      expect(response.body.password).toBeUndefined();
+      expect(
+        (await http.get('/api/user/me').set(auth(account.token)).expect(200)).body
+          .verificationStatus,
+      ).toBe('PENDING');
+    });
+
+    it('permite reenvío desde REJECTED', async () => {
+      const account = await register('rejected');
+      await dataSource.query(
+        'UPDATE "user" SET "verificationStatus" = $1 WHERE id = $2',
+        ['REJECTED', account.id],
+      );
+
+      await http
+        .post('/api/user/me/verification')
+        .set(auth(account.token))
+        .expect(200, { verificationStatus: 'PENDING' });
+    });
+
+    it.each(['PENDING', 'VERIFIED'])(
+      'rechaza una solicitud duplicada cuando el estado es %s',
+      async (status) => {
+        const account = await register(`blocked-${status.toLowerCase()}`);
+        await dataSource.query(
+          'UPDATE "user" SET "verificationStatus" = $1 WHERE id = $2',
+          [status, account.id],
+        );
+
+        await http
+          .post('/api/user/me/verification')
+          .set(auth(account.token))
+          .expect(409);
+        const persisted = await dataSource.query(
+          'SELECT "verificationStatus" FROM "user" WHERE id = $1',
+          [account.id],
+        );
+        expect(persisted[0].verificationStatus).toBe(status);
+      },
+    );
+
+    it('requiere JWT válido y no acepta identidad desde el cuerpo', async () => {
+      const account = await register('auth');
+      const otherAccount = await register('auth-target');
+      await http.post('/api/user/me/verification').expect(401);
+      await http
+        .post('/api/user/me/verification')
+        .set(auth('invalid.jwt.token'))
+        .expect(401);
+      const expiredToken = app
+        .get(JwtService)
+        .sign({ id: account.id, tokenVersion: 0 }, { expiresIn: -1 });
+      await http
+        .post('/api/user/me/verification')
+        .set(auth(expiredToken))
+        .expect(401);
+      await http
+        .post('/api/user/me/verification')
+        .set(auth(account.token))
+        .send({ userId: otherAccount.id })
+        .expect(200, { verificationStatus: 'PENDING' });
+
+      const otherStatus = await dataSource.query(
+        'SELECT "verificationStatus" FROM "user" WHERE id = $1',
+        [otherAccount.id],
+      );
+      expect(otherStatus[0].verificationStatus).toBe('UNVERIFIED');
+      const ownerStatus = await dataSource.query(
+        'SELECT "verificationStatus" FROM "user" WHERE id = $1',
+        [account.id],
+      );
+      expect(ownerStatus[0].verificationStatus).toBe('PENDING');
+    });
+
+    it('dos solicitudes simultáneas producen solo una transición exitosa', async () => {
+      const account = await register('concurrent');
+      const results = await Promise.all([
+        http.post('/api/user/me/verification').set(auth(account.token)),
+        http.post('/api/user/me/verification').set(auth(account.token)),
+      ]);
+
+      expect(results.map((response) => response.status).sort()).toEqual([200, 409]);
+      const persisted = await dataSource.query(
+        'SELECT "verificationStatus" FROM "user" WHERE id = $1',
+        [account.id],
+      );
+      expect(persisted[0].verificationStatus).toBe('PENDING');
+    });
+
+    it.each(['UNVERIFIED', 'REJECTED'])(
+      'permite cambiar el nombre con estado %s',
+      async (status) => {
+        const account = await register(`name-${status.toLowerCase()}`);
+        if (status === 'REJECTED') {
+          await dataSource.query(
+            'UPDATE "user" SET "verificationStatus" = $1 WHERE id = $2',
+            [status, account.id],
+          );
+        }
+
+        await http
+          .patch('/api/user/me')
+          .set(auth(account.token))
+          .send({ fullName: 'Nombre actualizado HU06' })
+          .expect(200);
+      },
+    );
+  });
+
   describe('HU-03 · Consultar mi perfil', () => {
     it('incluye nombre, correo, foto, verificación y reputación, sin la contraseña', async () => {
       const res = await http.get('/api/user/me').set(auth(token)).expect(200);
