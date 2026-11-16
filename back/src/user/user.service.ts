@@ -12,7 +12,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import bcrypt from 'bcrypt';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ChangeRole } from './dto/changeRole.dto';
 import { ChangeEmailDto } from './dto/changeEmail.dto';
 import { ChangePasswordDto } from './dto/changePassword.dto';
@@ -27,6 +27,7 @@ import { SearchUserDto } from './dto/search.dto';
 import { SetActiveStatus } from './dto/activeStatus.dto';
 import { UpdateUserDto } from './dto/update.dto';
 import { ResolveVerification } from './dto/verification.dto';
+import { VerificationRequestResponseDto } from './dto/verification-request-response.dto';
 import { User } from './entities/user.entity';
 import { ValidRoles } from './enums/valid-roles.enum';
 import { VerificationStatus } from './enums/verification-status';
@@ -163,14 +164,48 @@ export class UserService {
     user: User,
     updateUserDto: UpdateUserDto,
   ): Promise<UserProfileDto> {
+    const currentUser = await this.getUserOrFail(user.id);
     const changesName =
       updateUserDto.fullName !== undefined &&
-      updateUserDto.fullName !== user.fullName;
+      updateUserDto.fullName !== currentUser.fullName;
 
-    if (changesName && NAME_LOCKED_STATUSES.includes(user.verificationStatus)) {
+    if (
+      changesName &&
+      NAME_LOCKED_STATUSES.includes(currentUser.verificationStatus)
+    ) {
       throw new ForbiddenException(
         'The name cannot be changed while the identity is verified or under review',
       );
+    }
+
+    if (changesName) {
+      try {
+        // Comprueba el estado en la misma sentencia que guarda todos los
+        // campos del perfil; una transición concurrente no deja cambios parciales.
+        const result = await this.userRepository.update(
+          {
+            id: user.id,
+            verificationStatus: In([
+              VerificationStatus.UNVERIFIED,
+              VerificationStatus.REJECTED,
+            ]),
+          },
+          updateUserDto,
+        );
+
+        if (result.affected === 1) {
+          return this.toProfile(await this.getUserOrFail(user.id));
+        }
+
+        const latestUser = await this.getUserOrFail(user.id);
+        if (NAME_LOCKED_STATUSES.includes(latestUser.verificationStatus)) {
+          throw new ForbiddenException(
+            'The name cannot be changed while the identity is verified or under review',
+          );
+        }
+      } catch (error) {
+        this.handleException(error);
+      }
     }
 
     const userToUpdate = await this.preloadUser(user.id, updateUserDto);
@@ -233,25 +268,35 @@ export class UserService {
     return this.toProfile(await this.getUserOrFail(user.id));
   }
 
-  async requestVerification(user: User): Promise<UserProfileDto> {
-    if (
-      user.verificationStatus === VerificationStatus.VERIFIED ||
-      user.verificationStatus === VerificationStatus.PENDING
-    ) {
-      throw new ConflictException('The identity is already verified or under review');
-    }
-
-    const userToUpdate = await this.preloadUser(user.id, {
-      verificationStatus: VerificationStatus.PENDING,
-    });
-
-    if (!userToUpdate) {
-      throw new NotFoundException(`User with id ${user.id} not found`);
-    }
-
+  async requestVerification(
+    user: User,
+  ): Promise<VerificationRequestResponseDto> {
     try {
-      await this.userRepository.save(userToUpdate);
-      return this.toProfile(userToUpdate);
+      // Un único UPDATE condicional garantiza que dos solicitudes simultáneas
+      // no puedan ser aceptadas desde el mismo estado previo.
+      const result = await this.userRepository.update(
+        {
+          id: user.id,
+          verificationStatus: In([
+            VerificationStatus.UNVERIFIED,
+            VerificationStatus.REJECTED,
+          ]),
+        },
+        { verificationStatus: VerificationStatus.PENDING },
+      );
+
+      if (result.affected !== 1) {
+        const currentUser = await this.getUserOrFail(user.id);
+        throw new ConflictException(
+          currentUser.verificationStatus === VerificationStatus.PENDING
+            ? 'The identity is already under review'
+            : currentUser.verificationStatus === VerificationStatus.VERIFIED
+              ? 'The identity is already verified'
+              : 'The verification request cannot be submitted in the current state',
+        );
+      }
+
+      return { verificationStatus: VerificationStatus.PENDING };
     } catch (error) {
       this.handleException(error);
     }

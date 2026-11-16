@@ -70,7 +70,7 @@ describe('UserService', () => {
       findOne: jest.fn(),
       findOneBy: jest.fn(),
       preload: jest.fn(async (value) => makeUser(value)),
-      update: jest.fn().mockResolvedValue(undefined),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
       createQueryBuilder: jest.fn().mockReturnValue(qb),
     });
     jwtService.sign.mockReturnValue('signed-token');
@@ -304,6 +304,9 @@ describe('UserService', () => {
       const pending = makeUser({
         verificationStatus: VerificationStatus.PENDING,
       });
+      userRepository.findOneBy.mockImplementation(async ({ id }) =>
+        id === verified.id ? verified : pending,
+      );
 
       // Act / Assert
       await expect(
@@ -317,6 +320,10 @@ describe('UserService', () => {
     it('updateMe actualiza campos permitidos', async () => {
       // Arrange
       const user = makeUser();
+      userRepository.findOneBy.mockResolvedValue(user);
+      userRepository.findOneBy.mockResolvedValueOnce(user).mockResolvedValueOnce(
+        makeUser({ fullName: 'Ana Actualizada', info: 'Nueva bio' }),
+      );
 
       // Act
       const result = await service.updateMe(user, {
@@ -325,12 +332,50 @@ describe('UserService', () => {
       });
 
       // Assert
-      expect(userRepository.preload).toHaveBeenCalledWith({
-        id: 'user-1',
-        fullName: 'Ana Actualizada',
-        info: 'Nueva bio',
-      });
+      expect(userRepository.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'user-1',
+          verificationStatus: expect.any(Object),
+        }),
+        { fullName: 'Ana Actualizada', info: 'Nueva bio' },
+      );
       expect(result.info).toBe('Nueva bio');
+    });
+
+    it('updateMe permite cambiar el nombre en estado REJECTED', async () => {
+      const rejected = makeUser({
+        verificationStatus: VerificationStatus.REJECTED,
+      });
+      userRepository.findOneBy
+        .mockResolvedValueOnce(rejected)
+        .mockResolvedValueOnce(
+          makeUser({
+            verificationStatus: VerificationStatus.REJECTED,
+            fullName: 'Nombre corregido',
+          }),
+        );
+
+      await expect(
+        service.updateMe(rejected, { fullName: 'Nombre corregido' }),
+      ).resolves.toMatchObject({ fullName: 'Nombre corregido' });
+    });
+
+    it('updateMe consulta el estado persistido y evita una actualización parcial', async () => {
+      const staleJwtUser = makeUser({
+        verificationStatus: VerificationStatus.UNVERIFIED,
+      });
+      userRepository.findOneBy.mockResolvedValue(
+        makeUser({ verificationStatus: VerificationStatus.PENDING }),
+      );
+
+      await expect(
+        service.updateMe(staleJwtUser, {
+          fullName: 'Nombre nuevo',
+          info: 'Bio nueva',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(userRepository.preload).not.toHaveBeenCalled();
+      expect(userRepository.save).not.toHaveBeenCalled();
     });
 
     it('HU-03 · findMe incluye foto, verificación y reputación', () => {
@@ -357,6 +402,7 @@ describe('UserService', () => {
     });
 
     it('HU-03 · updateMe guarda la foto de perfil', async () => {
+      userRepository.findOneBy.mockResolvedValue(makeUser({ photoUrl: null }));
       // Act
       const result = await service.updateMe(makeUser({ photoUrl: null }), {
         photoUrl: 'https://images.example.com/nueva.jpg',
@@ -372,6 +418,7 @@ describe('UserService', () => {
 
     it('updateMe devuelve 404 si preload no encuentra el usuario', async () => {
       // Arrange
+      userRepository.findOneBy.mockResolvedValue(makeUser());
       userRepository.preload.mockResolvedValue(null);
 
       // Act / Assert
@@ -630,31 +677,46 @@ describe('UserService', () => {
   });
 
   describe('verification', () => {
-    it('requestVerification pasa a PENDING y rechaza estados bloqueados', async () => {
+    it.each([
+      VerificationStatus.UNVERIFIED,
+      VerificationStatus.REJECTED,
+    ])('requestVerification permite %s -> PENDING', async (status) => {
       // Arrange
-      const user = makeUser();
+      const user = makeUser({ verificationStatus: status });
 
       // Act
       const result = await service.requestVerification(user);
 
       // Assert
-      expect(userRepository.preload).toHaveBeenCalledWith({
-        id: 'user-1',
+      expect(userRepository.update).toHaveBeenCalledWith(
+        {
+          id: 'user-1',
+          verificationStatus: expect.objectContaining({
+            _type: 'in',
+            _value: [VerificationStatus.UNVERIFIED, VerificationStatus.REJECTED],
+          }),
+        },
+        { verificationStatus: VerificationStatus.PENDING },
+      );
+      expect(result).toEqual({
         verificationStatus: VerificationStatus.PENDING,
       });
-      expect(result.verificationStatus).toBe(VerificationStatus.PENDING);
-
-      await expect(
-        service.requestVerification(
-          makeUser({ verificationStatus: VerificationStatus.PENDING }),
-        ),
-      ).rejects.toBeInstanceOf(ConflictException);
-      await expect(
-        service.requestVerification(
-          makeUser({ verificationStatus: VerificationStatus.VERIFIED }),
-        ),
-      ).rejects.toBeInstanceOf(ConflictException);
     });
+
+    it.each([VerificationStatus.PENDING, VerificationStatus.VERIFIED])(
+      'requestVerification rechaza %s sin alterar el estado',
+      async (status) => {
+        userRepository.update.mockResolvedValue({ affected: 0 });
+        userRepository.findOneBy.mockResolvedValue(
+          makeUser({ verificationStatus: status }),
+        );
+
+        await expect(
+          service.requestVerification(makeUser({ verificationStatus: status })),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(userRepository.save).not.toHaveBeenCalled();
+      },
+    );
 
     it('findPendingVerifications delega en findAll con orden antiguo primero', async () => {
       // Act
