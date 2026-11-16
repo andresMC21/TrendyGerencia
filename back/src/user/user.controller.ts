@@ -37,6 +37,7 @@ import { UserProfileDto } from './dto/profile.dto';
 import { PublicProfileDto } from './dto/public-profile.dto';
 import { RegisterUserDto } from './dto/register.dto';
 import { UpdateUserDto } from './dto/update.dto';
+import { VerificationRequestResponseDto } from './dto/verification-request-response.dto';
 import { User } from './entities/user.entity';
 import { UserService } from './user.service';
 
@@ -243,12 +244,12 @@ export class UserController {
   @ApiOperation({
     summary: 'Solicitar verificación de identidad',
     description:
-      'Actualiza verificationStatus a PENDING. Devuelve el perfil actualizado; no acepta una nueva solicitud si la cuenta ya está PENDING o VERIFIED.',
+      'Requiere JWT válido. UNVERIFIED y REJECTED pasan a PENDING. PENDING y VERIFIED devuelven 409. La actualización condicional es atómica.',
   })
   @ApiOkResponse({
-    type: UserProfileDto,
+    type: VerificationRequestResponseDto,
     description:
-      'La solicitud quedó pendiente y se devuelve el perfil actualizado.',
+      'La solicitud queda en PENDING y la respuesta indica ese estado sin incluir otros datos del perfil.',
   })
   @ApiConflictResponse({
     description: 'La identidad ya está verificada o en revisión',
@@ -257,7 +258,9 @@ export class UserController {
   @ApiInternalServerErrorResponse({
     description: 'Error inesperado al solicitar la verificación.',
   })
-  requestVerification(@GetUser() user: User): Promise<UserProfileDto> {
+  requestVerification(
+    @GetUser() user: User,
+  ): Promise<VerificationRequestResponseDto> {
     return this.userService.requestVerification(user);
   }
 
