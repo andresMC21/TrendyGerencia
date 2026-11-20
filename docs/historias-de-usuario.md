@@ -11,6 +11,7 @@ Toda la documentación del proyecto está en esta carpeta (`docs/`), junto con e
 | HU-07 | Consultar otro perfil | `GET /user/:id` (con sesión; perfil público y reputación) | `/usuario/:id` | [HU-07](HU-07.md) |
 | HU-08 | Publicar un producto | `POST /products` | `/publicar` | [HU-08](HU-08.md) |
 | HU-09 | Explorar el barrio | `GET /products?neighborhoodId=` | `/explorar` | [HU-09](HU-09.md) |
+| HU-10 | Buscar por cercanía | `GET /products?lat=&lng=&radius=&sort=distance` | `/explorar` (Ordenar por → Más cercanos) | [HU-10](HU-10.md) |
 | HU-11 | Consultar un producto | `GET /products/:id` | `/producto/:id` | [HU-11](HU-11.md) |
 | HU-13 | Retirar una publicación | `DELETE /products/:id`, `GET /products/mine` | `/mis-publicaciones` | [HU-13](HU-13.md) |
 | HU-14 | Gestionar favoritos | `PUT` y `DELETE /products/:id/favorite`, `GET /products/favorites` | `/favoritos`, `/producto/:id` | [HU-14](HU-14.md) |

@@ -468,3 +468,48 @@ h1, h2, h3 { font-weight: 600; }
 .fav-heart:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
 .fav-heart--on { color: var(--red); background: var(--red-soft); border-color: var(--red); }
 .fav-heart:disabled { opacity: .6; cursor: progress; }
+
+/* HU-10 · Buscar por cercanía: barra del centro, deslizador de radio y mapa. */
+.cerca-bar, .ubicacion-panel { background: var(--glass); border: 1px solid var(--glass-border); border-radius: 16px; padding: 18px; margin: -8px 0 24px; }
+.cerca-bar { display: grid; grid-template-columns: minmax(150px, auto) minmax(0, 1fr) auto; gap: 12px 24px; align-items: center; }
+.cerca-centro { display: grid; gap: 2px; }
+.cerca-kicker { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.cerca-centro strong { color: var(--navy); font-size: 17px; }
+.cerca-acciones { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: flex-end; }
+.radio-slider { display: grid; gap: 6px; min-width: 0; }
+.radio-slider label { font-size: 13px; color: var(--muted); }
+.radio-slider label strong { color: var(--navy); }
+.radio-slider input[type='range'] { width: 100%; margin: 0; accent-color: var(--blue); cursor: pointer; }
+.radio-marcas { position: relative; height: 22px; margin-inline: 8px; }
+.radio-marca { position: absolute; left: calc(var(--p) * 100%); transform: translateX(-50%); border: 0; background: none; padding: 2px 4px; font-size: 11px; color: var(--muted); cursor: pointer; white-space: nowrap; border-radius: 6px; }
+.radio-marca::before { content: ''; position: absolute; left: 50%; top: -5px; width: 1px; height: 5px; background: var(--line); }
+.radio-marca:hover { color: var(--navy); }
+.radio-marca--on { color: var(--navy); font-weight: 700; background: var(--panel-soft); }
+.ubicacion-panel { display: grid; gap: 14px; }
+.ubicacion-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.ubicacion-panel h2 { font-size: 19px; margin: 0 0 4px; }
+.ubicacion-panel p { margin: 0; color: var(--muted); font-size: 14px; }
+.ubicacion-opciones { display: grid; grid-template-columns: auto minmax(200px, 320px); gap: 0 18px; align-items: center; }
+.ubicacion-opciones .field { margin: 0; }
+.mapa { height: 340px; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; z-index: 0; }
+.mapa--cargando { display: grid; place-items: center; color: var(--muted); background: var(--panel-soft); }
+.mapa .leaflet-container, .mapa.leaflet-container { font: inherit; }
+.mapa .mapa-barrio { stroke: #ffffff; stroke-width: 2; fill: #526b80; fill-opacity: .9; cursor: pointer; }
+.mapa .mapa-barrio:hover { fill: #216675; }
+.mapa .mapa-radio { stroke: #216675; stroke-width: 2; fill: #216675; fill-opacity: .1; }
+.mapa .mapa-centro { stroke: #ffffff; stroke-width: 3; fill: #b43d4c; fill-opacity: 1; }
+.product-distance { flex-basis: 100%; font-size: 13px; font-weight: 600; color: var(--blue); }
+[data-theme='dark'] .mapa .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.82) contrast(.9) saturate(.6); }
+[data-theme='dark'] .mapa .mapa-barrio { stroke: #0e1b28; fill: #b1c6d8; }
+[data-theme='dark'] .mapa .mapa-radio { stroke: #99d2dc; fill: #99d2dc; }
+[data-theme='dark'] .mapa .mapa-centro { stroke: #0e1b28; fill: #f1a5af; }
+[data-theme='dark'] .mapa .leaflet-control-attribution { background: #142636cc; color: var(--muted); }
+[data-theme='dark'] .mapa .leaflet-control-attribution a { color: var(--blue); }
+@media (max-width: 760px) {
+  .cerca-bar { grid-template-columns: 1fr; }
+  .cerca-acciones { justify-content: flex-start; }
+  .ubicacion-opciones { grid-template-columns: 1fr; gap: 12px; }
+  .ubicacion-panel-head { flex-direction: column; }
+  .mapa { height: 280px; }
+  .radio-marca--secundaria { display: none; }
+}
