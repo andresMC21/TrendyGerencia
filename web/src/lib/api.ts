@@ -104,6 +104,8 @@ export type Product = {
   favoritesCount?: number;
   viewsCount?: number;
   createdAt?: string;
+  /** HU-10 · solo llega si el feed se pidió con lat y lng. */
+  distanceKm?: number;
 };
 
 /** HU-11 · GET /products/:id (incluye el perfil público del vendedor). */
@@ -116,11 +118,19 @@ export type ProductDetail = Product & {
   seller: { id: string; fullName: string; ratingAverage: number; reviewsCount: number };
 };
 
+/** HU-10 · `distance` exige lat y lng (la API responde 400 sin ellas). */
+export type ProductSort = 'recent' | 'price_asc' | 'price_desc' | 'popular' | 'distance';
+
 /** HU-09 · Filtros del feed público. */
 export type FeedFilters = {
   neighborhoodId?: string;
   category?: string;
   condition?: ProductCondition;
+  /** HU-10 · centro y radio (km) de la búsqueda por cercanía. */
+  lat?: number;
+  lng?: number;
+  radius?: number;
+  sort?: ProductSort;
   page?: number;
   limit?: number;
 };

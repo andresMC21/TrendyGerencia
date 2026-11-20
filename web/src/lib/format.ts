@@ -40,6 +40,14 @@ export const ESTADO_PRODUCTO: Record<string, { label: string; tone: string }> = 
 export const precio = (v: number) =>
   v === 0 ? 'Gratis' : `$${Math.round(v).toLocaleString('es-CO')}`;
 
+/** HU-10 · Distancia legible: en metros por debajo de 1 km. */
+export const distancia = (km: number) =>
+  km < 0.05
+    ? 'menos de 50 m'
+    : km < 1
+      ? `${Math.round(km * 100) * 10} m`
+      : `${km.toLocaleString('es-CO', { maximumFractionDigits: 1 })} km`;
+
 export const barrio = (id: string) =>
   id
     .split('-')

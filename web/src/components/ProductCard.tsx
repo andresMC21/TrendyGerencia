@@ -1,7 +1,7 @@
 import { FavoriteIcon } from './FavoriteIcon';
 import { Link } from 'react-router';
 import type { Product } from '../lib/api';
-import { barrio, CATEGORIA, CONDICION, precio } from '../lib/format';
+import { barrio, CATEGORIA, CONDICION, distancia, precio } from '../lib/format';
 import type { FavoritoDeTarjeta } from '../lib/useFavoritos';
 import { ProductPhoto } from './ProductPhoto';
 
@@ -51,6 +51,7 @@ export function ProductCard({ product: p, favorito }: { product: Product; favori
         <span className="product-meta">
           {barrio(p.neighborhoodId)} · {CONDICION[p.condition] ?? p.condition}
         </span>
+        {p.distanceKm !== undefined && <span className="product-distance">a {distancia(p.distanceKm)}</span>}
       </div>
       <Link viewTransition to={`/producto/${p.id}`} state={{ photoUrl: p.photoUrl, title: p.title }} className="product-more">
         Ver producto →
