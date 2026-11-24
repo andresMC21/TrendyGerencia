@@ -74,7 +74,7 @@ describe('Products (e2e)', () => {
 
   afterAll(async () => {
     const ds = app.get(DataSource);
-    await ds.query(`DELETE FROM product WHERE "neighborhoodId" = $1`, [hood]);
+    await ds.query(`DELETE FROM product WHERE "neighborhoodId" LIKE $1`, [`${hood}%`]);
     await ds.query(`DELETE FROM "user" WHERE email LIKE $1`, [`e2e-${run}-%`]);
     await app.close();
   });
@@ -205,6 +205,153 @@ describe('Products (e2e)', () => {
       .expect(200);
 
     expect(res.body.price).toBe(200000);
+  });
+
+  describe('HU-12 · editar mi publicación', () => {
+    let editId: string;
+
+    const create = async () =>
+      (
+        await http
+          .post('/api/products')
+          .set(auth(tokenSeller))
+          .send(body({ title: 'Para editar', description: 'Original' }))
+          .expect(201)
+      ).body.id as string;
+
+    const detail = async (id: string) =>
+      (await http.get(`/api/products/${id}`).expect(200)).body;
+
+    beforeAll(async () => {
+      editId = await create();
+    });
+
+    it('criterio 1 · el vendedor actualiza los campos permitidos y el cambio persiste', async () => {
+      const res = await http
+        .put(`/api/products/${editId}`)
+        .set(auth(tokenSeller))
+        .send({
+          title: '  Bicicleta ruta  ',
+          description: 'Recién ajustada',
+          price: 320000,
+          acceptsBarter: false,
+          category: 'Deportes',
+          condition: 'USADO',
+          neighborhoodId: `${hood}-b`,
+          location: { lat: 3.45, lng: -76.53 },
+        })
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        id: editId,
+        title: 'Bicicleta ruta',
+        description: 'Recién ajustada',
+        price: 320000,
+        acceptsBarter: false,
+        category: 'deportes',
+        condition: 'USADO',
+        neighborhoodId: `${hood}-b`,
+        status: 'AVAILABLE',
+      });
+
+      const stored = await detail(editId);
+      expect(stored).toMatchObject({
+        title: 'Bicicleta ruta',
+        price: 320000,
+        neighborhoodId: `${hood}-b`,
+      });
+      // PostGIS puede devolver las coordenadas con ruido de coma flotante.
+      expect(stored.location.lat).toBeCloseTo(3.45, 5);
+      expect(stored.location.lng).toBeCloseTo(-76.53, 5);
+    });
+
+    it('criterio 1 · un cuerpo parcial no toca los demás campos', async () => {
+      const before = await detail(editId);
+
+      await http
+        .put(`/api/products/${editId}`)
+        .set(auth(tokenSeller))
+        .send({ price: 1 })
+        .expect(200);
+
+      const after = await detail(editId);
+      expect(after.price).toBe(1);
+      expect(after.title).toBe(before.title);
+      expect(after.description).toBe(before.description);
+      expect(after.neighborhoodId).toBe(before.neighborhoodId);
+    });
+
+    it('criterio 2 · otro usuario recibe 403 y sin sesión 401; el producto no cambia', async () => {
+      const before = await detail(editId);
+
+      await http
+        .put(`/api/products/${editId}`)
+        .set(auth(tokenBuyer))
+        .send({ title: 'Secuestrado', price: 1 })
+        .expect(403);
+      await http.put(`/api/products/${editId}`).send({ title: 'Anónimo' }).expect(401);
+
+      const after = await detail(editId);
+      expect(after.title).toBe(before.title);
+      expect(after.price).toBe(before.price);
+    });
+
+    it('un producto inexistente responde 404 y un id mal formado 400', async () => {
+      await http
+        .put('/api/products/00000000-0000-4000-8000-000000000000')
+        .set(auth(tokenSeller))
+        .send({ price: 1 })
+        .expect(404);
+      await http
+        .put('/api/products/no-es-uuid')
+        .set(auth(tokenSeller))
+        .send({ price: 1 })
+        .expect(400);
+    });
+
+    it.each([
+      ['título demasiado corto', { title: 'ab' }],
+      ['título solo con espacios', { title: '   ' }],
+      ['título null', { title: null }],
+      ['precio negativo', { price: -5 }],
+      ['precio con tres decimales', { price: 1.234 }],
+      ['precio null', { price: null }],
+      ['condición inexistente', { condition: 'ROTO' }],
+      ['barrio que no es slug', { neighborhoodId: 'Barrio Con Espacios' }],
+      ['ubicación fuera de rango', { location: { lat: 200, lng: 0 } }],
+      ['ubicación null', { location: null }],
+      ['campo sellerId', { sellerId: '00000000-0000-4000-8000-000000000000' }],
+      ['campo status', { status: 'SOLD' }],
+    ])(
+      'criterio 3 · %s responde 400 y no se guarda nada',
+      async (_label, invalid) => {
+        const before = await detail(editId);
+
+        const res = await http
+          .put(`/api/products/${editId}`)
+          .set(auth(tokenSeller))
+          .send({ description: 'No debe guardarse', ...invalid })
+          .expect(400);
+
+        expect(res.body.message).toBeDefined();
+        const after = await detail(editId);
+        expect(after.description).toBe(before.description);
+        expect(after.title).toBe(before.title);
+        expect(after.price).toBe(before.price);
+        expect(after.status).toBe('AVAILABLE');
+      },
+    );
+
+    it('un producto retirado ya no se puede editar (404)', async () => {
+      const id = await create();
+      await http.delete(`/api/products/${id}`).set(auth(tokenSeller)).expect(204);
+
+      await http
+        .put(`/api/products/${id}`)
+        .set(auth(tokenSeller))
+        .send({ price: 1 })
+        .expect(404);
+    });
   });
 
   it('POST /products/:id/favorite alterna el favorito', async () => {

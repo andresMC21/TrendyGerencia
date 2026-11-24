@@ -555,6 +555,167 @@ describe('ProductService', () => {
       expect(spy).toHaveBeenCalledWith('granada');
       expect(spy).toHaveBeenCalledWith('centro');
     });
+
+    describe('HU-12 · editar mi publicación', () => {
+      it('criterio 1 · actualiza varios campos permitidos y conserva el resto', async () => {
+        // Arrange
+        productRepo.findOne.mockResolvedValue(makeProduct());
+
+        // Act
+        const res = await service.update('p1', 'seller-1', {
+          title: 'Bicicleta ruta',
+          description: 'Recién ajustada',
+          price: 320000,
+          acceptsBarter: true,
+          category: 'deportes',
+          condition: ProductCondition.LIKE_NEW,
+          neighborhoodId: 'centro',
+          photoUrl: '/images/products/bicicleta.jpg',
+          estimatedWeightKg: 12,
+        });
+
+        // Assert
+        const saved = productRepo.save.mock.calls[0][0];
+        expect(saved).toMatchObject({
+          title: 'Bicicleta ruta',
+          description: 'Recién ajustada',
+          price: 320000,
+          acceptsBarter: true,
+          condition: ProductCondition.LIKE_NEW,
+          neighborhoodId: 'centro',
+          photoUrl: '/images/products/bicicleta.jpg',
+          estimatedWeightKg: 12,
+          sellerId: 'seller-1',
+          status: ProductStatus.AVAILABLE,
+        });
+        expect(res.title).toBe('Bicicleta ruta');
+        expect(res.price).toBe(320000);
+      });
+
+      it('criterio 1 · un cuerpo parcial no toca los campos que no se envían', async () => {
+        // Arrange
+        productRepo.findOne.mockResolvedValue(makeProduct());
+
+        // Act
+        await service.update('p1', 'seller-1', { price: 10 });
+
+        // Assert
+        const saved = productRepo.save.mock.calls[0][0];
+        expect(saved.price).toBe(10);
+        expect(saved.title).toBe('Bici');
+        expect(saved.description).toBe('desc');
+        expect(saved.location).toEqual({ type: 'Point', coordinates: [-76.5, 3.4] });
+      });
+
+      it('criterio 1 · permite quitar la foto y el peso estimado (campos anulables)', async () => {
+        // Arrange
+        productRepo.findOne.mockResolvedValue(makeProduct({ photoUrl: '/images/products/a.jpg' }));
+
+        // Act
+        await service.update('p1', 'seller-1', {
+          photoUrl: null,
+          estimatedWeightKg: null,
+        } as never);
+
+        // Assert
+        const saved = productRepo.save.mock.calls[0][0];
+        expect(saved.photoUrl).toBeNull();
+        expect(saved.estimatedWeightKg).toBeNull();
+      });
+
+      it('criterio 1 · nunca copia id, sellerId, status ni contadores aunque lleguen al servicio', async () => {
+        // Arrange
+        productRepo.findOne.mockResolvedValue(makeProduct());
+
+        // Act
+        await service.update('p1', 'seller-1', {
+          title: 'Nuevo título',
+          id: 'otro',
+          sellerId: 'intruso',
+          status: ProductStatus.SOLD,
+          viewsCount: 999,
+        } as never);
+
+        // Assert
+        const saved = productRepo.save.mock.calls[0][0];
+        expect(saved.title).toBe('Nuevo título');
+        expect(saved.id).toBe('p1');
+        expect(saved.sellerId).toBe('seller-1');
+        expect(saved.status).toBe(ProductStatus.AVAILABLE);
+        expect(saved.viewsCount).toBe(0);
+      });
+
+      it('criterio 2 · otro usuario recibe 403 y no se guarda nada', async () => {
+        // Arrange
+        productRepo.findOne.mockResolvedValue(makeProduct());
+
+        // Act
+        const result = service.update('p1', 'intruso', { price: 1 });
+
+        // Assert
+        await expect(result).rejects.toBeInstanceOf(ForbiddenException);
+        expect(productRepo.save).not.toHaveBeenCalled();
+      });
+
+      it('criterio 2 · un producto retirado responde 404 y no se guarda nada', async () => {
+        // Arrange
+        productRepo.findOne.mockResolvedValue(makeProduct({ status: ProductStatus.REMOVED }));
+
+        // Act
+        const result = service.update('p1', 'seller-1', { price: 1 });
+
+        // Assert
+        await expect(result).rejects.toBeInstanceOf(NotFoundException);
+        expect(productRepo.save).not.toHaveBeenCalled();
+      });
+
+      it.each([ProductStatus.RESERVED, ProductStatus.SOLD])(
+        'un producto %s responde 409 y no se guarda nada',
+        async (status) => {
+          // Arrange
+          productRepo.findOne.mockResolvedValue(makeProduct({ status }));
+
+          // Act
+          const result = service.update('p1', 'seller-1', { price: 1 });
+
+          // Assert
+          await expect(result).rejects.toBeInstanceOf(ConflictException);
+          expect(productRepo.save).not.toHaveBeenCalled();
+        },
+      );
+
+      it.each(['title', 'description', 'category', 'condition', 'neighborhoodId', 'price', 'acceptsBarter', 'location'])(
+        'criterio 3 · %s: null responde 400 y no se guarda nada',
+        async (field) => {
+          // Arrange
+          productRepo.findOne.mockResolvedValue(makeProduct());
+
+          // Act
+          const result = service.update('p1', 'seller-1', { [field]: null } as never);
+
+          // Assert
+          await expect(result).rejects.toBeInstanceOf(BadRequestException);
+          await expect(result).rejects.toMatchObject({
+            response: { message: [expect.stringContaining(field)] },
+          });
+          expect(productRepo.save).not.toHaveBeenCalled();
+        },
+      );
+
+      it('criterio 3 · si un campo es inválido no se aplica ningún cambio del mismo cuerpo', async () => {
+        // Arrange
+        const product = makeProduct();
+        productRepo.findOne.mockResolvedValue(product);
+
+        // Act
+        const result = service.update('p1', 'seller-1', { title: 'Válido', price: null } as never);
+
+        // Assert
+        await expect(result).rejects.toBeInstanceOf(BadRequestException);
+        expect(product.title).toBe('Bici');
+        expect(productRepo.save).not.toHaveBeenCalled();
+      });
+    });
   });
 
   // ───────── remove ─────────
