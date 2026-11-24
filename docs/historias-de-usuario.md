@@ -8,8 +8,10 @@ Toda la documentación del proyecto está en esta carpeta (`docs/`), junto con e
 | HU-02 | Iniciar sesión | `POST /user/login`, `@Auth()` | `/ingresar` | [HU-02](HU-02.md) |
 | HU-03 | Consultar mi perfil | `GET /user/me`, `PATCH /user/me` (foto) | `/perfil` | [HU-03](HU-03.md) |
 | HU-05 | Actualizar mis credenciales | `PATCH /user/me/email`, `PATCH /user/me/password` | `/perfil` | [HU-05](HU-05.md) |
+| HU-07 | Consultar otro perfil | `GET /user/:id` (con sesión; perfil público y reputación) | `/usuario/:id` | [HU-07](HU-07.md) |
 | HU-08 | Publicar un producto | `POST /products` | `/publicar` | [HU-08](HU-08.md) |
 | HU-09 | Explorar el barrio | `GET /products?neighborhoodId=` | `/explorar` | [HU-09](HU-09.md) |
+| HU-10 | Buscar por cercanía | `GET /products?lat=&lng=&radius=&sort=distance` | `/explorar` (Ordenar por → Más cercanos) | [HU-10](HU-10.md) |
 | HU-11 | Consultar un producto | `GET /products/:id` | `/producto/:id` | [HU-11](HU-11.md) |
 | HU-12 | Editar mi publicación | `PUT /products/:id` | `/editar/:id`, `/mis-publicaciones` | [HU-12](HU-12.md) |
 | HU-13 | Retirar una publicación | `DELETE /products/:id`, `GET /products/mine` | `/mis-publicaciones` | [HU-13](HU-13.md) |
@@ -17,6 +19,7 @@ Toda la documentación del proyecto está en esta carpeta (`docs/`), junto con e
 | HU-15 | Iniciar una transacción | `POST /transactions` | `/producto/:id` | [HU-15](HU-15.md) |
 | HU-16 | Acordar una entrega | `POST /transactions/:id/meeting-proposal` (`/accept`, `/reject`) | `/transacciones/:id` | [HU-16](HU-16.md) |
 | HU-17 | Finalizar o cancelar intercambio | `POST /transactions/:id/confirm-exchange` (vendido / recibido), `PUT /transactions/:id/status` (cancelar) | `/transacciones/:id` | [HU-17](HU-17.md) |
+| HU-18 | Calificar una transacción | `POST /review`, `PATCH` y `DELETE /review/:id`, `GET /review?transactionId=` | `/transacciones/:id` (al completar) | [HU-18](HU-18.md) |
 
 ## Usuarios de prueba
 

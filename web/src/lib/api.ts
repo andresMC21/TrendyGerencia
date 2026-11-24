@@ -110,6 +110,8 @@ export type Product = {
   favoritesCount?: number;
   viewsCount?: number;
   createdAt?: string;
+  /** HU-10 · solo llega si el feed se pidió con lat y lng. */
+  distanceKm?: number;
 };
 
 /** HU-11 · GET /products/:id (incluye el perfil público del vendedor). */
@@ -122,11 +124,19 @@ export type ProductDetail = Product & {
   seller: { id: string; fullName: string; ratingAverage: number; reviewsCount: number };
 };
 
+/** HU-10 · `distance` exige lat y lng (la API responde 400 sin ellas). */
+export type ProductSort = 'recent' | 'price_asc' | 'price_desc' | 'popular' | 'distance';
+
 /** HU-09 · Filtros del feed público. */
 export type FeedFilters = {
   neighborhoodId?: string;
   category?: string;
   condition?: ProductCondition;
+  /** HU-10 · centro y radio (km) de la búsqueda por cercanía. */
+  lat?: number;
+  lng?: number;
+  radius?: number;
+  sort?: ProductSort;
   page?: number;
   limit?: number;
 };
@@ -162,6 +172,107 @@ export const authApi = {
       token,
       body: { currentPassword, newEmail },
     }),
+};
+
+export type UserRole = UserProfile['role'][number];
+
+/** HU-20 · Filtros de la lista de usuarios para administración. */
+export type AdminUserFilters = {
+  search?: string;
+  role?: UserRole;
+  isActive?: boolean;
+  limit?: number;
+  skip?: number;
+};
+
+export type PaginatedUsers = { data: UserProfile[]; total: number; limit: number; skip: number };
+
+/**
+ * HU-20 · Administrar usuarios. Listar lo pueden ADMIN y MODERATOR; cambiar roles y
+ * activar o desactivar cuentas solo ADMIN (403 para los demás). El admin no puede
+ * quitarse ADMIN ni desactivarse a sí mismo (403).
+ */
+export const adminApi = {
+  users: (token: string, { limit = 20, ...filters }: AdminUserFilters = {}) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== '') query.set(key, String(value));
+    }
+    return apiRequest<PaginatedUsers>(`/admin/users?${query}`, { token });
+  },
+  /** Reemplaza todos los roles del usuario (lista no vacía y sin duplicados). */
+  changeRoles: (token: string, id: string, roles: UserRole[]) =>
+    apiRequest<UserProfile>(`/admin/users/${encodeURIComponent(id)}/role`, {
+      method: 'PATCH',
+      token,
+      body: { roles },
+    }),
+  /** false desactiva la cuenta (conserva sus datos e invalida sus JWT); true la reactiva. */
+  setActive: (token: string, id: string, isActive: boolean) =>
+    apiRequest<UserProfile>(`/admin/users/${encodeURIComponent(id)}/active`, {
+      method: 'PATCH',
+      token,
+      body: { isActive },
+    }),
+};
+
+/** HU-07 · Perfil y reputación de otra persona (sin correo ni datos de autenticación). */
+export type PublicReview = {
+  rating: number;
+  comment: string | null;
+  reviewerName: string;
+  createdAt: string;
+};
+
+export type PublicProfile = {
+  id: string;
+  fullName: string;
+  info: string | null;
+  photoUrl: string | null;
+  verificationStatus: UserProfile['verificationStatus'];
+  ratingAverage: number;
+  reviewsCount: number;
+  availableProductsCount: number;
+  recentReviews: PublicReview[];
+  memberSince: string;
+};
+
+export const userApi = {
+  /** HU-07 · Requiere sesión (401 sin token); 404 si no existe o está inactivo. */
+  publicProfile: (token: string, id: string) =>
+    apiRequest<PublicProfile>(`/user/${encodeURIComponent(id)}`, { token }),
+};
+
+/** HU-18 · Reseña de una transacción completada. */
+export type Review = {
+  id: string;
+  transactionId: string;
+  reviewer: { id: string; fullName: string };
+  targetUser: { id: string; fullName: string };
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+};
+
+export const reviewApi = {
+  /** Reseñas de esa transacción escritas o recibidas por el usuario (máx. 2). */
+  forTransaction: (token: string, transactionId: string) =>
+    apiRequest<Review[]>(`/review?transactionId=${encodeURIComponent(transactionId)}`, { token }),
+  /** 409 si la transacción no está completada o ya la calificó. */
+  create: (token: string, transactionId: string, rating: number, comment: string | null) =>
+    apiRequest<Review>('/review', {
+      method: 'POST',
+      token,
+      body: { transactionId, rating, ...(comment ? { comment } : {}) },
+    }),
+  update: (token: string, id: string, rating: number, comment: string | null) =>
+    apiRequest<Review>(`/review/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      token,
+      body: { rating, comment },
+    }),
+  remove: (token: string, id: string) =>
+    apiRequest<void>(`/review/${encodeURIComponent(id)}`, { method: 'DELETE', token }),
 };
 
 export const productApi = {

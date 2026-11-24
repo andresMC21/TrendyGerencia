@@ -1,5 +1,6 @@
 import { createRoutesFromElements, Navigate, Route } from 'react-router';
-import { SoloInvitados, SoloUsuarios } from './components/RouteGuards';
+import { SoloAdmin, SoloInvitados, SoloUsuarios } from './components/RouteGuards';
+import AdminUsuarios from './pages/AdminUsuarios';
 import EditarPublicacion from './pages/EditarPublicacion';
 import Explorar from './pages/Explorar';
 import Favoritos from './pages/Favoritos';
@@ -8,6 +9,7 @@ import Inicio from './pages/Inicio';
 import Landing from './pages/Landing';
 import MisPublicaciones from './pages/MisPublicaciones';
 import Perfil from './pages/Perfil';
+import PerfilPublico from './pages/PerfilPublico';
 import Producto from './pages/Producto';
 import Publicar from './pages/Publicar';
 import Registro from './pages/Registro';
@@ -95,6 +97,22 @@ export const routes = createRoutesFromElements(
           <SoloUsuarios>
             <Transaccion />
           </SoloUsuarios>
+        }
+      />
+      <Route
+        path="/usuario/:id"
+        element={
+          <SoloUsuarios>
+            <PerfilPublico />
+          </SoloUsuarios>
+        }
+      />
+      <Route
+        path="/admin/usuarios"
+        element={
+          <SoloAdmin>
+            <AdminUsuarios />
+          </SoloAdmin>
         }
       />
       <Route path="/explorar" element={<Explorar />} />

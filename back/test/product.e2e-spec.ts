@@ -168,6 +168,96 @@ describe('Products (e2e)', () => {
     expect(far.body.total).toBe(0);
   });
 
+  describe('HU-10 · buscar por cercanía', () => {
+    // 0,01° de latitud ≈ 1,11 km. Se publican desordenados para que ni el
+    // orden de creación ni el de «más recientes» coincidan con el de distancia.
+    const geoHood = `geo-${run}`;
+    const centro = { lat: 3.4, lng: -76.53 };
+    const ids: Record<string, string> = {};
+
+    const cerca = (query: object) =>
+      http
+        .get('/api/products')
+        .query({ neighborhoodId: geoHood, lat: centro.lat, lng: centro.lng, ...query })
+        .expect(200);
+
+    beforeAll(async () => {
+      for (const [nombre, dLat] of [['lejos', 0.03], ['aqui', 0], ['medio', 0.01]] as const) {
+        const res = await http
+          .post('/api/products')
+          .set(auth(tokenSeller))
+          .send(
+            body({
+              title: `Geo ${nombre}`,
+              neighborhoodId: geoHood,
+              location: { lat: centro.lat + dLat, lng: centro.lng },
+            }),
+          )
+          .expect(201);
+        ids[nombre] = res.body.id;
+      }
+    });
+
+    afterAll(async () => {
+      await app.get(DataSource).query(`DELETE FROM product WHERE "neighborhoodId" = $1`, [geoHood]);
+    });
+
+    it('criterio 1: con coordenadas y radius en km solo devuelve lo que está dentro del radio', async () => {
+      const r1 = await cerca({ radius: 1 });
+      expect(r1.body.items.map((p: { id: string }) => p.id)).toEqual([ids.aqui]);
+
+      const r2 = await cerca({ radius: 2 });
+      expect(r2.body.total).toBe(2);
+      expect(r2.body.items.map((p: { id: string }) => p.id).sort()).toEqual([ids.aqui, ids.medio].sort());
+
+      const r5 = await cerca({ radius: 5 });
+      expect(r5.body.total).toBe(3);
+    });
+
+    it('criterio 1: sin radius usa 5 km, y radius fuera de 0,1–50 responde 400', async () => {
+      const res = await cerca({});
+      expect(res.body.total).toBe(3);
+
+      await http.get('/api/products').query({ lat: 3.4, lng: -76.53, radius: 0 }).expect(400);
+      await http.get('/api/products').query({ lat: 3.4, lng: -76.53, radius: 51 }).expect(400);
+    });
+
+    it('criterio 2: cada producto incluye distanceKm en kilómetros', async () => {
+      const res = await cerca({ radius: 5, sort: 'distance' });
+      const porId = Object.fromEntries(
+        res.body.items.map((p: { id: string; distanceKm: number }) => [p.id, p.distanceKm]),
+      );
+      expect(porId[ids.aqui]).toBe(0);
+      expect(porId[ids.medio]).toBeCloseTo(1.11, 1);
+      expect(porId[ids.lejos]).toBeCloseTo(3.32, 1);
+    });
+
+    it('criterio 2: sin coordenadas la respuesta no trae distanceKm', async () => {
+      const res = await http.get('/api/products').query({ neighborhoodId: geoHood }).expect(200);
+      expect(res.body.items).toHaveLength(3);
+      for (const p of res.body.items) expect(p).not.toHaveProperty('distanceKm');
+    });
+
+    it('criterio 3: con sort=distance los resultados van del más cercano al más lejano, también al paginar', async () => {
+      const res = await cerca({ radius: 5, sort: 'distance' });
+      expect(res.body.items.map((p: { id: string }) => p.id)).toEqual([ids.aqui, ids.medio, ids.lejos]);
+
+      const p1 = await cerca({ radius: 5, sort: 'distance', limit: 2, page: 1 });
+      const p2 = await cerca({ radius: 5, sort: 'distance', limit: 2, page: 2 });
+      expect([...p1.body.items, ...p2.body.items].map((p: { id: string }) => p.id)).toEqual([
+        ids.aqui,
+        ids.medio,
+        ids.lejos,
+      ]);
+    });
+
+    it('criterio 3: con coordenadas, otro orden mantiene el filtro por radio y la distancia', async () => {
+      const res = await cerca({ radius: 2, sort: 'recent' });
+      expect(res.body.items.map((p: { id: string }) => p.id)).toEqual([ids.medio, ids.aqui]);
+      expect(res.body.items.every((p: { distanceKm?: number }) => typeof p.distanceKm === 'number')).toBe(true);
+    });
+  });
+
   it('GET /products rechaza filtros inválidos', async () => {
     await http.get('/api/products').query({ lat: 3.4 }).expect(400);
     await http.get('/api/products').query({ sort: 'distance' }).expect(400);

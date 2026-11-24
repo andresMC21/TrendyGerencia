@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
 import { Footer, Header } from '../components/Brand';
 import { Alert } from '../components/Form';
+import { CalificarIntercambio } from '../components/CalificarIntercambio';
 import { ApiError, transactionApi, type Transaction as Tx } from '../lib/api';
 import { ESTADO_TRANSACCION, etapaAcuerdo, fechaHora } from '../lib/format';
 import { nombrePunto, SAFE_POINTS } from '../lib/safePoints';
@@ -132,11 +133,19 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
       <dl className="profile-data profile-data--plain">
         <div>
           <dt>Comprador</dt>
-          <dd>{tx.buyer?.fullName ?? tx.buyerId}</dd>
+          <dd>
+            <Link to={`/usuario/${tx.buyerId}`} data-testid="perfil-comprador">
+              {tx.buyer?.fullName ?? 'Ver perfil'}
+            </Link>
+          </dd>
         </div>
         <div>
           <dt>Vendedor</dt>
-          <dd>{tx.seller?.fullName ?? tx.sellerId}</dd>
+          <dd>
+            <Link to={`/usuario/${tx.sellerId}`} data-testid="perfil-vendedor">
+              {tx.seller?.fullName ?? 'Ver perfil'}
+            </Link>
+          </dd>
         </div>
         {tx.message && (
           <div>
@@ -174,6 +183,7 @@ function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
               el producto como vendido y {tx.buyer?.fullName ?? 'el comprador'} lo recibió.
             </Alert>
           </div>
+          <CalificarIntercambio tx={tx} />
         </>
       )}
       {tx.status === 'CANCELLED' && (

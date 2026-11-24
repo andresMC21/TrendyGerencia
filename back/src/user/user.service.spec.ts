@@ -55,6 +55,7 @@ describe('UserService', () => {
     preload: jest.fn(),
     update: jest.fn(),
     createQueryBuilder: jest.fn(),
+    manager: { find: jest.fn(), count: jest.fn() },
   };
   const jwtService = {
     sign: jest.fn(),
@@ -72,6 +73,10 @@ describe('UserService', () => {
       preload: jest.fn(async (value) => makeUser(value)),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
       createQueryBuilder: jest.fn().mockReturnValue(qb),
+      manager: {
+        find: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      },
     });
     jwtService.sign.mockReturnValue('signed-token');
 
@@ -442,6 +447,75 @@ describe('UserService', () => {
       expect(result.id).toBe('user-1');
     });
 
+    it('HU-07 · findPublicProfile presenta ratingAverage, reviewsCount y reseñas recientes (criterio 2)', async () => {
+      // Arrange
+      userRepository.findOneBy.mockResolvedValue(makeUser());
+      userRepository.manager.find.mockResolvedValue([
+        {
+          rating: 5,
+          comment: 'Todo bien',
+          createdAt: new Date('2026-10-20T10:00:00Z'),
+          reviewer: { fullName: 'Carlos Ruiz', email: 'carlos@x.com', password: 'h' },
+        },
+      ]);
+      userRepository.manager.count.mockResolvedValue(3);
+
+      // Act
+      const result = await service.findPublicProfile('user-1');
+
+      // Assert
+      expect(result).toMatchObject({
+        fullName: 'Ana Gomez',
+        ratingAverage: 4.5,
+        reviewsCount: 2,
+        availableProductsCount: 3,
+        verificationStatus: VerificationStatus.UNVERIFIED,
+        memberSince: new Date('2026-10-01T10:00:00Z'),
+        recentReviews: [
+          { rating: 5, comment: 'Todo bien', reviewerName: 'Carlos Ruiz' },
+        ],
+      });
+      expect(userRepository.manager.find).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          where: { targetUserId: 'user-1' },
+          order: { createdAt: 'DESC' },
+          take: 5,
+        }),
+      );
+    });
+
+    it('HU-07 · sin reseñas, ratingAverage es 0 y no null', async () => {
+      // Arrange
+      userRepository.findOneBy.mockResolvedValue(
+        makeUser({ ratingAverage: undefined, reviewsCount: 0 }),
+      );
+
+      // Act
+      const result = await service.findPublicProfile('user-1');
+
+      // Assert
+      expect(result.ratingAverage).toBe(0);
+      expect(result.reviewsCount).toBe(0);
+      expect(result.recentReviews).toEqual([]);
+    });
+
+    it('HU-07 · no expone contraseña, correo, rol ni datos de autenticación (criterio 3)', async () => {
+      // Arrange
+      userRepository.findOneBy.mockResolvedValue(makeUser());
+      userRepository.manager.find.mockResolvedValue([
+        { rating: 4, comment: null, createdAt: new Date(), reviewer: makeUser() },
+      ]);
+
+      // Act
+      const json = JSON.stringify(await service.findPublicProfile('user-1'));
+
+      // Assert
+      for (const secret of ['password', 'hash', 'email', 'ana@example.com', 'tokenVersion', 'role', 'isActive']) {
+        expect(json).not.toContain(secret);
+      }
+    });
+
     it('findPublicProfile devuelve 404 si no existe usuario activo', async () => {
       // Arrange
       userRepository.findOneBy.mockResolvedValue(null);
@@ -659,6 +733,51 @@ describe('UserService', () => {
       await expect(
         service.setActiveStatus(admin, admin.id, { isActive: false }),
       ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('HU-20 · desactivar sube tokenVersion y conserva los datos; reactivar no la cambia', async () => {
+      // Arrange
+      const admin = makeUser({ id: 'admin-1', role: [ValidRoles.ADMIN] });
+      userRepository.findOneBy.mockResolvedValueOnce(
+        makeUser({ tokenVersion: 3 }),
+      );
+
+      // Act
+      await service.setActiveStatus(admin, 'user-1', { isActive: false });
+      const saved = userRepository.save.mock.calls.at(-1)[0] as User;
+
+      // Assert
+      expect(saved.isActive).toBe(false);
+      expect(saved.tokenVersion).toBe(4);
+      expect(saved.email).toBe('ana@example.com');
+      expect(saved.fullName).toBe('Ana Gomez');
+
+      // Arrange: reactivar la misma cuenta
+      userRepository.findOneBy.mockResolvedValueOnce(
+        makeUser({ isActive: false, tokenVersion: 4 }),
+      );
+
+      // Act
+      await service.setActiveStatus(admin, 'user-1', { isActive: true });
+      const reactivated = userRepository.save.mock.calls.at(-1)[0] as User;
+
+      // Assert
+      expect(reactivated.isActive).toBe(true);
+      expect(reactivated.tokenVersion).toBe(4);
+    });
+
+    it('HU-20 · el admin sí puede dejarse ADMIN junto con otros roles', async () => {
+      // Arrange
+      const admin = makeUser({ id: 'admin-1', role: [ValidRoles.ADMIN] });
+      userRepository.findOneBy.mockResolvedValue(admin);
+
+      // Act
+      const result = await service.changeRoles(admin, admin.id, {
+        roles: [ValidRoles.ADMIN, ValidRoles.MODERATOR],
+      });
+
+      // Assert
+      expect(result.role).toEqual([ValidRoles.ADMIN, ValidRoles.MODERATOR]);
     });
 
     it('remove hace soft delete mediante setActiveStatus', async () => {

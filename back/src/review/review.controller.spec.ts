@@ -49,10 +49,18 @@ describe('ReviewController', () => {
 
   it('findAll delega con el usuario autenticado', async () => {
     // Act
-    await controller.findAll(user);
+    await controller.findAll(user, {});
 
     // Assert
-    expect(reviewService.findAll).toHaveBeenCalledWith('user-1');
+    expect(reviewService.findAll).toHaveBeenCalledWith('user-1', undefined);
+  });
+
+  it('findAll filtra por transaccion cuando se envia (HU-18)', async () => {
+    // Act
+    await controller.findAll(user, { transactionId: 'tx-1' });
+
+    // Assert
+    expect(reviewService.findAll).toHaveBeenCalledWith('user-1', 'tx-1');
   });
 
   it('findOne delega con id y usuario autenticado', async () => {

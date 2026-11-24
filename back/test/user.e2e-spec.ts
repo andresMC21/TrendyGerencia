@@ -539,7 +539,7 @@ describe('Users (e2e)', () => {
       const url = 'https://images.example.com/fotos/perfil.jpg';
       await http.patch('/api/user/me').set(auth(token)).send({ photoUrl: url }).expect(200);
       expect((await http.get('/api/user/me').set(auth(token)).expect(200)).body.photoUrl).toBe(url);
-      expect((await http.get(`/api/user/${userId}`).expect(200)).body.photoUrl).toBe(url);
+      expect((await http.get(`/api/user/${userId}`).set(auth(token)).expect(200)).body.photoUrl).toBe(url);
 
       await http.patch('/api/user/me').set(auth(token)).send({ photoUrl: null }).expect(200);
       expect((await http.get('/api/user/me').set(auth(token)).expect(200)).body.photoUrl).toBeNull();
@@ -616,19 +616,55 @@ describe('Users (e2e)', () => {
       .expect(200);
   });
 
-  it('GET /user/:id devuelve el perfil público autenticado', async () => {
-    const res = await http
-      .get(`/api/user/${userId}`)
-      .set(auth(token))
-      .expect(200);
+  describe('HU-07 · Consultar otro perfil', () => {
+    it('criterio 1: sin sesión responde 401; con sesión válida devuelve el perfil', async () => {
+      await http.get(`/api/user/${userId}`).expect(401);
+      await http
+        .get(`/api/user/${userId}`)
+        .set(auth('token-invalido'))
+        .expect(401);
 
-    expect(res.body).toMatchObject({
-      id: userId,
-      email: `${emailPrefix}changed@test.com`,
-      fullName: 'E2E User Updated',
+      const res = await http
+        .get(`/api/user/${userId}`)
+        .set(auth(token))
+        .expect(200);
+      expect(res.body).toMatchObject({
+        id: userId,
+        fullName: 'E2E User Updated',
+      });
     });
 
-    expect(res.body.password).toBeUndefined();
+    it('criterio 2: presenta ratingAverage y reviewsCount como números', async () => {
+      const res = await http
+        .get(`/api/user/${userId}`)
+        .set(auth(token))
+        .expect(200);
+
+      expect(res.body.ratingAverage).toBe(0);
+      expect(res.body.reviewsCount).toBe(0);
+      expect(res.body.recentReviews).toEqual([]);
+      expect(typeof res.body.availableProductsCount).toBe('number');
+      expect(res.body.memberSince).toEqual(expect.any(String));
+    });
+
+    it('criterio 3: no expone contraseña, correo, rol ni datos de autenticación', async () => {
+      const res = await http
+        .get(`/api/user/${userId}`)
+        .set(auth(token))
+        .expect(200);
+
+      for (const field of [
+        'password',
+        'email',
+        'role',
+        'isActive',
+        'tokenVersion',
+        'token',
+      ]) {
+        expect(res.body).not.toHaveProperty(field);
+      }
+      expect(JSON.stringify(res.body)).not.toContain('@test.com');
+    });
   });
 
   it('GET /user/:id valida el UUID', async () => {
@@ -807,4 +843,151 @@ describe('Users (e2e)', () => {
     });
   });
 
+  describe('HU-20 · Administrar usuarios', () => {
+    const register = async (suffix: string) => {
+      const user = newUser(`hu20-${suffix}`);
+      const { body } = await http.post('/api/user/register').send(user).expect(201);
+      return { id: body.id as string, token: body.token as string, user };
+    };
+
+    /** Crea una cuenta, le da el rol indicado y vuelve a iniciar sesión. */
+    const registerWithRole = async (suffix: string, role: 'ADMIN' | 'MODERATOR') => {
+      const account = await register(suffix);
+      await dataSource.query(
+        `UPDATE "user" SET "role" = ARRAY[$1]::"public"."user_role_enum"[] WHERE id = $2`,
+        [role, account.id],
+      );
+      const { body } = await http
+        .post('/api/user/login')
+        .send({ email: account.user.email, password })
+        .expect(200);
+      return { ...account, token: body.token as string };
+    };
+
+    let admin: Awaited<ReturnType<typeof registerWithRole>>;
+
+    beforeAll(async () => {
+      admin = await registerWithRole('admin', 'ADMIN');
+    });
+
+    it('criterio 1: solo ADMIN cambia roles y activa o desactiva cuentas', async () => {
+      const target = await register('c1-target');
+      const user = await register('c1-user');
+      const moderator = await registerWithRole('c1-mod', 'MODERATOR');
+
+      for (const actor of [user, moderator]) {
+        await http
+          .patch(`/api/admin/users/${target.id}/role`)
+          .set(auth(actor.token))
+          .send({ roles: ['MODERATOR'] })
+          .expect(403);
+        await http
+          .patch(`/api/admin/users/${target.id}/active`)
+          .set(auth(actor.token))
+          .send({ isActive: false })
+          .expect(403);
+      }
+      await http
+        .patch(`/api/admin/users/${target.id}/role`)
+        .send({ roles: ['MODERATOR'] })
+        .expect(401);
+
+      const roles = await http
+        .patch(`/api/admin/users/${target.id}/role`)
+        .set(auth(admin.token))
+        .send({ roles: ['USER', 'MODERATOR'] })
+        .expect(200);
+      expect(roles.body.role).toEqual(['USER', 'MODERATOR']);
+
+      const inactive = await http
+        .patch(`/api/admin/users/${target.id}/active`)
+        .set(auth(admin.token))
+        .send({ isActive: false })
+        .expect(200);
+      expect(inactive.body.isActive).toBe(false);
+
+      const active = await http
+        .patch(`/api/admin/users/${target.id}/active`)
+        .set(auth(admin.token))
+        .send({ isActive: true })
+        .expect(200);
+      expect(active.body.isActive).toBe(true);
+    });
+
+    it('criterio 1: rechaza roles vacíos, inválidos o duplicados', async () => {
+      const target = await register('c1-invalid');
+      for (const roles of [[], ['SUPERADMIN'], ['USER', 'USER']]) {
+        await http
+          .patch(`/api/admin/users/${target.id}/role`)
+          .set(auth(admin.token))
+          .send({ roles })
+          .expect(400);
+      }
+    });
+
+    it('criterio 2: desactivar conserva los datos e invalida los JWT vigentes, también al reactivar', async () => {
+      const target = await register('c2-target');
+      await http.get('/api/user/me').set(auth(target.token)).expect(200);
+
+      await http
+        .patch(`/api/admin/users/${target.id}/active`)
+        .set(auth(admin.token))
+        .send({ isActive: false })
+        .expect(200);
+
+      // El JWT que tenía ya no sirve y tampoco puede iniciar sesión.
+      await http.get('/api/user/me').set(auth(target.token)).expect(401);
+      await http
+        .post('/api/user/login')
+        .send({ email: target.user.email, password })
+        .expect(401);
+
+      // Los datos se conservan: el admin la sigue viendo con su información.
+      const kept = await http
+        .get(`/api/admin/users/${target.id}`)
+        .set(auth(admin.token))
+        .expect(200);
+      expect(kept.body).toMatchObject({
+        id: target.id,
+        email: target.user.email,
+        fullName: target.user.fullName,
+        isActive: false,
+      });
+
+      // Al reactivarla, el token viejo sigue invalidado; un login nuevo sí sirve.
+      await http
+        .patch(`/api/admin/users/${target.id}/active`)
+        .set(auth(admin.token))
+        .send({ isActive: true })
+        .expect(200);
+      await http.get('/api/user/me').set(auth(target.token)).expect(401);
+      const login = await http
+        .post('/api/user/login')
+        .send({ email: target.user.email, password })
+        .expect(200);
+      await http.get('/api/user/me').set(auth(login.body.token)).expect(200);
+    });
+
+    it('criterio 3: el admin no puede quitarse ADMIN ni desactivar su propia cuenta', async () => {
+      await http
+        .patch(`/api/admin/users/${admin.id}/role`)
+        .set(auth(admin.token))
+        .send({ roles: ['USER'] })
+        .expect(403);
+      await http
+        .patch(`/api/admin/users/${admin.id}/active`)
+        .set(auth(admin.token))
+        .send({ isActive: false })
+        .expect(403);
+      await http
+        .delete(`/api/admin/users/${admin.id}`)
+        .set(auth(admin.token))
+        .expect(403);
+
+      // Sigue siendo ADMIN, activo y con su sesión vigente.
+      const me = await http.get('/api/user/me').set(auth(admin.token)).expect(200);
+      expect(me.body.role).toContain('ADMIN');
+      expect(me.body.isActive).toBe(true);
+    });
+  });
 });

@@ -210,10 +210,10 @@ La colección `postman/trendy-api.postman_collection.json` cubre todos los endpo
 | Probar que un `USER` no accede a rutas admin (403) | `GET /admin/users` | `ana` |
 | Publicar y editar productos | `POST /products`, `PUT /products/:id` | `ana` |
 | Retirar una publicación (HU-13, borrado lógico → `REMOVED`) y ver mis publicaciones | `DELETE /products/:id`, `GET /products/mine` · web: `/mis-publicaciones` | dueño (`ana`); otro `USER` recibe 403 |
-| Feed por barrio / cercanía / filtros | `GET /products?neighborhoodId=…&lat=…&lng=…&radius=…` | público |
+| Feed por barrio / cercanía / filtros | `GET /products?neighborhoodId=…` o `GET /products?lat=…&lng=…&radius=…&sort=distance` | público |
 | Favoritos (HU-14: marcar sin duplicar, quitar y ver mi lista) | `PUT` y `DELETE /products/:id/favorite`, `GET /products/favorites` (`POST` alterna) · web: corazón en `/explorar`, `/inicio` y en cada producto, y lista en `/favoritos` | cualquiera autenticado |
 | Compra: reservar → el comprador propone punto → el vendedor acepta → vendido + recibido | `POST /transactions`, `POST /transactions/:id/meeting-proposal`, `POST /transactions/:id/meeting-proposal/accept` (o `/reject`), `POST /transactions/:id/confirm-exchange` (cada uno), `PUT /transactions/:id/status` para cancelar | `carlos` compra, `ana` vende |
-| Reseñas tras una compra completada | `POST /review`, `GET /review` | comprador y vendedor |
+| Calificar tras una compra completada (HU-18: 1 a 5 y comentario opcional, una por persona; editar o borrar recalcula el promedio) | `POST /review`, `PATCH` y `DELETE /review/:id`, `GET /review?transactionId=` · web: «Califica a…» en `/transacciones/:id` | comprador y vendedor |
 
 ### Explorar el barrio (HU-09)
 
@@ -226,6 +226,16 @@ La página pública **`/explorar`** (http://localhost:5173/explorar) permite con
 
 Más detalle en [`docs/HU-09.md`](docs/HU-09.md).
 
+### Buscar por cercanía (HU-10)
+
+En `/explorar`, el selector **Ordenar por → Más cercanos** pide un centro para la búsqueda: la ubicación del dispositivo, un punto del mapa (OpenStreetMap con Leaflet) o un barrio. Después, un deslizador ajusta el radio entre 0,1 y 50 km, con marcas en 1, 2, 5, 10, 20 y 50 km, y cada tarjeta muestra a qué distancia está el producto.
+
+- **En la API:** `GET /products?lat=3.3826&lng=-76.5296&radius=2&sort=distance`. `radius` está en km (5 por defecto), cada producto trae `distanceKm` y `sort=distance` exige coordenadas.
+- **Seguridad:** las coordenadas del dispositivo y de un punto del mapa no se guardan en la URL de la página; solo el radio, el orden y, si se eligió un barrio como centro, su slug.
+- **Barrio y cercanía son excluyentes en la web:** elegir uno quita el otro.
+
+Más detalle en [`docs/HU-10.md`](docs/HU-10.md).
+
 ## Pruebas automatizadas
 
 ```bash
@@ -235,10 +245,10 @@ npm run test:cov    # unitarias + cobertura
 
 | Tipo | Herramienta | Resultado |
 |---|---|---|
-| Unitarias | Jest | 25 suites, 326 pruebas pasan |
-| Cobertura | Jest | Sentencias 90.9 % · Ramas 80.8 % · Funciones 85.4 % · Líneas 90.4 % (umbral exigido: 80 %) |
-| Integración | Jest + Supertest + PostGIS | 4 suites, 73 pruebas pasan (health, usuarios, productos, transacciones) |
-| Manuales / regresión | Postman (Newman) | 160 requests, 452 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
+| Unitarias | Jest | 26 suites, 380 pruebas pasan |
+| Cobertura | Jest | Sentencias 90.58 % · Ramas 82.25 % · Funciones 83.92 % · Líneas 90.18 % (umbral exigido: 80 %) |
+| Integración | Jest + Supertest + PostGIS | 4 suites, 120 pruebas pasan (health, usuarios, productos, transacciones) |
+| Manuales / regresión | Postman (Newman) | 163 requests, 464 aserciones, 0 fallos (`npx newman run back/postman/TrendyAPI.postman_collection.json` con la API local y el seed cargado) |
 
 ### Pruebas de integración
 
