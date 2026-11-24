@@ -1553,3 +1553,75 @@ html[data-theme="dark"] .empty-illustration, html[data-theme="dark"] .empty-stat
 .review-stars__off {
   color: var(--line);
 }
+
+/* ---------- HU-20 · Administrar usuarios ---------- */
+.admin-count {
+  margin: 0 0 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.admin-user {
+  gap: 12px;
+  border-left-color: var(--green);
+}
+.admin-user--inactive {
+  border-left-color: var(--slate);
+}
+.admin-user--inactive .admin-user__head {
+  opacity: 0.7;
+}
+.admin-user__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.admin-user__who {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.admin-user__who .tx-meta {
+  word-break: break-all;
+}
+.admin-user__me {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+.admin-roles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  border: 0;
+  margin: 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+}
+.admin-roles legend {
+  float: left;
+  margin-right: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.admin-role {
+  margin: 0;
+  font-size: 14px;
+}
+.admin-role input:disabled {
+  cursor: not-allowed;
+}
+.admin-roles .btn {
+  margin-left: auto;
+}
+.admin-user__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.admin-user .alert,
+.admin-user .field-error {
+  margin: 0;
+}
