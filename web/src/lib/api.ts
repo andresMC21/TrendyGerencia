@@ -88,6 +88,12 @@ export type CreateProductBody = {
   acceptsBarter?: boolean;
 };
 
+/**
+ * HU-12 · Cuerpo de PUT /products/:id: los mismos campos que al publicar, todos
+ * opcionales. Solo se envía lo que cambió.
+ */
+export type UpdateProductBody = Partial<CreateProductBody>;
+
 export type Product = {
   photoUrl?: string | null;
   id: string;
@@ -240,6 +246,13 @@ export const productApi = {
   /** HU-08 · publicar un producto (requiere token). */
   create: (token: string, body: CreateProductBody) =>
     apiRequest<Product>('/products', { method: 'POST', token, body }),
+  /**
+   * HU-12 · editar una publicación propia (solo mientras esté disponible).
+   * 400 si algún dato es inválido, 403 si no es del usuario, 404 si no existe o
+   * fue retirada, 409 si ya está reservada o vendida.
+   */
+  update: (token: string, id: string, body: UpdateProductBody) =>
+    apiRequest<Product>(`/products/${encodeURIComponent(id)}`, { method: 'PUT', token, body }),
   /** HU-13 · publicaciones propias en cualquier estado, incluidas las retiradas. */
   mine: (token: string) => apiRequest<Product[]>('/products/mine', { token }),
   /**

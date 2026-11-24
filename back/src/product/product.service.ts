@@ -43,6 +43,26 @@ const removeConflictMessage = (status: ProductStatus) =>
     ? 'No se puede retirar un producto reservado: primero cancela la transacción activa'
     : `No se puede retirar un producto en estado ${status}`;
 
+/**
+ * HU-12 · Campos que el vendedor puede editar con PUT /products/:id. Son los
+ * mismos del contrato de publicación; id, sellerId, status y los contadores
+ * nunca se copian aunque lleguen al servicio.
+ */
+const EDITABLE_FIELDS = [
+  'title',
+  'description',
+  'photoUrl',
+  'category',
+  'condition',
+  'neighborhoodId',
+  'price',
+  'acceptsBarter',
+  'estimatedWeightKg',
+] as const;
+
+/** Únicos campos que admiten `null` al editar (columnas anulables). */
+const NULLABLE_EDITABLE_FIELDS = new Set<string>(['photoUrl', 'estimatedWeightKg']);
+
 const MAX_CACHE_ENTRIES = 500;
 
 interface CacheEntry {
@@ -253,7 +273,12 @@ export class ProductService {
     return ProductDto.fromEntity(saved);
   }
 
-  /** PUT /products/:id — solo el dueño y solo si está AVAILABLE. */
+  /**
+   * PUT /products/:id — HU-12 · Editar mi publicación.
+   * Solo el dueño (403 si no) y solo si está AVAILABLE (409 si no). Los campos
+   * se copian uno a uno y solo los enviados; `null` se rechaza salvo en los
+   * campos anulables.
+   */
   async update(
     id: string,
     userId: string,
@@ -267,10 +292,26 @@ export class ProductService {
       );
     }
 
+    // HU-12 · criterio 3: PartialType vuelve opcionales los campos y
+    // `@IsOptional` también deja pasar `null`; aquí se rechaza explícitamente
+    // para que un dato inválido nunca llegue a la base (400, no 500).
+    const patch: Record<string, unknown> = {};
+    for (const field of EDITABLE_FIELDS) {
+      const value: unknown = dto[field];
+      if (value === undefined) continue;
+      if (value === null && !NULLABLE_EDITABLE_FIELDS.has(field)) {
+        throw new BadRequestException([`${field} should not be null`]);
+      }
+      patch[field] = value;
+    }
+    const location: unknown = dto.location;
+    if (location === null) {
+      throw new BadRequestException(['location should not be null']);
+    }
+
     const previousNeighborhood = product.neighborhoodId;
-    const { location, ...rest } = dto;
-    Object.assign(product, rest);
-    if (location) product.location = toGeoJson(location);
+    Object.assign(product, patch);
+    if (dto.location) product.location = toGeoJson(dto.location);
 
     const saved = await this.productRepository.save(product);
 

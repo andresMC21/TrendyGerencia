@@ -35,6 +35,9 @@ services:
         value: production
       - key: DB_SSL
         value: 'false'
+      # Producción nunca sincroniza el esquema: solo migraciones.
+      - key: DB_SYNCHRONIZE
+        value: 'false'
       - key: TYPEORM_SYNCHRONIZE
         value: 'false'
 

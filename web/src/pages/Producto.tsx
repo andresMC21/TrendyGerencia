@@ -322,6 +322,10 @@ function MiProducto({ p, onProductChange }: {
       {p.status === 'AVAILABLE' ? (
         <>
           <p className="field-hint">
+            ¿Algo cambió? <Link viewTransition to={`/editar/${p.id}`}>Edita tu publicación</Link> para
+            mantenerla al día.
+          </p>
+          <p className="field-hint">
             Si ya no quieres ofrecer este artículo, retíralo: dejará de aparecer en Trendy y se
             conservará en <Link viewTransition to="/mis-publicaciones">tu historial</Link>.
           </p>
