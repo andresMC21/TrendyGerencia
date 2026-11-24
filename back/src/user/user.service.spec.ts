@@ -735,6 +735,51 @@ describe('UserService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
+    it('HU-20 · desactivar sube tokenVersion y conserva los datos; reactivar no la cambia', async () => {
+      // Arrange
+      const admin = makeUser({ id: 'admin-1', role: [ValidRoles.ADMIN] });
+      userRepository.findOneBy.mockResolvedValueOnce(
+        makeUser({ tokenVersion: 3 }),
+      );
+
+      // Act
+      await service.setActiveStatus(admin, 'user-1', { isActive: false });
+      const saved = userRepository.save.mock.calls.at(-1)[0] as User;
+
+      // Assert
+      expect(saved.isActive).toBe(false);
+      expect(saved.tokenVersion).toBe(4);
+      expect(saved.email).toBe('ana@example.com');
+      expect(saved.fullName).toBe('Ana Gomez');
+
+      // Arrange: reactivar la misma cuenta
+      userRepository.findOneBy.mockResolvedValueOnce(
+        makeUser({ isActive: false, tokenVersion: 4 }),
+      );
+
+      // Act
+      await service.setActiveStatus(admin, 'user-1', { isActive: true });
+      const reactivated = userRepository.save.mock.calls.at(-1)[0] as User;
+
+      // Assert
+      expect(reactivated.isActive).toBe(true);
+      expect(reactivated.tokenVersion).toBe(4);
+    });
+
+    it('HU-20 · el admin sí puede dejarse ADMIN junto con otros roles', async () => {
+      // Arrange
+      const admin = makeUser({ id: 'admin-1', role: [ValidRoles.ADMIN] });
+      userRepository.findOneBy.mockResolvedValue(admin);
+
+      // Act
+      const result = await service.changeRoles(admin, admin.id, {
+        roles: [ValidRoles.ADMIN, ValidRoles.MODERATOR],
+      });
+
+      // Assert
+      expect(result.role).toEqual([ValidRoles.ADMIN, ValidRoles.MODERATOR]);
+    });
+
     it('remove hace soft delete mediante setActiveStatus', async () => {
       // Arrange
       userRepository.findOneBy.mockResolvedValue(makeUser());

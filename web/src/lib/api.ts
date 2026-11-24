@@ -174,6 +174,48 @@ export const authApi = {
     }),
 };
 
+export type UserRole = UserProfile['role'][number];
+
+/** HU-20 · Filtros de la lista de usuarios para administración. */
+export type AdminUserFilters = {
+  search?: string;
+  role?: UserRole;
+  isActive?: boolean;
+  limit?: number;
+  skip?: number;
+};
+
+export type PaginatedUsers = { data: UserProfile[]; total: number; limit: number; skip: number };
+
+/**
+ * HU-20 · Administrar usuarios. Listar lo pueden ADMIN y MODERATOR; cambiar roles y
+ * activar o desactivar cuentas solo ADMIN (403 para los demás). El admin no puede
+ * quitarse ADMIN ni desactivarse a sí mismo (403).
+ */
+export const adminApi = {
+  users: (token: string, { limit = 20, ...filters }: AdminUserFilters = {}) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== '') query.set(key, String(value));
+    }
+    return apiRequest<PaginatedUsers>(`/admin/users?${query}`, { token });
+  },
+  /** Reemplaza todos los roles del usuario (lista no vacía y sin duplicados). */
+  changeRoles: (token: string, id: string, roles: UserRole[]) =>
+    apiRequest<UserProfile>(`/admin/users/${encodeURIComponent(id)}/role`, {
+      method: 'PATCH',
+      token,
+      body: { roles },
+    }),
+  /** false desactiva la cuenta (conserva sus datos e invalida sus JWT); true la reactiva. */
+  setActive: (token: string, id: string, isActive: boolean) =>
+    apiRequest<UserProfile>(`/admin/users/${encodeURIComponent(id)}/active`, {
+      method: 'PATCH',
+      token,
+      body: { isActive },
+    }),
+};
+
 /** HU-07 · Perfil y reputación de otra persona (sin correo ni datos de autenticación). */
 export type PublicReview = {
   rating: number;

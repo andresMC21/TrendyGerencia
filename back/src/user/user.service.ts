@@ -493,6 +493,12 @@ export class UserService {
     }
 
     const user = await this.getUserOrFail(id);
+    // HU-20 · Al desactivar se invalidan los JWT vigentes. Aunque la estrategia
+    // JWT ya rechaza cuentas inactivas, subir tokenVersion evita que esos
+    // tokens vuelvan a servir si la cuenta se reactiva después.
+    if (user.isActive && !dto.isActive) {
+      user.tokenVersion = (user.tokenVersion ?? 0) + 1;
+    }
     user.isActive = dto.isActive;
 
     try {
