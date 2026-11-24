@@ -1,5 +1,6 @@
 import { createRoutesFromElements, Navigate, Route } from 'react-router';
 import { SoloInvitados, SoloUsuarios } from './components/RouteGuards';
+import EditarPublicacion from './pages/EditarPublicacion';
 import Explorar from './pages/Explorar';
 import Favoritos from './pages/Favoritos';
 import Ingresar from './pages/Ingresar';
@@ -53,6 +54,14 @@ export const routes = createRoutesFromElements(
         element={
           <SoloUsuarios>
             <Publicar />
+          </SoloUsuarios>
+        }
+      />
+      <Route
+        path="/editar/:id"
+        element={
+          <SoloUsuarios>
+            <EditarPublicacion />
           </SoloUsuarios>
         }
       />

@@ -11,6 +11,7 @@ Toda la documentación del proyecto está en esta carpeta (`docs/`), junto con e
 | HU-08 | Publicar un producto | `POST /products` | `/publicar` | [HU-08](HU-08.md) |
 | HU-09 | Explorar el barrio | `GET /products?neighborhoodId=` | `/explorar` | [HU-09](HU-09.md) |
 | HU-11 | Consultar un producto | `GET /products/:id` | `/producto/:id` | [HU-11](HU-11.md) |
+| HU-12 | Editar mi publicación | `PUT /products/:id` | `/editar/:id`, `/mis-publicaciones` | [HU-12](HU-12.md) |
 | HU-13 | Retirar una publicación | `DELETE /products/:id`, `GET /products/mine` | `/mis-publicaciones` | [HU-13](HU-13.md) |
 | HU-14 | Gestionar favoritos | `PUT` y `DELETE /products/:id/favorite`, `GET /products/favorites` | `/favoritos`, `/producto/:id` | [HU-14](HU-14.md) |
 | HU-15 | Iniciar una transacción | `POST /transactions` | `/producto/:id` | [HU-15](HU-15.md) |

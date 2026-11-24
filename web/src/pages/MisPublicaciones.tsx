@@ -16,15 +16,18 @@ type Estado =
 
 const ACTIVAS = ['AVAILABLE', 'RESERVED'];
 
-/** HU-13 · Publicaciones del vendedor y retiro (borrado lógico). */
+/** HU-13 · Publicaciones del vendedor y retiro (borrado lógico). HU-12 · enlace para editarlas. */
 export default function MisPublicaciones() {
   const { token } = useSession();
   const location = useLocation();
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
+  const navegacion = location.state as { retirado?: string; editado?: string } | null;
   const [aviso, setAviso] = useState<string>(
-    (location.state as { retirado?: string } | null)?.retirado
-      ? `Retiraste «${(location.state as { retirado: string }).retirado}». Ya no aparece en Trendy.`
-      : '',
+    navegacion?.retirado
+      ? `Retiraste «${navegacion.retirado}». Ya no aparece en Trendy.`
+      : navegacion?.editado
+        ? `Guardaste los cambios de «${navegacion.editado}».`
+        : '',
   );
 
   const cargar = useCallback(() => {
@@ -167,13 +170,18 @@ function MiPublicacion({
         )}
       </div>
       {status === 'AVAILABLE' && (
-        <RetirarPublicacion
-          productId={p.id}
-          title={p.title}
-          onRemoved={onRemoved}
-          onConflict={onConflict}
-          compact
-        />
+        <>
+          <Link viewTransition to={`/editar/${p.id}`} className="btn btn-outline btn-sm" data-testid={`editar-${p.id}`}>
+            Editar
+          </Link>
+          <RetirarPublicacion
+            productId={p.id}
+            title={p.title}
+            onRemoved={onRemoved}
+            onConflict={onConflict}
+            compact
+          />
+        </>
       )}
     </li>
   );

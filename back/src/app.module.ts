@@ -18,7 +18,10 @@ import { HealthController } from './health.controller';
         const isProduction = nodeEnv === 'production';
 
         // Supports both names used by the two original configurations.
-        const synchronize = (config.get<string>('DB_SYNCHRONIZE') ?? config.get<string>('TYPEORM_SYNCHRONIZE')) === 'true';
+        // In production the schema only changes through migrations, whatever the variables say.
+        const synchronize =
+          !isProduction &&
+          (config.get<string>('DB_SYNCHRONIZE') ?? config.get<string>('TYPEORM_SYNCHRONIZE')) === 'true';
 
         // DB_SSL explicitly overrides the environment-based default.
         const sslSetting = config.get<string>('DB_SSL');

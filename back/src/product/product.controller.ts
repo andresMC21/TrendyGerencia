@@ -253,9 +253,9 @@ export class ProductController {
   @Put(':id')
   @Auth()
   @ApiOperation({
-    summary: 'Editar un producto',
+    summary: 'Editar un producto (HU-12)',
     description:
-      'Requiere JWT. Solo el vendedor puede editar el producto y únicamente mientras esté AVAILABLE.',
+      'Requiere JWT. Solo el vendedor puede editar el producto (otro usuario recibe 403) y únicamente mientras esté AVAILABLE (si no, 409). Admite los mismos campos que al publicar, todos opcionales; los datos inválidos (valores fuera de rango, null en campos obligatorios o campos no permitidos como sellerId o status) responden 400 y no se guarda nada.',
   })
   @ApiParam({
     name: 'id',
@@ -273,7 +273,8 @@ export class ProductController {
     description: 'El producto se actualizó correctamente.',
   })
   @ApiBadRequestResponse({
-    description: 'El identificador o el cuerpo no cumplen las validaciones.',
+    description:
+      'El identificador o el cuerpo no cumplen las validaciones; no se modifica el producto.',
   })
   @ApiNotFoundResponse({
     description: 'No existe un producto con ese identificador o fue eliminado.',
