@@ -95,6 +95,8 @@ export default function Perfil() {
             </dl>
           </section>
 
+          <Verificacion />
+
           <DatosDelPerfil />
 
           <FotoDePerfil />
@@ -104,6 +106,91 @@ export default function Perfil() {
       </main>
       <Footer />
     </>
+  );
+}
+
+/** HU-06 · Solicitar la verificación de identidad; HU-19 la resuelve un moderador. */
+function Verificacion() {
+  const { token, user, setProfile } = useSession();
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!user || !token) return null;
+
+  const estado = user.verificationStatus;
+  const motivo = user.verificationRejectionReason;
+
+  const solicitar = async () => {
+    setEnviando(true);
+    setError('');
+    try {
+      await authApi.requestVerification(token);
+      notify('Solicitud de verificación enviada');
+    } catch (e) {
+      setError(
+        e instanceof ApiError && e.status === 409
+          ? 'Tu solicitud ya está en revisión o tu identidad ya fue verificada.'
+          : e instanceof ApiError && e.status === 401
+            ? 'Tu sesión venció. Vuelve a iniciar sesión.'
+            : e instanceof ApiError
+              ? e.messages[0]
+              : 'No pudimos enviar la solicitud. Inténtalo de nuevo.',
+      );
+    } finally {
+      // Recarga el perfil para mostrar el estado y la fecha reales del servidor.
+      try {
+        setProfile(await authApi.me(token));
+      } catch {
+        /* la sesión se resuelve en la siguiente petición */
+      }
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <section className="form-card photo-card" aria-label="Verificación de identidad">
+      <h2 className="detail-h">Verificación de identidad</h2>
+
+      {estado === 'VERIFIED' && (
+        <p data-testid="verificacion-estado">Tu identidad está verificada. ¡Gracias por generar confianza!</p>
+      )}
+
+      {estado === 'PENDING' && (
+        <p data-testid="verificacion-estado">
+          Tu solicitud está en revisión
+          {user.verificationRequestedAt ? ` desde el ${fecha(user.verificationRequestedAt)}` : ''}. Un
+          moderador la resolverá. Mientras tanto no puedes cambiar tu nombre.
+        </p>
+      )}
+
+      {(estado === 'UNVERIFIED' || estado === 'REJECTED') && (
+        <>
+          {estado === 'REJECTED' ? (
+            <Alert tone="error">
+              Tu solicitud fue rechazada.
+              {motivo ? ` Motivo: ${motivo}` : ' El moderador no indicó un motivo.'} Corrige lo que haga
+              falta y vuelve a solicitarla.
+            </Alert>
+          ) : (
+            <p data-testid="verificacion-estado">
+              Verifica tu identidad para dar más confianza a quienes intercambian contigo. Un moderador
+              revisará tu solicitud y, mientras esté en revisión, no podrás cambiar tu nombre.
+            </p>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary"
+            data-testid="solicitar-verificacion"
+            disabled={enviando}
+            onClick={solicitar}
+          >
+            {enviando ? 'Enviando…' : estado === 'REJECTED' ? 'Volver a solicitar' : 'Solicitar verificación'}
+          </button>
+        </>
+      )}
+
+      {error && <Alert tone="error">{error}</Alert>}
+    </section>
   );
 }
 

@@ -990,4 +990,364 @@ describe('Users (e2e)', () => {
       expect(me.body.isActive).toBe(true);
     });
   });
+
+  describe('HU-19 · Resolver verificaciones', () => {
+    type Account = { id: string; token: string; user: ReturnType<typeof newUser> };
+
+    const register = async (suffix: string): Promise<Account> => {
+      const user = newUser(`hu19-${suffix}`);
+      const { body } = await http.post('/api/user/register').send(user).expect(201);
+      return { id: body.id as string, token: body.token as string, user };
+    };
+
+    /** Crea una cuenta, le da el rol indicado y vuelve a iniciar sesión. */
+    const registerWithRole = async (
+      suffix: string,
+      role: 'ADMIN' | 'MODERATOR',
+    ): Promise<Account> => {
+      const account = await register(suffix);
+      await dataSource.query(
+        `UPDATE "user" SET "role" = ARRAY[$1]::"public"."user_role_enum"[] WHERE id = $2`,
+        [role, account.id],
+      );
+      const { body } = await http
+        .post('/api/user/login')
+        .send({ email: account.user.email, password })
+        .expect(200);
+      return { ...account, token: body.token as string };
+    };
+
+    /** Registra una cuenta y deja su solicitud de verificación en PENDING. */
+    const registerPending = async (suffix: string): Promise<Account> => {
+      const account = await register(suffix);
+      await http
+        .post('/api/user/me/verification')
+        .set(auth(account.token))
+        .expect(200);
+      return account;
+    };
+
+    const statusOf = async (id: string) =>
+      (
+        await dataSource.query(
+          'SELECT "verificationStatus" FROM "user" WHERE id = $1',
+          [id],
+        )
+      )[0].verificationStatus as string;
+
+    /** Recorre todas las páginas de pendientes para no depender de otros datos. */
+    const listPending = async (jwt: string) => {
+      const all: any[] = [];
+      let skip = 0;
+      let total = 0;
+      do {
+        const { body } = await http
+          .get(`/api/moderation/verifications?limit=100&skip=${skip}`)
+          .set(auth(jwt))
+          .expect(200);
+        all.push(...body.data);
+        total = body.total;
+        skip += 100;
+      } while (skip < total);
+      return all;
+    };
+
+    let moderator: Account;
+    let admin: Account;
+
+    beforeAll(async () => {
+      moderator = await registerWithRole('mod', 'MODERATOR');
+      admin = await registerWithRole('admin', 'ADMIN');
+    });
+
+    it('criterio 1: moderador y administrador ven solo las solicitudes PENDING, las más antiguas primero', async () => {
+      const first = await registerPending('c1-first');
+      const second = await registerPending('c1-second');
+      const unverified = await register('c1-unverified');
+      const verified = await register('c1-verified');
+      await dataSource.query(
+        'UPDATE "user" SET "verificationStatus" = $1 WHERE id = $2',
+        ['VERIFIED', verified.id],
+      );
+
+      for (const actor of [moderator, admin]) {
+        const pending = await listPending(actor.token);
+        const ids = pending.map((u) => u.id);
+
+        expect(ids).toEqual(expect.arrayContaining([first.id, second.id]));
+        expect(ids).not.toContain(unverified.id);
+        expect(ids).not.toContain(verified.id);
+        expect(pending.every((u) => u.verificationStatus === 'PENDING')).toBe(true);
+        expect(ids.indexOf(first.id)).toBeLessThan(ids.indexOf(second.id));
+        // Nunca se expone la contraseña.
+        expect(pending.some((u) => 'password' in u)).toBe(false);
+      }
+    });
+
+    it('criterio 1: cada solicitud trae foto, información y la fecha real en que se pidió', async () => {
+      const target = await register('c1-detail');
+      const photoUrl = 'https://images.example.com/hu19.jpg';
+      await dataSource.query(
+        'UPDATE "user" SET "photoUrl" = $1, "info" = $2 WHERE id = $3',
+        [photoUrl, 'Vendo ropa en San Fernando', target.id],
+      );
+      const before = Date.now();
+      await http
+        .post('/api/user/me/verification')
+        .set(auth(target.token))
+        .expect(200);
+
+      const item = (await listPending(moderator.token)).find(
+        (u) => u.id === target.id,
+      );
+      expect(item).toMatchObject({
+        photoUrl,
+        info: 'Vendo ropa en San Fernando',
+        verificationStatus: 'PENDING',
+      });
+      const requestedAt = new Date(item.verificationRequestedAt).getTime();
+      expect(requestedAt).toBeGreaterThanOrEqual(before - 1000);
+      expect(requestedAt).toBeLessThanOrEqual(Date.now() + 1000);
+
+      // Editar el perfil no cambia la fecha de la solicitud.
+      await http
+        .patch('/api/user/me')
+        .set(auth(target.token))
+        .send({ info: 'Texto nuevo' })
+        .expect(200);
+      const after = (await listPending(moderator.token)).find(
+        (u) => u.id === target.id,
+      );
+      expect(after.verificationRequestedAt).toBe(item.verificationRequestedAt);
+    });
+
+    it('criterio 1: pagina con limit y skip y valida los parámetros', async () => {
+      await registerPending('c1-page-a');
+      await registerPending('c1-page-b');
+
+      const page = await http
+        .get('/api/moderation/verifications?limit=1&skip=0')
+        .set(auth(moderator.token))
+        .expect(200);
+      expect(page.body.data).toHaveLength(1);
+      expect(page.body).toMatchObject({ limit: 1, skip: 0 });
+      expect(page.body.total).toBeGreaterThanOrEqual(2);
+
+      for (const query of ['limit=0', 'limit=101', 'limit=abc', 'skip=-1']) {
+        await http
+          .get(`/api/moderation/verifications?${query}`)
+          .set(auth(moderator.token))
+          .expect(400);
+      }
+    });
+
+    it('criterio 1: un usuario común no puede consultar y sin token responde 401', async () => {
+      const user = await register('c1-user');
+
+      await http
+        .get('/api/moderation/verifications')
+        .set(auth(user.token))
+        .expect(403);
+      await http.get('/api/moderation/verifications').expect(401);
+    });
+
+    it('criterio 2: aprobar deja la cuenta VERIFIED y sale de la lista de pendientes', async () => {
+      const target = await registerPending('c2-approve');
+
+      const res = await http
+        .patch(`/api/moderation/verifications/${target.id}`)
+        .set(auth(moderator.token))
+        .send({ approved: true })
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        id: target.id,
+        verificationStatus: 'VERIFIED',
+      });
+      expect(res.body.password).toBeUndefined();
+      expect(
+        (await http.get('/api/user/me').set(auth(target.token)).expect(200))
+          .body.verificationStatus,
+      ).toBe('VERIFIED');
+      expect((await listPending(admin.token)).map((u) => u.id)).not.toContain(
+        target.id,
+      );
+    });
+
+    it('criterio 2: rechazar deja la cuenta REJECTED y permite pedir verificación de nuevo', async () => {
+      const target = await registerPending('c2-reject');
+
+      const res = await http
+        .patch(`/api/moderation/verifications/${target.id}`)
+        .set(auth(admin.token))
+        .send({ approved: false, reason: 'Documento ilegible' })
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        verificationStatus: 'REJECTED',
+        verificationRejectionReason: 'Documento ilegible',
+      });
+      // La persona ve el motivo en su propio perfil.
+      expect(
+        (await http.get('/api/user/me').set(auth(target.token)).expect(200))
+          .body.verificationRejectionReason,
+      ).toBe('Documento ilegible');
+
+      // Al volver a solicitar, el motivo anterior se limpia y la fecha se renueva.
+      const firstRequest = (
+        await http.get('/api/user/me').set(auth(target.token)).expect(200)
+      ).body.verificationRequestedAt;
+      await http
+        .post('/api/user/me/verification')
+        .set(auth(target.token))
+        .expect(200, { verificationStatus: 'PENDING' });
+      const me = (
+        await http.get('/api/user/me').set(auth(target.token)).expect(200)
+      ).body;
+      expect(me.verificationRejectionReason).toBeNull();
+      expect(new Date(me.verificationRequestedAt).getTime()).toBeGreaterThanOrEqual(
+        new Date(firstRequest).getTime(),
+      );
+    });
+
+    it('criterio 2: rechazar sin motivo no guarda ninguno, y aprobar descarta el que se envíe', async () => {
+      const rejected = await registerPending('c2-no-reason');
+      const noReason = await http
+        .patch(`/api/moderation/verifications/${rejected.id}`)
+        .set(auth(moderator.token))
+        .send({ approved: false, reason: '   ' })
+        .expect(200);
+      expect(noReason.body.verificationRejectionReason).toBeNull();
+
+      const approved = await registerPending('c2-approve-reason');
+      const res = await http
+        .patch(`/api/moderation/verifications/${approved.id}`)
+        .set(auth(admin.token))
+        .send({ approved: true, reason: 'Todo en orden' })
+        .expect(200);
+      expect(res.body).toMatchObject({
+        verificationStatus: 'VERIFIED',
+        verificationRejectionReason: null,
+      });
+    });
+
+    it('criterio 2: una solicitud ya resuelta, o que no existe, no se puede resolver otra vez', async () => {
+      const target = await registerPending('c2-twice');
+      await http
+        .patch(`/api/moderation/verifications/${target.id}`)
+        .set(auth(moderator.token))
+        .send({ approved: true })
+        .expect(200);
+
+      // Segundo intento: ya no está PENDING y el estado no cambia.
+      await http
+        .patch(`/api/moderation/verifications/${target.id}`)
+        .set(auth(admin.token))
+        .send({ approved: false })
+        .expect(409);
+      expect(await statusOf(target.id)).toBe('VERIFIED');
+
+      // Sin solicitud pendiente (UNVERIFIED).
+      const idle = await register('c2-idle');
+      await http
+        .patch(`/api/moderation/verifications/${idle.id}`)
+        .set(auth(moderator.token))
+        .send({ approved: true })
+        .expect(409);
+      expect(await statusOf(idle.id)).toBe('UNVERIFIED');
+
+      await http
+        .patch('/api/moderation/verifications/00000000-0000-4000-8000-000000000000')
+        .set(auth(moderator.token))
+        .send({ approved: true })
+        .expect(404);
+    });
+
+    it('criterio 2: dos moderadores resolviendo a la vez solo logran una resolución', async () => {
+      const target = await registerPending('c2-race');
+
+      const responses = await Promise.all([
+        http
+          .patch(`/api/moderation/verifications/${target.id}`)
+          .set(auth(moderator.token))
+          .send({ approved: true }),
+        http
+          .patch(`/api/moderation/verifications/${target.id}`)
+          .set(auth(admin.token))
+          .send({ approved: false }),
+      ]);
+
+      expect(responses.map((r) => r.status).sort()).toEqual([200, 409]);
+      const winner = responses.find((r) => r.status === 200)!;
+      expect(await statusOf(target.id)).toBe(winner.body.verificationStatus);
+    });
+
+    it('criterio 2: valida el id y el cuerpo, y exige rol de moderación', async () => {
+      const target = await registerPending('c2-invalid');
+      const user = await register('c2-user');
+
+      await http
+        .patch('/api/moderation/verifications/no-es-uuid')
+        .set(auth(moderator.token))
+        .send({ approved: true })
+        .expect(400);
+
+      for (const body of [
+        {},
+        { approved: 'true' },
+        { approved: 1 },
+        { approved: true, reason: 'a'.repeat(301) },
+        { approved: true, verificationStatus: 'VERIFIED' },
+        { approved: true, role: ['ADMIN'] },
+      ]) {
+        await http
+          .patch(`/api/moderation/verifications/${target.id}`)
+          .set(auth(moderator.token))
+          .send(body)
+          .expect(400);
+      }
+
+      await http
+        .patch(`/api/moderation/verifications/${target.id}`)
+        .set(auth(user.token))
+        .send({ approved: true })
+        .expect(403);
+      await http
+        .patch(`/api/moderation/verifications/${target.id}`)
+        .send({ approved: true })
+        .expect(401);
+
+      // Ninguna petición inválida cambió el estado.
+      expect(await statusOf(target.id)).toBe('PENDING');
+    });
+
+    it.each(['MODERATOR', 'ADMIN'] as const)(
+      'criterio 3: un %s no puede resolver su propia solicitud',
+      async (role) => {
+        const self = await registerWithRole(`c3-${role.toLowerCase()}`, role);
+        await http
+          .post('/api/user/me/verification')
+          .set(auth(self.token))
+          .expect(200);
+
+        for (const approved of [true, false]) {
+          await http
+            .patch(`/api/moderation/verifications/${self.id}`)
+            .set(auth(self.token))
+            .send({ approved })
+            .expect(403);
+        }
+        expect(await statusOf(self.id)).toBe('PENDING');
+
+        // Otro miembro de moderación sí puede resolverla.
+        const other = role === 'ADMIN' ? moderator : admin;
+        const res = await http
+          .patch(`/api/moderation/verifications/${self.id}`)
+          .set(auth(other.token))
+          .send({ approved: true })
+          .expect(200);
+        expect(res.body.verificationStatus).toBe('VERIFIED');
+      },
+    );
+  });
 });
