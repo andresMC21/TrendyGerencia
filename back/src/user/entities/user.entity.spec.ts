@@ -30,6 +30,8 @@ describe('User entity', () => {
         'tokenVersion',
         'info',
         'verificationStatus',
+        'verificationRequestedAt',
+        'verificationRejectionReason',
         'ratingAverage',
         'reviewsCount',
         'isActive',

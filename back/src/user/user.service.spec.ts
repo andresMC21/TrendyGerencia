@@ -815,7 +815,11 @@ describe('UserService', () => {
             _value: [VerificationStatus.UNVERIFIED, VerificationStatus.REJECTED],
           }),
         },
-        { verificationStatus: VerificationStatus.PENDING },
+        {
+          verificationStatus: VerificationStatus.PENDING,
+          verificationRequestedAt: expect.any(Date),
+          verificationRejectionReason: null,
+        },
       );
       expect(result).toEqual({
         verificationStatus: VerificationStatus.PENDING,
@@ -842,51 +846,214 @@ describe('UserService', () => {
       await service.findPendingVerifications({ limit: 20, skip: 0 });
 
       // Assert
-      expect(qb.orderBy).toHaveBeenCalledWith('user.updatedAt', 'ASC');
+      expect(qb.orderBy).toHaveBeenCalledWith(
+        'user.verificationRequestedAt',
+        'ASC',
+        'NULLS FIRST',
+      );
+    });
+  });
+
+  describe('HU-19 · resolver verificaciones', () => {
+    const moderator = () =>
+      makeUser({ id: 'moderator-1', role: [ValidRoles.MODERATOR] });
+
+    it('criterio 1: findPendingVerifications filtra PENDING, pagina y ordena por antigüedad', async () => {
+      // Arrange
+      qb.getManyAndCount.mockResolvedValue([
+        [makeUser({ verificationStatus: VerificationStatus.PENDING })],
+        7,
+      ]);
+
+      // Act
+      const result = await service.findPendingVerifications({
+        limit: 5,
+        skip: 10,
+      });
+
+      // Assert
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'user.verificationStatus = :verificationStatus',
+        { verificationStatus: VerificationStatus.PENDING },
+      );
+      expect(qb.orderBy).toHaveBeenCalledWith(
+        'user.verificationRequestedAt',
+        'ASC',
+        'NULLS FIRST',
+      );
+      expect(qb.skip).toHaveBeenCalledWith(10);
+      expect(qb.take).toHaveBeenCalledWith(5);
+      expect(result).toMatchObject({ total: 7, limit: 5, skip: 10 });
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0]).not.toHaveProperty('password');
     });
 
-    it('resolveVerification aprueba o rechaza solo solicitudes pendientes', async () => {
+    it('criterio 1: cada solicitud trae foto, información y la fecha en que se pidió', async () => {
+      // Act
+      await service.findPendingVerifications({ limit: 20, skip: 0 });
+
+      // Assert
+      expect(qb.select).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          'user.photoUrl',
+          'user.info',
+          'user.verificationRequestedAt',
+          'user.verificationRejectionReason',
+        ]),
+      );
+    });
+
+    it.each([
+      [true, VerificationStatus.VERIFIED],
+      [false, VerificationStatus.REJECTED],
+    ])(
+      'criterio 2: approved=%s deja la solicitud en %s con un UPDATE condicional',
+      async (approved, expected) => {
+        // Arrange
+        userRepository.findOneBy.mockResolvedValue(
+          makeUser({ id: 'target-1', verificationStatus: expected }),
+        );
+
+        // Act
+        const result = await service.resolveVerification(
+          moderator(),
+          'target-1',
+          { approved },
+        );
+
+        // Assert
+        expect(userRepository.update).toHaveBeenCalledWith(
+          { id: 'target-1', verificationStatus: VerificationStatus.PENDING },
+          { verificationStatus: expected, verificationRejectionReason: null },
+        );
+        expect(userRepository.save).not.toHaveBeenCalled();
+        expect(result.verificationStatus).toBe(expected);
+        expect(result).not.toHaveProperty('password');
+      },
+    );
+
+    it('criterio 2: al rechazar guarda el motivo (sin espacios sobrantes) para que la persona lo vea', async () => {
       // Arrange
       userRepository.findOneBy.mockResolvedValue(
         makeUser({
           id: 'target-1',
-          verificationStatus: VerificationStatus.PENDING,
+          verificationStatus: VerificationStatus.REJECTED,
         }),
       );
 
       // Act
-      const approved = await service.resolveVerification(
-        makeUser({ id: 'moderator-1' }),
-        'target-1',
-        { approved: true },
-      );
+      await service.resolveVerification(moderator(), 'target-1', {
+        approved: false,
+        reason: '  Documento ilegible  ',
+      });
 
       // Assert
-      expect(approved.verificationStatus).toBe(VerificationStatus.VERIFIED);
+      expect(userRepository.update).toHaveBeenCalledWith(expect.anything(), {
+        verificationStatus: VerificationStatus.REJECTED,
+        verificationRejectionReason: 'Documento ilegible',
+      });
+    });
 
+    it.each([undefined, '', '   '])(
+      'criterio 2: rechazar con motivo %j no guarda ningún motivo',
+      async (reason) => {
+        // Arrange
+        userRepository.findOneBy.mockResolvedValue(
+          makeUser({ id: 'target-1' }),
+        );
+
+        // Act
+        await service.resolveVerification(moderator(), 'target-1', {
+          approved: false,
+          reason,
+        });
+
+        // Assert
+        expect(userRepository.update).toHaveBeenCalledWith(expect.anything(), {
+          verificationStatus: VerificationStatus.REJECTED,
+          verificationRejectionReason: null,
+        });
+      },
+    );
+
+    it('criterio 2: aprobar descarta el motivo aunque se envíe', async () => {
+      // Arrange
+      userRepository.findOneBy.mockResolvedValue(makeUser({ id: 'target-1' }));
+
+      // Act
+      await service.resolveVerification(moderator(), 'target-1', {
+        approved: true,
+        reason: 'Todo en orden',
+      });
+
+      // Assert
+      expect(userRepository.update).toHaveBeenCalledWith(expect.anything(), {
+        verificationStatus: VerificationStatus.VERIFIED,
+        verificationRejectionReason: null,
+      });
+    });
+
+    it.each([
+      VerificationStatus.UNVERIFIED,
+      VerificationStatus.VERIFIED,
+      VerificationStatus.REJECTED,
+    ])('devuelve 409 si el usuario está %s y no tiene solicitud pendiente', async (status) => {
+      // Arrange
+      userRepository.update.mockResolvedValue({ affected: 0 });
       userRepository.findOneBy.mockResolvedValue(
-        makeUser({
-          id: 'target-1',
-          verificationStatus: VerificationStatus.UNVERIFIED,
-        }),
+        makeUser({ id: 'target-1', verificationStatus: status }),
       );
+
+      // Act / Assert
       await expect(
-        service.resolveVerification(
-          makeUser({ id: 'moderator-1' }),
-          'target-1',
-          {
-            approved: false,
-            reason: 'faltan datos',
-          },
-        ),
+        service.resolveVerification(moderator(), 'target-1', {
+          approved: true,
+        }),
       ).rejects.toBeInstanceOf(ConflictException);
     });
 
-    it('resolveVerification impide revisar la propia solicitud', async () => {
+    it('devuelve 404 si el usuario no existe', async () => {
+      // Arrange
+      userRepository.update.mockResolvedValue({ affected: 0 });
+      userRepository.findOneBy.mockResolvedValue(null);
+
       // Act / Assert
       await expect(
-        service.resolveVerification(makeUser(), 'user-1', { approved: true }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+        service.resolveVerification(moderator(), 'missing', {
+          approved: true,
+        }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it.each([ValidRoles.MODERATOR, ValidRoles.ADMIN])(
+      'criterio 3: un %s no puede resolver su propia solicitud',
+      async (role) => {
+        // Arrange
+        const self = makeUser({
+          id: 'self-1',
+          role: [role],
+          verificationStatus: VerificationStatus.PENDING,
+        });
+
+        // Act / Assert
+        await expect(
+          service.resolveVerification(self, 'self-1', { approved: true }),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(userRepository.update).not.toHaveBeenCalled();
+        expect(userRepository.save).not.toHaveBeenCalled();
+      },
+    );
+
+    it('convierte un error inesperado de base de datos en 500', async () => {
+      // Arrange
+      userRepository.update.mockRejectedValue(new Error('db down'));
+
+      // Act / Assert
+      await expect(
+        service.resolveVerification(moderator(), 'target-1', {
+          approved: true,
+        }),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
     });
   });
 

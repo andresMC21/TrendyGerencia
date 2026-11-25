@@ -244,7 +244,7 @@ export class UserController {
   @ApiOperation({
     summary: 'Solicitar verificación de identidad',
     description:
-      'Requiere JWT válido. UNVERIFIED y REJECTED pasan a PENDING. PENDING y VERIFIED devuelven 409. La actualización condicional es atómica.',
+      'Requiere JWT válido. UNVERIFIED y REJECTED pasan a PENDING. PENDING y VERIFIED devuelven 409. Guarda la fecha de la solicitud (verificationRequestedAt) y borra el motivo de un rechazo anterior. La actualización condicional es atómica.',
   })
   @ApiOkResponse({
     type: VerificationRequestResponseDto,

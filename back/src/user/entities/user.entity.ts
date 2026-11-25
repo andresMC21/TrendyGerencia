@@ -57,6 +57,24 @@ export class User {
   })
   verificationStatus: VerificationStatus;
 
+  /** HU-19 · Cuándo la persona pidió la verificación (null si nunca la pidió). */
+  @Column({
+    type: 'timestamptz',
+    nullable: true,
+  })
+  verificationRequestedAt: Date | null;
+
+  /**
+   * HU-19 · Motivo del último rechazo, para que la persona sepa qué corregir.
+   * Es null si no fue rechazada o si volvió a solicitar o fue aprobada.
+   */
+  @Column({
+    type: 'varchar',
+    length: 300,
+    nullable: true,
+  })
+  verificationRejectionReason: string | null;
+
   @Column({
     type: 'float',
     default: 0,

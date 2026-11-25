@@ -40,7 +40,7 @@ export class ModerationController {
   @ApiOperation({
     summary: 'Listar solicitudes de verificación pendientes',
     description:
-      'ADMIN y MODERATOR pueden consultar solicitudes PENDING. Devuelve primero las solicitudes más antiguas; limit y skip controlan la paginación.',
+      'ADMIN y MODERATOR pueden consultar solicitudes PENDING. Devuelve primero las solicitudes más antiguas según verificationRequestedAt (fecha en que se pidió); limit y skip controlan la paginación. Cada elemento incluye foto, información y fecha de solicitud.',
   })
   @ApiQuery({
     name: 'limit',
@@ -78,7 +78,7 @@ export class ModerationController {
   @ApiOperation({
     summary: 'Resolver una solicitud de verificación',
     description:
-      'ADMIN y MODERATOR pueden aprobarla (approved=true) o rechazarla (false). reason es opcional, se incluye en los logs y no queda almacenado en el perfil. No se puede resolver la propia solicitud.',
+      'ADMIN y MODERATOR pueden aprobarla (approved=true) o rechazarla (false). reason es opcional (hasta 300 caracteres): al rechazar se guarda en verificationRejectionReason para que la persona lo vea en su perfil, y al aprobar se limpia. También queda en los logs. No se puede resolver la propia solicitud.',
   })
   @ApiParam({
     name: 'userId',
