@@ -65,6 +65,11 @@ export type UserProfile = {
   ratingAverage?: number;
   reviewsCount: number;
   createdAt: string;
+  updatedAt?: string;
+  /** HU-19 · Cuándo se pidió la verificación (null si nunca se pidió). */
+  verificationRequestedAt?: string | null;
+  /** HU-19 · Motivo del último rechazo; null si no aplica. */
+  verificationRejectionReason?: string | null;
 };
 
 export type RegisterBody = { fullName: string; email: string; password: string };
@@ -153,6 +158,15 @@ export const authApi = {
   logout: (token: string) =>
     apiRequest<{ message: string }>('/user/logout', { method: 'POST', token }),
   /**
+   * HU-06 · pedir la verificación de identidad. UNVERIFIED y REJECTED pasan a PENDING;
+   * si ya está en revisión o verificada responde 409.
+   */
+  requestVerification: (token: string) =>
+    apiRequest<{ verificationStatus: 'PENDING' }>('/user/me/verification', {
+      method: 'POST',
+      token,
+    }),
+  /**
    * HU-05 · cambiar la contraseña. Exige la contraseña actual: 403 si no coincide,
    * 400 si la nueva es igual a la actual o no tiene entre 8 y 12 caracteres.
    */
@@ -213,6 +227,23 @@ export const adminApi = {
       method: 'PATCH',
       token,
       body: { isActive },
+    }),
+};
+
+/**
+ * HU-19 · Resolver verificaciones. Lo pueden usar ADMIN y MODERATOR (403 para los demás).
+ * La lista trae las solicitudes PENDING, las más antiguas primero. Resolver cambia la cuenta
+ * a VERIFIED o REJECTED; nadie puede resolver su propia solicitud (403) y una solicitud ya
+ * resuelta responde 409. El motivo es opcional (hasta 300 caracteres) y no se guarda en el perfil.
+ */
+export const moderationApi = {
+  pending: (token: string, { limit = 20, skip = 0 }: { limit?: number; skip?: number } = {}) =>
+    apiRequest<PaginatedUsers>(`/moderation/verifications?limit=${limit}&skip=${skip}`, { token }),
+  resolve: (token: string, userId: string, approved: boolean, reason?: string) =>
+    apiRequest<UserProfile>(`/moderation/verifications/${encodeURIComponent(userId)}`, {
+      method: 'PATCH',
+      token,
+      body: reason ? { approved, reason } : { approved },
     }),
 };
 

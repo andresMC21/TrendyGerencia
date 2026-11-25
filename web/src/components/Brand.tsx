@@ -68,6 +68,11 @@ export function Header() {
                   Usuarios
                 </NavLink>
               )}
+              {(user.role.includes('ADMIN') || user.role.includes('MODERATOR')) && (
+                <NavLink viewTransition to="/moderacion/verificaciones" className="nav-link">
+                  Verificaciones
+                </NavLink>
+              )}
               <button
                 className="btn btn-ghost"
                 onClick={() => {

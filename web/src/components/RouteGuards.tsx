@@ -16,6 +16,15 @@ export function SoloAdmin({ children }: { children: ReactNode }) {
   return user.role.includes('ADMIN') ? children : <Navigate to="/inicio" replace />;
 }
 
+/** HU-19 · Cuentas con rol MODERATOR o ADMIN; los demás vuelven a su inicio. */
+export function SoloModeracion({ children }: { children: ReactNode }) {
+  const { user, loading } = useSession();
+  if (loading) return <div className="page-loading" />;
+  if (!user) return <Navigate to="/ingresar" replace />;
+  const puede = user.role.includes('ADMIN') || user.role.includes('MODERATOR');
+  return puede ? children : <Navigate to="/inicio" replace />;
+}
+
 export function SoloUsuarios({ children }: { children: ReactNode }) {
   const { user, loading } = useSession();
   if (loading) return <div className="page-loading" />;

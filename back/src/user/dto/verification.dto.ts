@@ -15,7 +15,7 @@ export class ResolveVerification {
     example: 'Documento ilegible',
     maxLength: 300,
     description:
-      'Motivo de hasta 300 caracteres; se registra en logs, no en el perfil.',
+      'Motivo de hasta 300 caracteres. Al rechazar se guarda en el perfil (verificationRejectionReason) y la persona lo ve; al aprobar se descarta. También se registra en logs.',
   })
   @IsOptional()
   @IsString()
