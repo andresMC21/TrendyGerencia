@@ -1,8 +1,8 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /** TRD-25 · Chat entre comprador y vendedor de cada transacción. */
-export class TransactionMessages1794500000000 implements MigrationInterface {
-  name = 'TransactionMessages1794500000000';
+export class TransactionMessages1794600000000 implements MigrationInterface {
+  name = 'TransactionMessages1794600000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(

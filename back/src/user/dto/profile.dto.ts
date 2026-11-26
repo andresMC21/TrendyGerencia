@@ -114,6 +114,26 @@ export class UserProfileDto {
   @Expose()
   updatedAt: Date;
 
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description:
+      'HU-19 · Fecha en que se pidió la verificación de identidad o null si nunca se pidió.',
+  })
+  @Expose()
+  verificationRequestedAt: Date | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    maxLength: 300,
+    description:
+      'HU-19 · Motivo del último rechazo de la verificación o null si no aplica.',
+  })
+  @Expose()
+  verificationRejectionReason: string | null;
+
   static fromEntity(user: User): UserProfileDto {
     return plainToInstance(UserProfileDto, user, {
       excludeExtraneousValues: true,

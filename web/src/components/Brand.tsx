@@ -81,6 +81,7 @@ export function Header({ land = false }: { land?: boolean }) {
                     <Link role="menuitem" viewTransition className="only-m" to="/publicar">Publicar</Link>
                     <Link role="menuitem" viewTransition className="only-m" to="/transacciones">Transacciones</Link>
                     {user.role.includes('ADMIN') && <Link role="menuitem" viewTransition to="/admin/usuarios">Administrar usuarios</Link>}
+                    {(user.role.includes('ADMIN') || user.role.includes('MODERATOR')) && <Link role="menuitem" viewTransition to="/moderacion/verificaciones">Verificaciones</Link>}
                     <button role="menuitem" type="button" onClick={() => { navigate('/', { replace: true }); void logout(); }}>Cerrar sesión</button>
                   </div>
                 )}

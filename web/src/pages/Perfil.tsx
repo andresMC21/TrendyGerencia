@@ -35,11 +35,14 @@ export default function Perfil() {
     setSolicitando(true);
     try {
       await authApi.requestVerification(token);
-      setProfile({ ...user, verificationStatus: 'PENDING' });
-      notify('Solicitud enviada');
+      notify('Solicitud de verificación enviada');
     } catch (err) {
       notify(err instanceof ApiError && err.status === 409 ? 'Tu identidad ya está verificada o en revisión.' : 'No pudimos enviar la solicitud.');
-    } finally { setSolicitando(false); }
+    } finally {
+      // Recarga el perfil para mostrar el estado y la fecha reales del servidor.
+      try { setProfile(await authApi.me(token)); } catch { /* se resuelve en la siguiente petición */ }
+      setSolicitando(false);
+    }
   };
   return (
     <>
@@ -69,8 +72,12 @@ export default function Perfil() {
                 <span className="ic">{ver === 'PENDING' ? '…' : '!'}</span>
                 <div>
                   <b>{ver === 'PENDING' ? 'Verificación en revisión' : ver === 'REJECTED' ? 'Tu verificación fue rechazada' : 'Verifica tu identidad'}</b>
-                  <p>{ver === 'PENDING' ? 'Te avisaremos cuando la revisemos. Mientras tanto no puedes cambiar tu nombre.' : 'Las cuentas verificadas generan más confianza y cierran tratos más rápido.'}</p>
-                  {ver !== 'PENDING' && <button className="sbtn" type="button" disabled={solicitando} onClick={() => void solicitar()}>{solicitando ? 'Enviando…' : ver === 'REJECTED' ? 'Volver a solicitar' : 'Solicitar verificación'}</button>}
+                  <p data-testid="verificacion-estado">{ver === 'PENDING'
+                    ? `Un moderador la revisará${user.verificationRequestedAt ? ` (la pediste el ${new Date(user.verificationRequestedAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })})` : ''}. Mientras tanto no puedes cambiar tu nombre.`
+                    : ver === 'REJECTED'
+                      ? `${user.verificationRejectionReason ? `Motivo: ${user.verificationRejectionReason}.` : 'El moderador no indicó un motivo.'} Corrige lo que haga falta y vuelve a solicitarla.`
+                      : 'Las cuentas verificadas generan más confianza y cierran tratos más rápido.'}</p>
+                  {ver !== 'PENDING' && <button className="sbtn" type="button" data-testid="solicitar-verificacion" disabled={solicitando} onClick={() => void solicitar()}>{solicitando ? 'Enviando…' : ver === 'REJECTED' ? 'Volver a solicitar' : 'Solicitar verificación'}</button>}
                 </div>
               </div>
             )}

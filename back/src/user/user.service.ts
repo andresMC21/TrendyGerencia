@@ -45,8 +45,9 @@ export interface PaginatedResult<T> {
 }
 
 type UserSort = {
-  by: 'createdAt' | 'updatedAt';
+  by: 'createdAt' | 'updatedAt' | 'verificationRequestedAt';
   direction: 'ASC' | 'DESC';
+  nulls?: 'NULLS FIRST' | 'NULLS LAST';
 };
 
 const BCRYPT_ROUNDS = 10;
@@ -286,7 +287,11 @@ export class UserService {
             VerificationStatus.REJECTED,
           ]),
         },
-        { verificationStatus: VerificationStatus.PENDING },
+        {
+          verificationStatus: VerificationStatus.PENDING,
+          verificationRequestedAt: new Date(),
+          verificationRejectionReason: null,
+        },
       );
 
       if (result.affected !== 1) {
@@ -398,6 +403,9 @@ export class UserService {
         'user.info',
         'user.role',
         'user.verificationStatus',
+        'user.verificationRequestedAt',
+        'user.verificationRejectionReason',
+        'user.photoUrl',
         'user.isActive',
         'user.ratingAverage',
         'user.reviewsCount',
@@ -427,8 +435,13 @@ export class UserService {
       });
     }
 
+    if (sort.nulls) {
+      qb.orderBy(`user.${sort.by}`, sort.direction, sort.nulls);
+    } else {
+      qb.orderBy(`user.${sort.by}`, sort.direction);
+    }
+
     const [users, total] = await qb
-      .orderBy(`user.${sort.by}`, sort.direction)
       .skip(skip)
       .take(limit)
       .getManyAndCount();
@@ -527,8 +540,8 @@ export class UserService {
         skip: pagination.skip,
         verificationStatus: VerificationStatus.PENDING,
       },
-      // Las solicitudes más antiguas primero.
-      { by: 'updatedAt', direction: 'ASC' },
+      // Las solicitudes más antiguas primero; las anteriores a la fecha de solicitud, antes.
+      { by: 'verificationRequestedAt', direction: 'ASC', nulls: 'NULLS FIRST' },
     );
   }
 
@@ -537,35 +550,48 @@ export class UserService {
     userId: string,
     dto: ResolveVerification,
   ): Promise<UserProfileDto> {
+    // HU-19 · criterio 3: nadie resuelve su propia solicitud, sin importar su rol.
     if (moderator.id === userId) {
       throw new ForbiddenException(
         'You cannot review your own verification request',
       );
     }
 
-    const user = await this.getUserOrFail(userId);
-
-    if (user.verificationStatus !== VerificationStatus.PENDING) {
-      throw new ConflictException('The user has no pending verification');
-    }
-
-    user.verificationStatus = dto.approved
+    const nextStatus = dto.approved
       ? VerificationStatus.VERIFIED
       : VerificationStatus.REJECTED;
 
     try {
-      await this.userRepository.save(user);
+      // Un único UPDATE condicional: solo cambia si la solicitud sigue PENDING,
+      // así dos moderadores simultáneos no pueden resolver la misma solicitud
+      // ni sobrescribir otros datos del perfil.
+      const result = await this.userRepository.update(
+        { id: userId, verificationStatus: VerificationStatus.PENDING },
+        {
+          verificationStatus: nextStatus,
+          // El motivo solo se guarda al rechazar; aprobar lo limpia.
+          verificationRejectionReason: dto.approved
+            ? null
+            : dto.reason?.trim() || null,
+        },
+      );
+
+      if (result.affected !== 1) {
+        // 404 si el usuario no existe; 409 si existe pero no está PENDING.
+        await this.getUserOrFail(userId);
+        throw new ConflictException('The user has no pending verification');
+      }
     } catch (error) {
       this.handleException(error);
     }
 
-    // No hay columna para guardar el motivo: queda solo en el log.
+    // El motivo también queda en el log para auditoría.
     this.logger.log(
-      `Verification of user ${userId} ${user.verificationStatus} by ${moderator.id}` +
-      (dto.reason ? ` - reason: ${dto.reason}` : ''),
+      `Verification of user ${userId} ${nextStatus} by ${moderator.id}` +
+        (dto.reason ? ` - reason: ${dto.reason}` : ''),
     );
 
-    return this.toProfile(user);
+    return this.toProfile(await this.getUserOrFail(userId));
   }
 
   // ---------------------------------------------------------------------------

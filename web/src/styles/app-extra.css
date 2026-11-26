@@ -68,3 +68,18 @@ html.night .pg-app .mapa .leaflet-tile-pane{filter:invert(.9) hue-rotate(180deg)
 .pg-app .cerca .radio-slider strong{font-size:inherit}
 .pg-app .cerca .radio-marca--secundaria{display:none}
 @media (max-width:520px){.pg-app .carnet .top{flex-direction:column;align-items:flex-start;gap:10px}.pg-app .carnet dl{grid-template-columns:1fr 1fr}}
+/* HU-19 · solicitudes de verificación */
+.pg-app .vlist{display:grid;gap:12px;background:none;border:0;padding:0}
+.pg-app .vreq{background:var(--sf);border:1.5px solid var(--ln);border-radius:16px;padding:16px 18px;display:grid;gap:12px}
+.pg-app .vreq .who{display:flex;align-items:center;gap:12px}
+.pg-app .vreq .who b{display:block;color:var(--ink);font-size:16px}
+.pg-app .vreq .who span:not(.chip){display:block;color:var(--mu);font-size:13px}
+.pg-app .vreq .bio{margin:0;color:var(--tx);font-style:italic}
+.pg-app .vreq .ua{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pg-app .vreq .rej{flex:1;display:grid;gap:6px}
+.pg-app .vreq .rej .acts{display:flex;gap:10px}
+/* La tarjeta .pend de Inicio no debe pisar la caja de verificación en revisión */
+.pg-app .vbox.pend{grid-template-columns:44px minmax(0,1fr);gap:12px;align-items:start;background:none;border:1.5px dashed var(--ln);border-radius:14px;padding:14px;margin:4px 0 0;box-shadow:none;transform:none}
+.pg-app .vbox.pend span.ic{font-size:inherit;color:#003049}
+.pg-app .vbox.pend p{font-size:14px}
+.pg-app .vbox.pend .ic{width:44px;height:44px;border-radius:50%;border:2px solid #003049;display:grid;place-items:center;font-weight:700;background:#DCE8F0;margin:0;padding:0}
