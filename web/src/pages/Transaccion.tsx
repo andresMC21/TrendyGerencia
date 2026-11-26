@@ -1,27 +1,22 @@
-import { notify } from '../lib/toast';
-import { TransactionSteps } from '../components/TransactionSteps';
-import { Skeleton } from '../components/Skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useParams } from 'react-router';
-import { Footer, Header } from '../components/Brand';
-import { Alert } from '../components/Form';
+import { Avatar } from '../components/Avatar';
+import { Header } from '../components/Brand';
 import { CalificarIntercambio } from '../components/CalificarIntercambio';
+import { Alert } from '../components/Form';
+import { SafeMap } from '../components/SafeMap';
+import { TxChat } from '../components/TxChat';
 import { ApiError, transactionApi, type Transaction as Tx } from '../lib/api';
-import { ESTADO_TRANSACCION, etapaAcuerdo, fechaHora } from '../lib/format';
+import { etapaAcuerdo, precio } from '../lib/format';
 import { nombrePunto, SAFE_POINTS } from '../lib/safePoints';
 import { useSession } from '../lib/session';
+import { notify } from '../lib/toast';
 
-type Estado =
-  | { tipo: 'cargando' }
-  | { tipo: 'ok'; tx: Tx }
-  | { tipo: 'ajena' }
-  | { tipo: 'no-existe' }
-  | { tipo: 'error' };
+type Estado = { tipo: 'cargando' } | { tipo: 'ok'; tx: Tx } | { tipo: 'ajena' } | { tipo: 'no-existe' } | { tipo: 'error' };
 
-/**
- * HU-16 · Detalle y acuerdo del punto seguro entre comprador y vendedor.
- * HU-17 · Finalizar o cancelar el intercambio.
- */
+const fmtLargo = (iso: string) => new Date(iso).toLocaleString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', hour: 'numeric', minute: '2-digit' });
+
+/** HU-16 · Acordar el encuentro y HU-17 · cerrar el intercambio (prototipo TRD-25: recibo + mapa + chat). */
 export default function Transaccion() {
   const { id = '' } = useParams();
   return <TransaccionPagina key={id} id={id} />;
@@ -30,43 +25,32 @@ export default function Transaccion() {
 function TransaccionPagina({ id }: { id: string }) {
   const { token } = useSession();
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     if (!token) return;
     let activo = true;
-    transactionApi
-      .get(token, id)
+    transactionApi.get(token, id)
       .then((tx) => activo && setEstado({ tipo: 'ok', tx }))
       .catch((err) => {
         if (!activo) return;
         if (err instanceof ApiError && err.status === 403) return setEstado({ tipo: 'ajena' });
-        if (err instanceof ApiError && (err.status === 404 || err.status === 400))
-          return setEstado({ tipo: 'no-existe' });
+        if (err instanceof ApiError && (err.status === 404 || err.status === 400)) return setEstado({ tipo: 'no-existe' });
         setEstado({ tipo: 'error' });
       });
-    return () => {
-      activo = false;
-    };
+    return () => { activo = false; };
   }, [id, token]);
 
-  // HU-16 · Mientras la transacción siga abierta, se consulta cada pocos segundos para
-  // ver la respuesta de la otra persona (propuesta, aceptación o cancelación).
-  const abierta =
-    estado.tipo === 'ok' && (estado.tx.status === 'PENDING' || estado.tx.status === 'AGREED_POINT');
-  // HU-17 · Con el punto acordado se consulta más seguido, para que el círculo se
-  // complete apenas la otra persona confirme su parte.
-  const intervalo = estado.tipo === 'ok' && estado.tx.status === 'AGREED_POINT' ? 2500 : 6000;
+  // Mientras siga abierta se consulta cada pocos segundos (respuesta de la otra persona y mensajes nuevos).
+  const abierta = estado.tipo === 'ok' && estado.tx.status !== 'CANCELLED';
+  const intervalo = estado.tipo === 'ok' && estado.tx.status === 'AGREED_POINT' ? 2500 : 5000;
   useEffect(() => {
     if (!token || !abierta) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      transactionApi
-        .get(token, id)
-        .then((tx) =>
-          setEstado((prev) =>
-            prev.tipo === 'ok' && prev.tx.updatedAt === tx.updatedAt ? prev : { tipo: 'ok', tx },
-          ),
-        )
+      setTick((t) => t + 1);
+      transactionApi.get(token, id)
+        .then((tx) => setEstado((prev) => (prev.tipo === 'ok' && prev.tx.updatedAt === tx.updatedAt ? prev : { tipo: 'ok', tx })))
         .catch(() => undefined);
     }, intervalo);
     return () => window.clearInterval(timer);
@@ -75,338 +59,180 @@ function TransaccionPagina({ id }: { id: string }) {
   return (
     <>
       <Header />
-      <main className="dashboard">
-        <div className="container container--narrow">
-          <Link viewTransition to="/transacciones" className="back-link">
-            ← Volver a mis transacciones
-          </Link>
-
-          {estado.tipo === 'cargando' && <Skeleton kind="transactions" />}
-          {estado.tipo === 'ajena' && (
-            <Alert tone="error">
-              No participas en esta transacción, así que no puedes verla ni modificarla.
-            </Alert>
-          )}
-          {estado.tipo === 'no-existe' && (
-            <Alert tone="info">Esta transacción no existe.</Alert>
-          )}
-          {estado.tipo === 'error' && (
-            <Alert tone="error">No pudimos cargar la transacción. Inténtalo de nuevo.</Alert>
-          )}
-          {estado.tipo === 'ok' && (
-            <Detalle tx={estado.tx} onChange={(tx) => setEstado({ tipo: 'ok', tx })} />
-          )}
-        </div>
+      <main id="contenido" className="view on wrap">
+        <p className="crumbs"><Link viewTransition to="/transacciones">← Volver a mis transacciones</Link></p>
+        {estado.tipo === 'cargando' && <div className="tx"><div className="receipt skelbox" style={{ height: 420 }} /><div /></div>}
+        {estado.tipo === 'ajena' && <Alert tone="error">No participas en esta transacción, así que no puedes verla ni modificarla.</Alert>}
+        {estado.tipo === 'no-existe' && <Alert tone="info">Esta transacción no existe.</Alert>}
+        {estado.tipo === 'error' && <Alert tone="error">No pudimos cargar la transacción. Inténtalo de nuevo.</Alert>}
+        {estado.tipo === 'ok' && <Detalle tx={estado.tx} tick={tick} onChange={(tx) => setEstado({ tipo: 'ok', tx })} />}
       </main>
-      <Footer />
     </>
   );
 }
 
-function Detalle({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
+function Detalle({ tx, tick, onChange }: { tx: Tx; tick: number; onChange: (tx: Tx) => void }) {
   const { user } = useSession();
-  const e = ESTADO_TRANSACCION[tx.status] ?? { label: tx.status, tone: 'gray' };
   const soyComprador = tx.buyerId === user?.id;
-  // HU-17 · aviso que debe sobrevivir aunque la sección de acciones desaparezca.
+  const etapa = etapaAcuerdo(tx, user?.id);
+  const otro = ((soyComprador ? tx.seller?.fullName : tx.buyer?.fullName) ?? 'la otra persona').split(' ')[0];
   const [aviso, setAviso] = useState('');
+  const [stamp, setStamp] = useState<{ t: string; c?: string; n: number } | null>(null);
+  const prev = useRef(tx.status);
+  useEffect(() => {
+    if (prev.current !== tx.status) {
+      if (tx.status === 'AGREED_POINT') setStamp({ t: '¡Acordado!', n: Date.now() });
+      if (tx.status === 'COMPLETED') setStamp({ t: '¡Completado!', n: Date.now() });
+      if (tx.status === 'CANCELLED') setStamp({ t: 'Cancelado', c: '#D62828', n: Date.now() });
+      prev.current = tx.status;
+    }
+  }, [tx.status]);
+  const fire = (t: string, c?: string) => setStamp({ t, c, n: Date.now() });
+
+  const st: [string, string] = tx.status === 'PENDING' ? (etapa === 'sin-propuesta' ? ['Pendiente', 'o'] : ['Esperando respuesta', '']) : tx.status === 'AGREED_POINT' ? ['Punto acordado', 'b'] : tx.status === 'COMPLETED' ? ['Completada', 'g'] : ['Cancelada', 'n'];
+  const paso = tx.status === 'COMPLETED' ? 4 : tx.status === 'AGREED_POINT' ? 3 : etapa === 'sin-propuesta' ? 1 : 2;
+  const titulo = tx.status === 'CANCELLED' ? 'Transacción cancelada' : tx.status === 'COMPLETED' ? 'Intercambio completado' : tx.status === 'AGREED_POINT' ? 'Nos vemos allá' : etapa === 'esperando' ? 'Propuesta enviada' : etapa === 'por-responder' ? 'Tienes una propuesta' : 'Acuerden el encuentro';
+  const ref = tx.id.replace(/-/g, '').slice(0, 4).toUpperCase();
 
   return (
-    <article className="product-detail">
-      <TransactionSteps status={tx.status} celebrate />
-      <div className="product-top">
-        <span className="product-cat">{soyComprador ? 'Compra' : 'Venta'}</span>
-        <span className={`chip chip--${e.tone}`} data-testid="transaccion-estado">
-          {e.label}
-        </span>
+    <>
+      <div className="txhead"><h1>{titulo}</h1></div>
+      <div className="tx">
+        <div className="receipt">
+          <div className="rh">
+            <span>RECIBO DE {soyComprador ? 'COMPRA' : 'VENTA'} · Nº {ref} <button className="copy" type="button" aria-label="Copiar referencia" onClick={() => { void navigator.clipboard?.writeText(tx.id); notify('Referencia copiada'); }}>Copiar</button></span>
+            <span className={`chip ${st[1]}`} data-testid="transaccion-estado">{st[0]}</span>
+          </div>
+          <div className="deal">
+            <span className="thumb">{tx.product?.photoUrl && <img src={tx.product.photoUrl} alt="" />}</span>
+            <div>
+              {tx.product ? <Link to={`/producto/${tx.productId}`} style={{ color: 'var(--ink)', fontFamily: "'Young Serif',Georgia,serif", fontSize: 19, textDecoration: 'none' }}>{tx.product.title}</Link> : <b>Transacción</b>}
+              <div className="parties">
+                <Avatar name={tx.buyer?.fullName ?? 'Comprador'} photoUrl={soyComprador ? user?.photoUrl : tx.buyer?.photoUrl} avatar={soyComprador ? user?.avatar : tx.buyer?.avatar} style={{ width: 28, height: 28 }} />
+                <Link to={soyComprador ? '/perfil' : `/usuario/${tx.buyerId}`} data-testid="perfil-comprador">{soyComprador ? 'Tú compras' : `${tx.buyer?.fullName ?? 'Comprador'} compra`}</Link>
+                <span aria-hidden="true">⇄</span>
+                <Avatar name={tx.seller?.fullName ?? 'Vendedor'} photoUrl={!soyComprador ? user?.photoUrl : tx.seller?.photoUrl} avatar={!soyComprador ? user?.avatar : tx.seller?.avatar} style={{ width: 28, height: 28 }} />
+                <Link to={!soyComprador ? '/perfil' : `/usuario/${tx.sellerId}`} data-testid="perfil-vendedor">{!soyComprador ? 'Tú vendes' : `${tx.seller?.fullName ?? 'Vendedor'} vende`}</Link>
+              </div>
+            </div>
+            {tx.product && <span className="chip" style={{ fontSize: 14 }}>{precio(Number(tx.product.price))}</span>}
+          </div>
+          <div className="stampwrap">{stamp && <div key={stamp.n} className="stamp on" role="status" style={stamp.c ? { color: stamp.c, borderColor: stamp.c } : undefined}>{stamp.t}</div>}</div>
+          <ol className="track t4">
+            {['Solicitud', 'Punto propuesto', 'Punto aceptado', 'Completada'].map((l, i) => (
+              <li key={l} className={tx.status === 'CANCELLED' ? '' : i < paso ? 'done' : i === paso ? 'now' : ''}>{l}</li>
+            ))}
+          </ol>
+          {aviso && <Alert tone="info">{aviso}</Alert>}
+          {tx.status === 'PENDING' && <AcordarEncuentro tx={tx} onChange={onChange} onFire={fire} />}
+          {tx.status === 'AGREED_POINT' && <Acordado tx={tx} onChange={onChange} onAviso={setAviso} />}
+          {tx.status === 'COMPLETED' && (
+            <div data-testid="resultado-final">
+              <div className="agreed on"><b>Intercambio completado.</b><div className="mu" style={{ fontSize: 14 }}>{tx.seller?.fullName ?? 'El vendedor'} marcó el producto como vendido y {tx.buyer?.fullName ?? 'el comprador'} lo recibió.</div></div>
+              <CalificarIntercambio tx={tx} />
+            </div>
+          )}
+          {tx.status === 'CANCELLED' && (
+            <div data-testid="resultado-final" className="agreed on" style={{ background: 'var(--cr)' }}>
+              <b>Transacción cancelada.</b>
+              <div className="mu" style={{ fontSize: 14 }}>{tx.product?.status === 'REMOVED' ? 'Después, quien vendía retiró la publicación, así que ya no está disponible.' : 'El producto se liberó y volvió a estar disponible para otros compradores.'}</div>
+            </div>
+          )}
+          {(tx.status === 'PENDING' || tx.status === 'AGREED_POINT') && <Cancelar tx={tx} onChange={onChange} onAviso={setAviso} />}
+          <p className="mu" style={{ fontSize: 12, margin: '14px 0 0' }}>Habla con {otro} en el chat de la derecha.</p>
+        </div>
+        <aside className="side">
+          <TxChat tx={tx} tick={tick} />
+          <div className="box"><h3>Consejos para el encuentro</h3><ul><li>Elijan un lugar concurrido y de día.</li><li>Revisa el objeto antes de pagar o intercambiar.</li><li>Confirma en Trendy solo cuando todo esté bien.</li></ul></div>
+        </aside>
       </div>
-
-      <h1>
-        {tx.product ? (
-          <Link viewTransition to={`/producto/${tx.productId}`} className="product-link">
-            {tx.product.title}
-          </Link>
-        ) : (
-          'Transacción'
-        )}
-      </h1>
-
-      <dl className="profile-data profile-data--plain">
-        <div>
-          <dt>Comprador</dt>
-          <dd>
-            <Link to={`/usuario/${tx.buyerId}`} data-testid="perfil-comprador">
-              {tx.buyer?.fullName ?? 'Ver perfil'}
-            </Link>
-          </dd>
-        </div>
-        <div>
-          <dt>Vendedor</dt>
-          <dd>
-            <Link to={`/usuario/${tx.sellerId}`} data-testid="perfil-vendedor">
-              {tx.seller?.fullName ?? 'Ver perfil'}
-            </Link>
-          </dd>
-        </div>
-        {tx.message && (
-          <div>
-            <dt>Mensaje</dt>
-            <dd>{tx.message}</dd>
-          </div>
-        )}
-        <div>
-          <dt>Referencia</dt>
-          <dd className="tx-ref">{tx.id}</dd>
-        </div>
-      </dl>
-
-      <h2 className="detail-h">Entrega presencial</h2>
-      {tx.status === 'PENDING' ? (
-        <AcordarEncuentro tx={tx} onChange={onChange} />
-      ) : tx.safePointId && tx.scheduledTime && (tx.agreedAt || tx.status !== 'CANCELLED') ? (
-        <div className="meeting-box" data-testid="encuentro-acordado">
-          <span className="meeting-kicker">Acordado por los dos</span>
-          <strong>{nombrePunto(tx.safePointId)}</strong>
-          <span>{fechaHora(tx.scheduledTime)}</span>
-        </div>
-      ) : (
-        <Alert tone="info">Esta transacción no llegó a acordar un punto de encuentro.</Alert>
-      )}
-
-      <h2 className="detail-h">Resultado del intercambio</h2>
-      {aviso && <Alert tone="info">{aviso}</Alert>}
-      {tx.status === 'COMPLETED' && (
-        <>
-          <AnilloIntercambio tx={tx} />
-          <div data-testid="resultado-final">
-            <Alert tone="success">
-              <strong>Intercambio completado.</strong> {tx.seller?.fullName ?? 'El vendedor'} marcó
-              el producto como vendido y {tx.buyer?.fullName ?? 'el comprador'} lo recibió.
-            </Alert>
-          </div>
-          <CalificarIntercambio tx={tx} />
-        </>
-      )}
-      {tx.status === 'CANCELLED' && (
-        <div data-testid="resultado-final">
-          <Alert tone="info">
-            <strong>Transacción cancelada.</strong>{' '}
-            {tx.product?.status === 'REMOVED'
-              ? 'Después, quien vendía retiró la publicación (HU-13), así que ya no está disponible.'
-              : 'El producto se liberó y volvió a estar disponible para otros compradores.'}
-          </Alert>
-        </div>
-      )}
-      {(tx.status === 'PENDING' || tx.status === 'AGREED_POINT') && (
-        <CerrarIntercambio tx={tx} onChange={onChange} onAviso={setAviso} />
-      )}
-    </article>
+    </>
   );
 }
 
-type Accion = 'CONFIRMAR' | 'CANCELLED';
-
-/**
- * HU-17 · Círculo del intercambio: la mitad izquierda es el «producto vendido» del
- * vendedor y la derecha el «producto recibido» del comprador. Cada mitad se pone
- * verde cuando esa persona confirma; con las dos, el círculo queda completo.
- */
-function AnilloIntercambio({ tx }: { tx: Tx }) {
-  const vendido = !!tx.sellerConfirmedAt;
-  const recibido = !!tx.buyerConfirmedAt;
-  const total = Number(vendido) + Number(recibido);
-  const completo = tx.status === 'COMPLETED' || total === 2;
-  const color = (ok: boolean) => (ok ? 'var(--green)' : 'var(--line)');
-  const partes = [
-    { key: 'vendedor', ok: vendido, label: 'Producto vendido', quien: tx.seller?.fullName ?? 'Vendedor' },
-    { key: 'comprador', ok: recibido, label: 'Producto recibido', quien: tx.buyer?.fullName ?? 'Comprador' },
-  ];
-
-  return (
-    <div className="exchange-ring" data-testid="confirmaciones">
-      <svg
-        viewBox="0 0 120 120"
-        className="exchange-ring__svg"
-        role="img"
-        aria-label={`Intercambio: ${total} de 2 confirmaciones`}
-      >
-        {/* Mitad izquierda: vendedor. Mitad derecha: comprador. */}
-        <path d="M60 8 A52 52 0 0 0 60 112" stroke={color(vendido)} className="exchange-ring__half" />
-        <path d="M60 8 A52 52 0 0 1 60 112" stroke={color(recibido)} className="exchange-ring__half" />
-        <text x="60" y="60" className={`exchange-ring__center${completo ? ' exchange-ring__center--ok' : ''}`}>
-          {completo ? '✓' : `${total}/2`}
-        </text>
-      </svg>
-      <ul className="exchange-ring__legend">
-        {partes.map((p, i) => (
-          <li
-            key={p.key}
-            className={`exchange-check${p.ok ? ' exchange-check--ok' : ''}`}
-            data-testid={`estado-${p.key}`}
-          >
-            <span className="exchange-ring__dot" style={{ background: color(p.ok) }} aria-hidden="true" />
-            <span>
-              <strong>{p.label}</strong>
-              <small>
-                {p.quien} · mitad {i === 0 ? 'izquierda' : 'derecha'} · {p.ok ? 'confirmado ✓' : 'por confirmar'}
-              </small>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/**
- * HU-17 · Cada parte confirma su lado (vendido / recibido) y cualquiera puede
- * cancelar. El intercambio queda completado cuando confirman los dos.
- */
-function CerrarIntercambio({
-  tx,
-  onChange,
-  onAviso,
-}: {
-  tx: Tx;
-  onChange: (tx: Tx) => void;
-  onAviso: (mensaje: string) => void;
-}) {
+/** HU-17 · Con el punto acordado, cada uno confirma su parte. */
+function Acordado({ tx, onChange, onAviso }: { tx: Tx; onChange: (tx: Tx) => void; onAviso: (m: string) => void }) {
   const { token, user } = useSession();
-  const [pendiente, setPendiente] = useState<Accion | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const inFlight = useRef(false);
-  const acordado = tx.status === 'AGREED_POINT';
   const soyVendedor = tx.sellerId === user?.id;
-  const otro = (soyVendedor ? tx.buyer?.fullName : tx.seller?.fullName) ?? 'la otra persona';
-  const yoConfirme = soyVendedor ? tx.sellerConfirmedAt : tx.buyerConfirmedAt;
-  const otroConfirmo = soyVendedor ? tx.buyerConfirmedAt : tx.sellerConfirmedAt;
+  const otro = ((soyVendedor ? tx.buyer?.fullName : tx.seller?.fullName) ?? 'la otra persona').split(' ')[0];
+  const vendedor = (tx.seller?.fullName ?? 'El vendedor').split(' ')[0];
+  const comprador = (tx.buyer?.fullName ?? 'El comprador').split(' ')[0];
+  const yo = soyVendedor ? tx.sellerConfirmedAt : tx.buyerConfirmedAt;
+  const punto = SAFE_POINTS.find((p) => p.id === tx.safePointId);
 
-  const confirmacion: Record<Accion, { pregunta: string; detalle: string; boton: string }> = {
-    CONFIRMAR: soyVendedor
-      ? {
-          pregunta: `¿Ya le entregaste el producto a ${otro}?`,
-          detalle: `Quedará marcado como vendido de tu parte. Cuando ${otro} marque que lo recibió, el intercambio se completa. No se puede deshacer.`,
-          boton: 'Sí, producto vendido',
-        }
-      : {
-          pregunta: '¿Ya recibiste el producto?',
-          detalle: `Quedará marcado como recibido de tu parte. Cuando ${otro} marque que lo vendió, el intercambio se completa. No se puede deshacer.`,
-          boton: 'Sí, lo recibí',
-        },
-    CANCELLED: {
-      pregunta: '¿Seguro que quieres cancelar esta transacción?',
-      detalle: 'El producto volverá a estar disponible para otros compradores. No se puede deshacer.',
-      boton: 'Sí, cancelar',
-    },
-  };
-
-  async function enviar(accion: Accion) {
-    if (!token || inFlight.current) return;
-    inFlight.current = true;
+  const confirmar = async () => {
+    if (!token || sending) return;
     setSending(true);
     setError('');
     onAviso('');
     try {
-      const updated =
-        accion === 'CONFIRMAR'
-          ? await transactionApi.confirmExchange(token, tx.id)
-          : await transactionApi.updateStatus(token, tx.id, 'CANCELLED');
-      setPendiente(null);
+      const updated = await transactionApi.confirmExchange(token, tx.id);
+      setConfirmando(false);
       onChange({ ...tx, ...updated });
       notify('Transacción actualizada.');
     } catch (err) {
-      setPendiente(null);
-      if (err instanceof ApiError && err.status === 401) {
-        setError('Tu sesión expiró. Vuelve a ingresar para actualizar la transacción.');
-      } else if (err instanceof ApiError && err.status === 403) {
-        setError('Solo el comprador y el vendedor pueden confirmar o cancelar esta transacción.');
-      } else if (err instanceof ApiError && err.status === 409) {
-        // La otra persona canceló o cambió el estado: se avisa y se muestra el estado real.
+      setConfirmando(false);
+      if (err instanceof ApiError && err.status === 409) {
         onAviso('La transacción se actualizó mientras tanto. Te mostramos su estado actual.');
         await transactionApi.get(token, tx.id).then(onChange).catch(() => undefined);
-      } else {
-        setError(err instanceof ApiError ? err.message : 'No pudimos actualizar la transacción. Inténtalo de nuevo.');
-      }
-    } finally {
-      inFlight.current = false;
-      setSending(false);
-    }
-  }
-
-  if (pendiente) {
-    const c = confirmacion[pendiente];
-    return (
-      <section
-        className={`tx-confirm tx-confirm--${pendiente === 'CANCELLED' ? 'danger' : 'ok'}`}
-        role="alertdialog"
-        aria-labelledby="tx-confirm-q"
-        aria-describedby="tx-confirm-d"
-      >
-        <strong id="tx-confirm-q">{c.pregunta}</strong>
-        <p id="tx-confirm-d">{c.detalle}</p>
-        <div className="tx-actions">
-          <button
-            type="button"
-            className={`btn ${pendiente === 'CANCELLED' ? 'btn-danger' : 'btn-success'}`}
-            onClick={() => enviar(pendiente)}
-            disabled={sending}
-            data-testid="btn-confirmar"
-          >
-            {sending ? 'Guardando…' : c.boton}
-          </button>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => setPendiente(null)}
-            disabled={sending}
-          >
-            No, volver
-          </button>
-        </div>
-      </section>
-    );
-  }
+      } else setError(err instanceof ApiError ? err.message : 'No pudimos actualizar la transacción. Inténtalo de nuevo.');
+    } finally { setSending(false); }
+  };
 
   return (
-    <section className="tx-close" aria-label="Confirmar o cancelar el intercambio">
-      {error && <Alert tone="error">{error}</Alert>}
-      <p className="field-hint" data-testid="estado-intercambio">
-        {!acordado
-          ? 'Cuando acuerden el punto y la hora, el vendedor marcará «producto vendido» y el comprador «producto recibido».'
-          : yoConfirme && !otroConfirmo
-            ? `Tu mitad del círculo ya está en verde. Se completa cuando ${otro} marque su parte.`
-            : otroConfirmo && !yoConfirme
-              ? `${otro} ya completó su mitad. Marca la tuya para cerrar el intercambio.`
-              : 'Después del encuentro, cada uno completa su mitad del círculo.'}
-      </p>
-      {acordado && <AnilloIntercambio tx={tx} />}
-      <div className="tx-actions">
-        {acordado &&
-          (yoConfirme ? (
-            <span className="exchange-done" data-testid="mi-parte-confirmada">
-              ✓ {soyVendedor ? 'Marcaste producto vendido' : 'Marcaste producto recibido'}
-            </span>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-success"
-              onClick={() => setPendiente('CONFIRMAR')}
-              disabled={sending}
-              data-testid={soyVendedor ? 'confirmar-vendedor' : 'confirmar-comprador'}
-            >
-              {soyVendedor ? 'Marcar producto vendido' : 'Marcar producto recibido'}
-            </button>
-          ))}
-        <button
-          type="button"
-          className="btn btn-danger-outline"
-          onClick={() => setPendiente('CANCELLED')}
-          data-testid="btn-cancelar"
-        >
-          Cancelar transacción
-        </button>
+    <div className="prop" data-testid="encuentro-acordado">
+      <div className="agreed on"><b>{nombrePunto(tx.safePointId ?? '')}</b> · {tx.scheduledTime && fmtLargo(tx.scheduledTime)}<div className="mu" style={{ fontSize: 14 }}>Acordado por los dos.{punto ? ` ${punto.address}.` : ''}</div></div>
+      <div className="checks" data-testid="confirmaciones">
+        <div className={`ck${tx.sellerConfirmedAt ? ' ok' : ''}`} data-testid="estado-vendedor"><span className="dot">{tx.sellerConfirmedAt ? '✓' : ''}</span><span>{tx.sellerConfirmedAt ? <>{soyVendedor ? 'Marcaste' : `${vendedor} marcó`} <b>producto vendido</b></> : <>Falta que {soyVendedor ? 'marques' : `${vendedor} marque`} <b>producto vendido</b></>}</span></div>
+        <div className={`ck${tx.buyerConfirmedAt ? ' ok' : ''}`} data-testid="estado-comprador"><span className="dot">{tx.buyerConfirmedAt ? '✓' : ''}</span><span>{tx.buyerConfirmedAt ? <>{!soyVendedor ? 'Marcaste' : `${comprador} marcó`} <b>producto recibido</b></> : <>Falta que {!soyVendedor ? 'marques' : `${comprador} marque`} <b>producto recibido</b></>}</span></div>
       </div>
-    </section>
+      {error && <Alert tone="error">{error}</Alert>}
+      <div className="row">
+        {yo ? (
+          <span className="mu" data-testid="mi-parte-confirmada">Listo de tu parte. Falta {otro}.</span>
+        ) : confirmando ? (
+          <span className="confirm">{soyVendedor ? `¿Ya le entregaste el producto a ${otro}?` : '¿Ya recibiste el producto?'} No se puede deshacer.
+            <button className="btn" type="button" disabled={sending} onClick={() => void confirmar()} data-testid="btn-confirmar">{sending ? 'Guardando…' : soyVendedor ? 'Sí, producto vendido' : 'Sí, lo recibí'}</button>
+            <button className="btn2" type="button" onClick={() => setConfirmando(false)}>No</button>
+          </span>
+        ) : (
+          <button className="btn" type="button" onClick={() => setConfirmando(true)} data-testid={soyVendedor ? 'confirmar-vendedor' : 'confirmar-comprador'}>{soyVendedor ? 'Marcar como vendido' : 'Marcar como recibido'}</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** HU-17 · Cualquiera de los dos puede cancelar mientras siga abierta. */
+function Cancelar({ tx, onChange, onAviso }: { tx: Tx; onChange: (tx: Tx) => void; onAviso: (m: string) => void }) {
+  const { token } = useSession();
+  const [conf, setConf] = useState(false);
+  const [sending, setSending] = useState(false);
+  const cancelar = async () => {
+    if (!token || sending) return;
+    setSending(true);
+    try {
+      const updated = await transactionApi.updateStatus(token, tx.id, 'CANCELLED');
+      onChange({ ...tx, ...updated });
+      notify('Transacción cancelada.');
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        onAviso('La transacción se actualizó mientras tanto. Te mostramos su estado actual.');
+        if (token) await transactionApi.get(token, tx.id).then(onChange).catch(() => undefined);
+      } else notify(err instanceof ApiError ? err.message : 'No pudimos cancelar la transacción.');
+    } finally { setSending(false); setConf(false); }
+  };
+  return (
+    <div className="cancelrow">
+      {conf ? (
+        <span>¿Seguro? El producto volverá a estar disponible. <button className="ghost danger" type="button" disabled={sending} onClick={() => void cancelar()} data-testid="btn-confirmar">{sending ? 'Cancelando…' : 'Sí, cancelar'}</button><button className="ghost" type="button" onClick={() => setConf(false)}>No</button></span>
+      ) : (
+        <button className="ghost" type="button" onClick={() => setConf(true)} data-testid="btn-cancelar">Cancelar transacción</button>
+      )}
+    </div>
   );
 }
 
@@ -426,314 +252,148 @@ function mensajeError(err: unknown, accion: string): string {
   return err instanceof ApiError ? err.message : `No pudimos ${accion}. Inténtalo de nuevo.`;
 }
 
-/**
- * HU-16 · Comprador y vendedor acuerdan el encuentro: uno propone y el otro acepta,
- * contrapropone o rechaza. Solo cuando los dos están de acuerdo pasa a AGREED_POINT.
- */
-function AcordarEncuentro({ tx, onChange }: { tx: Tx; onChange: (tx: Tx) => void }) {
+/** HU-16 · Proponer, esperar, aceptar, rechazar o contraproponer el punto y la hora. */
+function AcordarEncuentro({ tx, onChange, onFire }: { tx: Tx; onChange: (tx: Tx) => void; onFire: (t: string, c?: string) => void }) {
   const { user, token } = useSession();
   const etapa = etapaAcuerdo(tx, user?.id);
   const soyComprador = tx.buyerId === user?.id;
-  const otro = (soyComprador ? tx.seller?.fullName : tx.buyer?.fullName) ?? 'la otra persona';
+  const otro = ((soyComprador ? tx.seller?.fullName : tx.buyer?.fullName) ?? 'la otra persona').split(' ')[0];
   const [editando, setEditando] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  // El aviso queda atado a la propuesta para la que se dio: si la otra persona
-  // responde (rechaza, contrapropone), deja de mostrarse.
-  const [aviso, setAvisoState] = useState<{ texto: string; clave: string } | null>(null);
-  const claveActual = `${etapa}|${tx.proposedById ?? ''}`;
-  const setAviso = (texto: string) =>
-    setAvisoState(texto ? { texto, clave: `esperando|${user?.id ?? ''}` } : null);
-  const avisoVigente =
-    aviso && claveActual === aviso.clave ? aviso.texto : '';
-  const inFlight = useRef(false);
-
-  async function recargar() {
-    if (token) await transactionApi.get(token, tx.id).then(onChange).catch(() => undefined);
-  }
 
   async function responder(accion: 'aceptar' | 'rechazar') {
-    if (!token || inFlight.current || !tx.safePointId || !tx.scheduledTime) return;
-    inFlight.current = true;
+    if (!token || sending || !tx.safePointId || !tx.scheduledTime) return;
     setSending(true);
     setError('');
-    setAviso('');
     try {
-      const updated =
-        accion === 'aceptar'
-          ? await transactionApi.acceptMeeting(token, tx.id, tx.safePointId, tx.scheduledTime)
-          : await transactionApi.rejectMeeting(token, tx.id);
-      // Aceptar lleva a «Acordado por los dos» y el rechazo se muestra desde los datos
-      // de la transacción, así que ambos lados lo ven sin un aviso local.
+      const updated = accion === 'aceptar'
+        ? await transactionApi.acceptMeeting(token, tx.id, tx.safePointId, tx.scheduledTime)
+        : await transactionApi.rejectMeeting(token, tx.id);
       onChange({ ...tx, ...updated });
-      notify('Transacción actualizada.');
+      notify(accion === 'aceptar' ? '¡Punto acordado!' : 'Rechazaste la propuesta.');
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setError(`${otro} cambió la propuesta o la transacción cambió de estado. Revisa la versión actual.`);
-        await recargar();
-      } else {
-        setError(mensajeError(err, accion === 'aceptar' ? 'aceptar la propuesta' : 'rechazar la propuesta'));
-      }
-    } finally {
-      inFlight.current = false;
-      setSending(false);
-    }
+        await transactionApi.get(token, tx.id).then(onChange).catch(() => undefined);
+      } else setError(mensajeError(err, accion === 'aceptar' ? 'aceptar la propuesta' : 'rechazar la propuesta'));
+    } finally { setSending(false); }
   }
 
-  const propuesta =
-    tx.safePointId && tx.scheduledTime ? (
-      <div className="meeting-box" data-testid="propuesta-encuentro">
-        <span className="meeting-kicker">
-          {etapa === 'esperando' ? 'Tu propuesta' : `Propuesta de ${otro}`}
-        </span>
-        <strong>{nombrePunto(tx.safePointId)}</strong>
-        <span>{fechaHora(tx.scheduledTime)}</span>
-      </div>
-    ) : null;
-
-  return (
-    <section className="meeting-agreement" aria-label="Acordar punto seguro y horario">
-      <p className="agreement-progress" data-testid="paso-acuerdo">
-        {etapa === 'sin-propuesta'
-          ? `Paso 1 de 2 · ${soyComprador ? 'Propón' : `${otro} propone`} el punto y la hora de entrega`
-          : `Paso 2 de 2 · ${etapa === 'por-responder' ? 'Te toca responder' : `${otro} debe responder`}`}
-      </p>
-
-      {avisoVigente && <Alert tone="success">{avisoVigente}</Alert>}
-      {error && <Alert tone="error">{error}</Alert>}
-
-      {etapa === 'sin-propuesta' && <AvisoRechazo tx={tx} otro={otro} />}
-
-      {etapa === 'sin-propuesta' && !soyComprador && (
-        <p className="agreement-status" data-testid="estado-acuerdo">
-          Esperando que {otro} proponga el punto seguro y la hora de entrega. Cuando lo haga, aquí
-          podrás aceptarla o rechazarla.
-        </p>
-      )}
-
-      {etapa === 'sin-propuesta' && soyComprador && (
-        <>
-          <p className="field-hint">
-            Propón un lugar público y vigilado y una hora. {otro} tendrá que aceptarlo para que quede
-            acordado.
-          </p>
-          <ProponerEncuentro
-            tx={tx}
-            onChange={onChange}
-            onDone={() => setAviso(`Propuesta enviada. Ahora ${otro} debe aceptarla.`)}
-          />
-        </>
-      )}
-
-      {etapa === 'esperando' && (
-        <>
-          {propuesta}
-          <p className="agreement-status" data-testid="estado-acuerdo">
-            Esperando que {otro} acepte tu propuesta. Si cambias algo, {otro} verá la nueva propuesta.
-          </p>
-          {editando ? (
-            <ProponerEncuentro
-              tx={tx}
-              onChange={onChange}
-              onCancel={() => setEditando(false)}
-              onDone={() => {
-                setEditando(false);
-                setAviso(`Cambiaste la propuesta. ${otro} debe aceptar la nueva.`);
-              }}
-            />
-          ) : (
-            <button type="button" className="btn btn-outline" onClick={() => setEditando(true)}>
-              Cambiar mi propuesta
-            </button>
-          )}
-        </>
-      )}
-
-      {etapa === 'por-responder' && (
-        <>
-          {propuesta}
-          <p className="agreement-status agreement-status--todo" data-testid="estado-acuerdo">
-            {soyComprador
-              ? `${otro} propone otro punto u horario. ¿Te sirve?`
-              : `${otro} quiere recibir su compra aquí. ¿Aceptas la entrega?`}
-          </p>
-          {editando ? (
-            <ProponerEncuentro
-              tx={tx}
-              onChange={onChange}
-              onCancel={() => setEditando(false)}
-              onDone={() => {
-                setEditando(false);
-                setAviso(`Enviaste otra propuesta. Ahora ${otro} debe aceptarla.`);
-              }}
-            />
-          ) : (
-            <>
-              <div className="tx-actions">
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => responder('aceptar')}
-                  disabled={sending}
-                  data-testid="btn-aceptar-propuesta"
-                >
-                  {sending ? 'Guardando…' : soyComprador ? 'Aceptar' : 'Aceptar entrega'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-danger-outline"
-                  onClick={() => responder('rechazar')}
-                  disabled={sending}
-                  data-testid="btn-rechazar-propuesta"
-                >
-                  Rechazar
-                </button>
-              </div>
-              <button
-                type="button"
-                className="link-button agreement-alt"
-                onClick={() => setEditando(true)}
-                disabled={sending}
-                data-testid="btn-contraproponer"
-              >
-                ¿Ni sí ni no? Propón otro punto u hora
-              </button>
-            </>
-          )}
-        </>
-      )}
-    </section>
-  );
-}
-
-/**
- * HU-16 · Aviso del último rechazo. Lo ven los dos: quien propuso se entera de que
- * la otra persona no aceptó, y quien rechazó ve qué rechazó. Desaparece cuando
- * llega una propuesta nueva.
- */
-function AvisoRechazo({ tx, otro }: { tx: Tx; otro: string }) {
-  const { user } = useSession();
-  if (!tx.rejectedById || !tx.rejectedSafePointId || !tx.rejectedScheduledTime) return null;
-  const rechaceYo = tx.rejectedById === user?.id;
-  const soyComprador = tx.buyerId === user?.id;
-  const propuesta = `${nombrePunto(tx.rejectedSafePointId)}, ${fechaHora(tx.rejectedScheduledTime)}`;
-  return (
+  const rechazo = tx.rejectedById && tx.rejectedSafePointId && tx.rejectedScheduledTime ? (
     <div data-testid="aviso-rechazo">
-      <Alert tone={rechaceYo ? 'info' : 'error'}>
-        {rechaceYo ? (
-          <>
-            <strong>Rechazaste la propuesta de {otro}</strong> ({propuesta}).{' '}
-            {soyComprador ? 'Propón otro punto u horario.' : `Esperando que ${otro} proponga otra.`}
-          </>
-        ) : (
-          <>
-            <strong>{otro} rechazó tu propuesta</strong> ({propuesta}).{' '}
-            {soyComprador
-              ? 'Propón otro punto u horario.'
-              : `Esperando que ${otro} proponga otro punto u horario.`}
-          </>
-        )}
+      <Alert tone={tx.rejectedById === user?.id ? 'info' : 'error'}>
+        {tx.rejectedById === user?.id ? <><b>Rechazaste la propuesta de {otro}</b> ({nombrePunto(tx.rejectedSafePointId)}, {fmtLargo(tx.rejectedScheduledTime)}). </> : <><b>{otro} rechazó tu propuesta</b> ({nombrePunto(tx.rejectedSafePointId)}, {fmtLargo(tx.rejectedScheduledTime)}). </>}
+        {soyComprador ? 'Propón otro punto u horario.' : `Esperando que ${otro} proponga otra.`}
       </Alert>
+    </div>
+  ) : null;
+
+  const formulario = (onCancel?: () => void) => (
+    <ProponerEncuentro tx={tx} onChange={onChange} onCancel={onCancel} onDone={() => { setEditando(false); onFire('¡Propuesto!', '#F77F00'); }} />
+  );
+
+  if (etapa === 'sin-propuesta') {
+    return (
+      <>
+        <p className="mu" data-testid="paso-acuerdo" style={{ fontSize: 13, margin: '0 0 6px' }}>Paso 1 de 2 · {soyComprador ? 'Propón' : `${otro} propone`} el punto y la hora de entrega</p>
+        {rechazo}
+        {error && <Alert tone="error">{error}</Alert>}
+        {soyComprador ? formulario() : <div className="agreed on" data-testid="estado-acuerdo"><b>Esperando la propuesta de {otro}</b><div className="mu" style={{ fontSize: 14 }}>Cuando proponga un punto y una hora, aquí podrás aceptarla o rechazarla.</div></div>}
+      </>
+    );
+  }
+  const propuesta = tx.safePointId && tx.scheduledTime ? (
+    <div className="agreed on" data-testid="propuesta-encuentro"><b>{nombrePunto(tx.safePointId)}</b> · {fmtLargo(tx.scheduledTime)}
+      <div className="mu" style={{ fontSize: 14 }} data-testid="estado-acuerdo">{etapa === 'esperando' ? `Esperando a que ${otro} acepte. Le llegó un aviso.` : soyComprador ? `${otro} propone otro punto u horario. ¿Te sirve?` : `${otro} quiere recibir su compra aquí. ¿Aceptas la entrega?`}</div>
+    </div>
+  ) : null;
+  return (
+    <div className="prop">
+      <p className="mu" data-testid="paso-acuerdo" style={{ fontSize: 13, margin: '0 0 6px' }}>Paso 2 de 2 · {etapa === 'por-responder' ? 'Te toca responder' : `${otro} debe responder`}</p>
+      {error && <Alert tone="error">{error}</Alert>}
+      {!editando && propuesta}
+      {editando ? formulario(() => setEditando(false)) : etapa === 'esperando' ? (
+        <div className="row"><button className="btn2" type="button" onClick={() => setEditando(true)}>Cambiar propuesta</button></div>
+      ) : (
+        <div className="row">
+          <button className="btn" type="button" disabled={sending} onClick={() => void responder('aceptar')} data-testid="btn-aceptar-propuesta">{sending ? 'Guardando…' : 'Aceptar'}</button>
+          <button className="btn2" type="button" disabled={sending} onClick={() => setEditando(true)} data-testid="btn-contraproponer">Proponer otro</button>
+          <button className="ghost danger" type="button" disabled={sending} onClick={() => void responder('rechazar')} data-testid="btn-rechazar-propuesta">Rechazar</button>
+        </div>
+      )}
     </div>
   );
 }
 
-/** HU-16 · Formulario para proponer (o contraproponer) punto seguro y horario. */
-function ProponerEncuentro({
-  tx,
-  onChange,
-  onDone,
-  onCancel,
-}: {
-  tx: Tx;
-  onChange: (tx: Tx) => void;
-  onDone: () => void;
-  onCancel?: () => void;
-}) {
+/** Próximas franjas sugeridas: mañana, pasado mañana… a horas razonables. */
+function franjas(): Date[] {
+  return [[1, 16], [2, 16], [3, 10], [4, 17]].map(([d, h]) => { const x = new Date(); x.setDate(x.getDate() + d); x.setHours(h, 0, 0, 0); return x; });
+}
+const isoLocal = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+/** HU-16 · Formulario del prototipo: mapa con los puntos, lista, franjas y otra fecha. */
+function ProponerEncuentro({ tx, onChange, onDone, onCancel }: { tx: Tx; onChange: (tx: Tx) => void; onDone: () => void; onCancel?: () => void }) {
   const { token } = useSession();
-  const [safePointId, setSafePointId] = useState('');
-  const [fechaLocal, setFechaLocal] = useState('');
+  const slots = useRef(franjas()).current;
+  const [safePointId, setSafePointId] = useState(tx.safePointId ?? SAFE_POINTS[1].id);
+  const [fechaLocal, setFechaLocal] = useState(isoLocal(slots[0]));
+  const [slot, setSlot] = useState<number | null>(0);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const inFlight = useRef(false);
 
   async function proponer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!token || inFlight.current) return;
-
+    if (!token || sending) return;
     if (!safePointId) return setError('Elige un punto seguro.');
     const fecha = new Date(fechaLocal);
     if (!fechaLocal || Number.isNaN(fecha.getTime())) return setError('Elige la fecha y la hora del encuentro.');
-    if (fecha.getTime() <= Date.now()) return setError('El encuentro debe ser en una fecha y hora futuras.');
-
-    inFlight.current = true;
+    if (fecha.getTime() <= Date.now()) return setError('La fecha del encuentro debe ser futura.');
     setSending(true);
     setError('');
     try {
       const updated = await transactionApi.proposeMeeting(token, tx.id, safePointId, fecha.toISOString());
-      // El POST devuelve la transacción; se conservan las relaciones ya cargadas.
       onChange({ ...tx, ...updated });
-      notify('Transacción actualizada.');
+      notify('Propuesta enviada.');
       onDone();
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         setError('La transacción cambió de estado mientras tanto. Te mostramos su estado actual.');
         await transactionApi.get(token, tx.id).then(onChange).catch(() => undefined);
-      } else {
-        setError(mensajeError(err, 'enviar la propuesta'));
-      }
-    } finally {
-      inFlight.current = false;
-      setSending(false);
-    }
+      } else setError(mensajeError(err, 'enviar la propuesta'));
+    } finally { setSending(false); }
   }
 
   return (
-    <form className="transaction-start" onSubmit={proponer} aria-busy={sending} noValidate>
-      {error && <Alert tone="error">{error}</Alert>}
-      <fieldset className="safe-points" disabled={sending}>
-        <legend>Punto seguro</legend>
-        {SAFE_POINTS.map((p) => (
-          <label key={p.id} className={`safe-point${safePointId === p.id ? ' safe-point--on' : ''}`}>
-            <input
-              type="radio"
-              name="safePointId"
-              value={p.id}
-              checked={safePointId === p.id}
-              onChange={() => setSafePointId(p.id)}
-            />
-            <span>
-              <strong>{p.name}</strong>
-              <small>{p.address}</small>
-            </span>
-          </label>
-        ))}
-      </fieldset>
-
-      <div className="field">
-        <label htmlFor="scheduled-time">Fecha y hora del encuentro</label>
-        <div className="field-box">
-          <input
-            id="scheduled-time"
-            type="datetime-local"
-            value={fechaLocal}
-            min={ahoraLocal()}
-            onChange={(ev) => setFechaLocal(ev.target.value)}
-            disabled={sending}
-            required
-          />
+    <form onSubmit={proponer} noValidate aria-busy={sending}>
+      <p className="plabel" style={{ margin: '4px 0 10px' }}>¿Dónde se encuentran? <span className="mu" style={{ fontWeight: 400 }}>Toca un punto en el mapa o en la lista</span></p>
+      <div className="pick">
+        <SafeMap value={safePointId} onPick={setSafePointId} />
+        <div className="points" role="radiogroup" aria-label="Punto seguro">
+          {SAFE_POINTS.map((p) => (
+            <label className="pt" key={p.id}>
+              <input type="radio" name="pt" value={p.id} checked={safePointId === p.id} onChange={() => setSafePointId(p.id)} />
+              <span><b>{p.name.replace(' (entrada principal)', '')}</b><small>{p.address}</small></span>
+            </label>
+          ))}
         </div>
       </div>
-
-      <div className="tx-actions">
-        <button type="submit" className="btn btn-primary" disabled={sending} data-testid="btn-proponer">
-          {sending ? 'Enviando…' : 'Enviar propuesta'}
-        </button>
-        {onCancel && (
-          <button type="button" className="btn btn-outline" onClick={onCancel} disabled={sending}>
-            Volver
+      <p className="plabel" style={{ margin: '20px 0 8px' }}>¿Cuándo?</p>
+      <div className="slots">
+        {slots.map((d, i) => (
+          <button key={i} type="button" className="slot" aria-pressed={slot === i} onClick={() => { setSlot(i); setFechaLocal(isoLocal(d)); setError(''); }}>
+            <b>{d.toLocaleDateString('es-CO', { weekday: 'short', day: 'numeric' })}</b>
+            <span>{d.toLocaleTimeString('es-CO', { hour: 'numeric', minute: '2-digit' })}</span>
           </button>
-        )}
+        ))}
+      </div>
+      <label className="when" htmlFor="scheduled-time"><span className="mu" style={{ fontWeight: 400, fontSize: 14 }}>u otra fecha y hora</span>
+        <input id="scheduled-time" type="datetime-local" value={fechaLocal} min={ahoraLocal()} onChange={(e) => { setFechaLocal(e.target.value); setSlot(null); setError(''); }} disabled={sending} />
+      </label>
+      <p className="err" role="alert">{error}</p>
+      <div className="row" style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+        <button className="btn" type="submit" disabled={sending} data-testid="btn-proponer">{sending ? 'Enviando…' : 'Enviar propuesta'}</button>
+        {onCancel && <button className="btn2" type="button" onClick={onCancel} disabled={sending}>Volver</button>}
       </div>
     </form>
   );

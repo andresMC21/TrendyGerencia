@@ -189,6 +189,26 @@ describe('Transactions (e2e)', () => {
       .expect(403);
   });
 
+  it('TRD-25 · chat: los participantes escriben y leen; nadie más', async () => {
+    const url = `/api/transactions/${transactionId}/messages`;
+    await http.get(url).expect(401);
+    await http.get(url).set(auth(tokenOther)).expect(403);
+    await http.post(url).set(auth(tokenOther)).send({ body: 'hola' }).expect(403);
+    await http.post(url).set(auth(tokenBuyer)).send({ body: '   ' }).expect(400);
+    await http.post(url).set(auth(tokenBuyer)).send({ body: 'x'.repeat(501) }).expect(400);
+    await http.post(url).set(auth(tokenBuyer)).send({ body: 'hola', senderId: 'otro' }).expect(400);
+
+    const sent = await http.post(url).set(auth(tokenBuyer)).send({ body: '  ¿Te sirve el jueves?  ' }).expect(201);
+    expect(sent.body).toMatchObject({ transactionId, body: '¿Te sirve el jueves?' });
+    await http.post(url).set(auth(tokenSeller)).send({ body: 'Sí, a las 4' }).expect(201);
+
+    const list = await http.get(url).set(auth(tokenSeller)).expect(200);
+    expect(list.body.map((m: { body: string }) => m.body)).toEqual(['¿Te sirve el jueves?', 'Sí, a las 4']);
+    expect(list.body[0].senderId).not.toBe(list.body[1].senderId);
+
+    await http.get('/api/transactions/00000000-0000-4000-8000-000000000000/messages').set(auth(tokenBuyer)).expect(404);
+  });
+
   it('HU-16 · comprador y vendedor negocian el punto hasta quedar de acuerdo', async () => {
     const proposal = (id: string) => `/api/transactions/${id}/meeting-proposal`;
     const P1 = { safePointId: 'sp-1', scheduledTime: '2030-10-05T15:00:00.000Z' };

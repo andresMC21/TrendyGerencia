@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { Dot, Footer, Header } from '../components/Brand';
-import { Alert, Field } from '../components/Form';
+import { Header } from '../components/Brand';
+import { Alert, Field, Meter } from '../components/Form';
 import { ApiError } from '../lib/api';
 import { useSession } from '../lib/session';
 import { mapServerValidation, validateRegister, type RegisterErrors } from '../lib/validation';
@@ -59,101 +59,45 @@ export default function Registro() {
   return (
     <>
       <Header />
-      <main className="auth">
-        <div className="container auth-grid">
-          <aside className="learning-card">
-            <h2>Tu cuenta Trendy</h2>
-            <div className="lc-box lc-box--wide">
-              <span className="lc-label">PARA QUIÉN</span>
-              <p>Caleños que quieren vender o intercambiar objetos en desuso, sin miedo a estafas.</p>
-            </div>
-            <span className="lc-step">CON TU CUENTA PUEDES</span>
-            <ul className="lc-list">
-              <li>
-                <Dot /> Publicar objetos con descripción, precio y fotos.
-              </li>
-              <li>
-                <Dot /> Encontrar objetos de tu mismo barrio.
-              </li>
-              <li>
-                <Dot /> Recibir puntos de encuentro seguros según el riesgo de la zona.
-              </li>
+      <main id="contenido" className="view on wrap" data-view="registro">
+        <div className="auth">
+          <aside className="vitrina">
+            <p className="eb">Tu cuenta Trendy</p>
+            <h2>Vende o intercambia <em>sin miedo.</em></h2>
+            <p className="lead">Para caleños que quieren darle salida a lo que no usan, con gente de su propio barrio.</p>
+            <ul className="perks">
+              <li><span className="n">1</span><span><b>Publica en minutos</b>Descripción, precio y fotos de tus objetos.</span></li>
+              <li><span className="n">2</span><span><b>Encuentra cerca</b>Objetos de tu mismo barrio, ordenados por distancia.</span></li>
+              <li><span className="n">3</span><span><b>Encuentros seguros</b>Puntos sugeridos según el riesgo de la zona.</span></li>
             </ul>
-            <span className="lc-step">CONFIANZA</span>
-            <div className="lc-box">
-              <p>
-                Tu cuenta empieza como <strong>usuario sin verificar</strong>. Después podrás
-                verificar tu identidad para generar más confianza en tus compradores.
-              </p>
-            </div>
+            <div className="trust" style={{ marginTop: 28 }}><span className="chip">Sin verificar</span><span>Tu cuenta empieza <b>sin verificar</b>. Después puedes verificar tu identidad para dar más confianza.</span></div>
           </aside>
-
-          <section className="form-card">
-            <span className="form-kicker">REGISTRO</span>
+          <div className="ficha">
+            <div className="kick">Registro</div>
             <h1>Crea tu cuenta</h1>
-            <p className="form-sub">Solo necesitas tu nombre, tu correo y una contraseña.</p>
-
+            <p className="sub">Solo necesitas tu nombre, tu correo y una contraseña.</p>
             {formError && <Alert tone="error">{formError}</Alert>}
-
             <form onSubmit={onSubmit} noValidate>
-              <Field
-                label="Nombre completo"
-                name="fullName"
-                autoComplete="name"
-                placeholder="María Camila Pérez"
-                value={fullName}
-                onChange={(e) => {
-                  setFullName(e.target.value);
-                  clear('fullName');
-                }}
-                error={errors.fullName}
-              />
-              <Field
-                label="Correo electrónico"
-                name="email"
-                type="email"
-                autoComplete="email"
-                placeholder="tucorreo@ejemplo.com"
-                value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  clear('email');
-                }}
+              <Field label="Nombre completo" name="fullName" autoComplete="name" placeholder="María Camila Pérez" value={fullName}
+                onChange={(e) => { setFullName(e.target.value); clear('fullName'); }} error={errors.fullName} />
+              <Field label="Correo electrónico" name="email" type="email" autoComplete="email" placeholder="tucorreo@ejemplo.com" value={email}
+                onChange={(e) => { setEmail(e.target.value); clear('email'); }}
                 error={errors.email}
-                hint={undefined}
-              />
-              {emailTaken && (
-                <p className="inline-link">
-                  ¿Es tuyo? <Link viewTransition to="/ingresar">Inicia sesión aquí</Link>
-                </p>
-              )}
-              <Field
-                label="Contraseña"
-                name="password"
-                type="password"
-                autoComplete="new-password"
-                placeholder="Entre 8 y 12 caracteres"
-                maxLength={12}
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  clear('password');
-                }}
+                hint={emailTaken ? undefined : undefined} />
+              {emailTaken && <p className="mu" style={{ margin: '-8px 0 14px', fontSize: 13 }}>¿Es tuyo? <Link viewTransition to="/ingresar">Inicia sesión aquí</Link></p>}
+              <Field label="Contraseña" name="password" type="password" autoComplete="new-password" placeholder="Entre 8 y 12 caracteres" maxLength={12} value={password}
+                onChange={(e) => { setPassword(e.target.value); clear('password'); }}
+                className={errors.password ? '' : password.length >= 8 ? 'ok' : ''}
+                extra={<Meter length={password.length} />}
                 error={errors.password}
-                hint={`${password.length}/12 caracteres · mínimo 8`}
-              />
-              <button type="submit" className="btn btn-primary btn-block" disabled={sending}>
-                {sending ? 'Creando tu cuenta…' : 'Crear cuenta'}
-              </button>
+                hint={password.length === 0 ? 'Mínimo 8 caracteres' : password.length < 8 ? `Te faltan ${8 - password.length}` : 'Lista'}
+                count={`${password.length}/12`} />
+              <button className="btn" type="submit" disabled={sending}>{sending ? 'Creando tu cuenta…' : 'Crear cuenta'}</button>
             </form>
-
-            <p className="form-foot">
-              ¿Ya tienes cuenta? <Link viewTransition to="/ingresar">Inicia sesión</Link>
-            </p>
-          </section>
+            <p className="foot">¿Ya tienes cuenta? <Link viewTransition to="/ingresar">Inicia sesión</Link></p>
+          </div>
         </div>
       </main>
-      <Footer />
     </>
   );
 }

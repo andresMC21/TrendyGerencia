@@ -12,7 +12,9 @@ function storedTheme(): Theme | null {
 export function initializeTheme() {
   const media = window.matchMedia('(prefers-color-scheme: dark)');
   const apply = () => {
-    document.documentElement.dataset.theme = storedTheme() ?? (media.matches ? 'dark' : 'light');
+    const t = storedTheme() ?? 'light';
+    document.documentElement.dataset.theme = t;
+    document.documentElement.classList.toggle('night', t === 'dark');
     window.dispatchEvent(new Event(EVENT));
   };
   apply();
@@ -27,6 +29,7 @@ export function useTheme() {
   const toggle = () => {
     const next = snapshot() === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;
+    document.documentElement.classList.toggle('night', next === 'dark');
     try { localStorage.setItem(KEY, next); } catch { /* The theme still works for this session. */ }
     window.dispatchEvent(new Event(EVENT));
   };

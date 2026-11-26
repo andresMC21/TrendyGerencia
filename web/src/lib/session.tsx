@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { authApi, type RegisterBody, type UserProfile } from './api';
+import { ApiError, authApi, type RegisterBody, type UserProfile } from './api';
 
 const TOKEN_KEY = 'trendy.token';
 
@@ -69,7 +69,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setUser(profile);
         setToken(saved);
       })
-      .catch(() => storage.clear())
+      // Solo un 401 invalida la sesión: un corte de red o una navegación no deben cerrarla.
+      .catch((err) => { if (err instanceof ApiError && err.status === 401) storage.clear(); })
       .finally(() => setLoading(false));
   }, []);
 

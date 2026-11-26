@@ -1,7 +1,6 @@
 import { useRef, useState } from 'react';
 import { ApiError, productApi } from '../lib/api';
 import { useSession } from '../lib/session';
-import { Alert } from './Form';
 
 /**
  * HU-13 · Botón «Retirar publicación» con confirmación.
@@ -63,50 +62,17 @@ export function RetirarPublicacion({
 
   if (confirmando) {
     return (
-      <div
-        className="tx-confirm tx-confirm--danger"
-        role="alertdialog"
-        aria-labelledby={`retirar-q-${productId}`}
-      >
-        <strong id={`retirar-q-${productId}`}>¿Retirar «{title}»?</strong>
-        <p>
-          Dejará de aparecer en Trendy y nadie podrá iniciar una compra. Se conserva en tu historial
-          de publicaciones.
-        </p>
-        <div className="tx-actions">
-          <button
-            type="button"
-            className="btn btn-danger"
-            onClick={retirar}
-            disabled={sending}
-            data-testid="btn-confirmar-retiro"
-          >
-            {sending ? 'Retirando…' : 'Sí, retirar'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={() => setConfirmando(false)}
-            disabled={sending}
-          >
-            No, mantenerla
-          </button>
-        </div>
-      </div>
+      <span className="confirm" role="alertdialog" aria-label={`¿Retirar «${title}»?`}>
+        {compact ? '¿Retirarla?' : 'Dejará de verse en Trendy y queda en tu historial. ¿Retirarla?'}
+        <button type="button" className="sbtn rf" onClick={retirar} disabled={sending} data-testid="btn-confirmar-retiro">{sending ? 'Retirando…' : 'Sí, retirar'}</button>
+        <button type="button" className="sbtn" onClick={() => setConfirmando(false)} disabled={sending}>No</button>
+      </span>
     );
   }
-
   return (
-    <div className="retirar">
-      {error && <Alert tone="error">{error}</Alert>}
-      <button
-        type="button"
-        className={`btn btn-danger-outline${compact ? ' btn-sm' : ''}`}
-        onClick={() => setConfirmando(true)}
-        data-testid="btn-retirar"
-      >
-        Retirar publicación
-      </button>
-    </div>
+    <>
+      {error && <span className="note">{error}</span>}
+      <button type="button" className="sbtn r" onClick={() => setConfirmando(true)} data-testid="btn-retirar">Retirar</button>
+    </>
   );
 }

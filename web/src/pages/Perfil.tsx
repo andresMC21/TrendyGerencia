@@ -1,12 +1,11 @@
 import { notify } from '../lib/toast';
-import { Rating } from '../components/Rating';
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { Avatar } from '../components/Avatar';
-import { Footer, Header } from '../components/Brand';
-import { Alert, Field, TextAreaField } from '../components/Form';
+import { AvatarDialog } from '../components/AvatarDialog';
+import { Header } from '../components/Brand';
+import { Alert, Field, Meter, TextAreaField } from '../components/Form';
 import { ApiError, authApi } from '../lib/api';
-import { fecha, ROL, VERIFICACION } from '../lib/format';
 import { useSession } from '../lib/session';
 import {
   mapServerProfileValidation,
@@ -21,88 +20,78 @@ import {
 /** HU-04 · Con la verificación en revisión o aprobada, el nombre no se puede cambiar. */
 const NOMBRE_BLOQUEADO = ['PENDING', 'VERIFIED'];
 
-/** HU-03 · Consultar mi perfil (GET /user/me). */
+/** HU-03 · Mi perfil (prototipo TRD-25): carnet con avatar y ajustes por pestañas. */
 export default function Perfil() {
-  const { user } = useSession();
+  const { user, token, setProfile } = useSession();
+  const [tab, setTab] = useState<'d' | 'c' | 'p'>('d');
+  const [avatarOpen, setAvatarOpen] = useState(false);
+  const [solicitando, setSolicitando] = useState(false);
   if (!user) return null;
-
-  const ver = VERIFICACION[user.verificationStatus];
   const hayResenas = user.reviewsCount > 0 && user.ratingAverage != null;
-
+  const ver = user.verificationStatus;
+  const verChip: Record<string, [string, string]> = { VERIFIED: ['Verificada', 'ok2'], PENDING: ['En revisión', 'bl'], UNVERIFIED: ['Sin verificar', ''], REJECTED: ['Rechazada', 'n'] };
+  const solicitar = async () => {
+    if (!token || solicitando) return;
+    setSolicitando(true);
+    try {
+      await authApi.requestVerification(token);
+      setProfile({ ...user, verificationStatus: 'PENDING' });
+      notify('Solicitud enviada');
+    } catch (err) {
+      notify(err instanceof ApiError && err.status === 409 ? 'Tu identidad ya está verificada o en revisión.' : 'No pudimos enviar la solicitud.');
+    } finally { setSolicitando(false); }
+  };
   return (
     <>
       <Header />
-      <main className="dashboard">
-        <div className="container container--narrow">
-          <Link viewTransition to="/inicio" className="back-link">
-            ← Volver a Mi Trendy
-          </Link>
-          <h1 className="dash-title">Mi perfil</h1>
-          <div className="tx-actions">
-            <a className="btn btn-primary" href="#editar-perfil">
-              Editar mi perfil
-            </a>
-          </div>
-
-          <section className="profile-card profile-card--full" aria-label="Datos de mi perfil">
-            <div className="profile-head">
-              <Avatar name={user.fullName} photoUrl={user.photoUrl} size="lg" />
+      <main id="contenido" className="view on wrap">
+        <Link className="back" viewTransition to="/inicio" style={{ marginTop: 10 }}>← Volver a inicio</Link>
+        <div className="prof">
+          <article className="carnet" aria-label="Tu perfil">
+            <div className="top">
+              <button type="button" className="avbtn" aria-label="Cambiar avatar" onClick={() => setAvatarOpen(true)}>
+                <Avatar large name={user.fullName} photoUrl={user.photoUrl} avatar={user.avatar} />
+              </button>
               <div>
-                <strong data-testid="perfil-nombre">{user.fullName}</strong>
-                <span data-testid="perfil-email">{user.email}</span>
+                <h1 data-testid="perfil-nombre">{user.fullName}</h1>
+                <div className="mail"><span data-testid="perfil-email">{user.email}</span> · <button className="linkbtn" type="button" style={{ fontSize: 14, padding: 0, minHeight: 0 }} onClick={() => setAvatarOpen(true)}>Cambiar avatar</button></div>
               </div>
             </div>
-
-            <dl className="profile-data">
-              <div>
-                <dt>Sobre mí</dt>
-                <dd>{user.info?.trim() ? user.info : 'Aún no has agregado información.'}</dd>
-              </div>
-              <div>
-                <dt>Rol</dt>
-                <dd>
-                  <span className="chip chip--blue">
-                    {user.role.map((r) => ROL[r] ?? r).join(', ')}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt>Verificación</dt>
-                <dd>
-                  <span className={`chip chip--${ver.tone}`}>{ver.label}</span>
-                </dd>
-              </div>
-              <div>
-                <dt>Estado de la cuenta</dt>
-                <dd>
-                  <span className={`chip chip--${user.isActive ? 'green' : 'gray'}`}>
-                    {user.isActive ? 'Cuenta activa' : 'Inactiva'}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt>Calificación</dt>
-                <dd data-testid="perfil-rating">
-                  {hayResenas
-                    ? <Rating value={Number(user.ratingAverage)} count={user.reviewsCount} />
-                    : 'Sin calificaciones todavía'}
-                </dd>
-              </div>
-              <div>
-                <dt>Miembro desde</dt>
-                <dd>{fecha(user.createdAt)}</dd>
-              </div>
+            <p className="bio">{user.info?.trim() ? user.info : 'Aún no has agregado información sobre ti.'}</p>
+            <dl>
+              <div><dt>Verificación</dt><dd><span className={`chip ${verChip[ver][1]}`}>{verChip[ver][0]}</span></dd></div>
+              <div><dt>Estado</dt><dd><span className={`chip ${user.isActive ? 'ok2' : 'n'}`}>{user.isActive ? 'Cuenta activa' : 'Inactiva'}</span></dd></div>
+              <div><dt>Calificación</dt><dd data-testid="perfil-rating">{hayResenas ? <><span className="rating"><b>{Number(user.ratingAverage).toLocaleString('es-CO', { maximumFractionDigits: 1 })}</b><span className="stars">{'★'.repeat(Math.round(Number(user.ratingAverage)))}{'☆'.repeat(5 - Math.round(Number(user.ratingAverage)))}</span></span><small className="mu" style={{ fontWeight: 400 }}>{user.reviewsCount} {user.reviewsCount === 1 ? 'reseña' : 'reseñas'}</small></> : <span className="mu" style={{ fontWeight: 400 }}>Sin calificaciones</span>}</dd></div>
+              <div><dt>Miembro desde</dt><dd>{new Date(user.createdAt).toLocaleDateString('es-CO', { month: 'short', year: 'numeric' })}</dd></div>
             </dl>
-          </section>
-
-          <DatosDelPerfil />
-
-          <FotoDePerfil />
-          <CambiarCorreo />
-          <CambiarContrasena />
+            {ver !== 'VERIFIED' && (
+              <div className={`vbox${ver === 'PENDING' ? ' pend' : ''}`}>
+                <span className="ic">{ver === 'PENDING' ? '…' : '!'}</span>
+                <div>
+                  <b>{ver === 'PENDING' ? 'Verificación en revisión' : ver === 'REJECTED' ? 'Tu verificación fue rechazada' : 'Verifica tu identidad'}</b>
+                  <p>{ver === 'PENDING' ? 'Te avisaremos cuando la revisemos. Mientras tanto no puedes cambiar tu nombre.' : 'Las cuentas verificadas generan más confianza y cierran tratos más rápido.'}</p>
+                  {ver !== 'PENDING' && <button className="sbtn" type="button" disabled={solicitando} onClick={() => void solicitar()}>{solicitando ? 'Enviando…' : ver === 'REJECTED' ? 'Volver a solicitar' : 'Solicitar verificación'}</button>}
+                </div>
+              </div>
+            )}
+            {ver === 'VERIFIED' && <div className="vbox ok"><span className="ic">✓</span><div><b>Identidad verificada</b><p>Los demás ven la marca de verificación en tu perfil y tus publicaciones.</p></div></div>}
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}><Link className="btn2" viewTransition to={`/usuario/${user.id}`} style={{ flex: 1, justifyContent: 'center' }}>Ver mi perfil público</Link></div>
+          </article>
+          <div className="ficha" style={{ maxWidth: 'none' }}>
+            <div className="kick">Ajustes</div>
+            <h2 style={{ fontSize: 30, margin: '6px 0 18px' }}>Edita tu cuenta</h2>
+            <div className="tabs" role="tablist">
+              <button role="tab" type="button" aria-selected={tab === 'd'} onClick={() => setTab('d')}>Mis datos</button>
+              <button role="tab" type="button" aria-selected={tab === 'c'} onClick={() => setTab('c')}>Correo</button>
+              <button role="tab" type="button" aria-selected={tab === 'p'} onClick={() => setTab('p')}>Contraseña</button>
+            </div>
+            {tab === 'd' && <DatosDelPerfil />}
+            {tab === 'c' && <CambiarCorreo />}
+            {tab === 'p' && <CambiarContrasena />}
+          </div>
         </div>
+        <AvatarDialog open={avatarOpen} onClose={() => setAvatarOpen(false)} />
       </main>
-      <Footer />
     </>
   );
 }
@@ -158,8 +147,7 @@ function DatosDelPerfil() {
   }
 
   return (
-    <section id="editar-perfil" className="form-card photo-card" aria-label="Editar mis datos" tabIndex={-1}>
-      <h2 className="detail-h">Editar mis datos</h2>
+    <div id="editar-perfil">
       {error && <Alert tone="error">{error}</Alert>}
       {ok && <Alert tone="success">{ok}</Alert>}
       <form onSubmit={onSubmit} noValidate>
@@ -171,11 +159,7 @@ function DatosDelPerfil() {
           disabled={nombreBloqueado || sending}
           onChange={(e) => setFullName(e.target.value)}
           error={errors.fullName}
-          hint={
-            nombreBloqueado
-              ? 'Tu nombre no se puede cambiar mientras la verificación está en revisión o aprobada.'
-              : 'Entre 2 y 100 caracteres.'
-          }
+          hint={nombreBloqueado ? '🔒 No puedes cambiar tu nombre mientras la verificación está en revisión o aprobada.' : undefined}
         />
         <TextAreaField
           label="Sobre mí"
@@ -186,85 +170,16 @@ function DatosDelPerfil() {
           disabled={sending}
           onChange={(e) => setInfo(e.target.value)}
           error={errors.info}
-          hint={`${info.trim().length}/300 caracteres.`}
+          hint="Cuéntales a los demás quién eres"
+          count={`${info.trim().length}/300`}
         />
-        <div className="tx-actions">
-          <button type="submit" className="btn btn-primary" disabled={sending}>
+        <div>
+          <button type="submit" className="btn" disabled={sending}>
             {sending ? 'Guardando…' : 'Guardar cambios'}
           </button>
         </div>
       </form>
-    </section>
-  );
-}
-
-/** HU-03 · Cambiar o quitar la foto de perfil (URL de una imagen). */
-function FotoDePerfil() {
-  const { token, user, setProfile } = useSession();
-  const [url, setUrl] = useState(user?.photoUrl ?? '');
-  const [error, setError] = useState('');
-  const [ok, setOk] = useState('');
-  const [sending, setSending] = useState(false);
-
-  async function guardar(photoUrl: string | null) {
-    if (!token) return;
-    setSending(true);
-    setError('');
-    setOk('');
-    try {
-      const perfil = await authApi.updateMe(token, { photoUrl });
-      setProfile(perfil);
-      notify('Perfil guardado.');
-      setUrl(perfil.photoUrl ?? '');
-      setOk(photoUrl ? 'Foto actualizada.' : 'Quitaste tu foto de perfil.');
-    } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 400
-          ? 'Escribe la dirección completa de una imagen, empezando por https://'
-          : 'No pudimos guardar la foto. Inténtalo de nuevo.',
-      );
-    } finally {
-      setSending(false);
-    }
-  }
-
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    void guardar(url.trim() || null);
-  };
-
-  return (
-    <section className="form-card photo-card" aria-label="Foto de perfil">
-      <h2 className="detail-h">Foto de perfil</h2>
-      {error && <Alert tone="error">{error}</Alert>}
-      {ok && <Alert tone="success">{ok}</Alert>}
-      <form onSubmit={onSubmit} noValidate>
-        <Field
-          label="Dirección (URL) de la imagen"
-          name="photoUrl"
-          type="url"
-          placeholder="https://…/mi-foto.jpg"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          hint="Pega el enlace de una imagen pública. Se verá en tu perfil."
-        />
-        <div className="tx-actions">
-          <button type="submit" className="btn btn-primary" disabled={sending}>
-            {sending ? 'Guardando…' : 'Guardar foto'}
-          </button>
-          {user?.photoUrl && (
-            <button
-              type="button"
-              className="btn btn-outline"
-              disabled={sending}
-              onClick={() => void guardar(null)}
-            >
-              Quitar foto
-            </button>
-          )}
-        </div>
-      </form>
-    </section>
+    </div>
   );
 }
 
@@ -313,8 +228,8 @@ function CambiarCorreo() {
   }
 
   return (
-    <section className="form-card photo-card" aria-label="Cambiar correo">
-      <h2 className="detail-h">Cambiar correo</h2>
+    <div>
+      <p className="mu" style={{ margin: '0 0 14px', fontSize: 14 }}>Tu correo actual es <b style={{ color: 'var(--ink)' }}>{user?.email}</b>.</p>
       {error && <Alert tone="error">{error}</Alert>}
       {ok && <Alert tone="success">{ok}</Alert>}
       <form onSubmit={onSubmit} noValidate>
@@ -340,13 +255,13 @@ function CambiarCorreo() {
           hint="La necesitamos para confirmar que eres tú."
           disabled={sending}
         />
-        <div className="tx-actions">
-          <button type="submit" className="btn btn-primary" disabled={sending}>
+        <div>
+          <button type="submit" className="btn" disabled={sending}>
             {sending ? 'Guardando…' : 'Cambiar correo'}
           </button>
         </div>
       </form>
-    </section>
+    </div>
   );
 }
 
@@ -393,8 +308,7 @@ function CambiarContrasena() {
   }
 
   return (
-    <section className="form-card photo-card" aria-label="Cambiar contraseña">
-      <h2 className="detail-h">Cambiar contraseña</h2>
+    <div>
       {error && <Alert tone="error">{error}</Alert>}
       {ok && <Alert tone="success">{ok}</Alert>}
       <form onSubmit={onSubmit} noValidate>
@@ -417,15 +331,18 @@ function CambiarContrasena() {
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           error={errors.newPassword}
+          maxLength={12}
+          extra={<Meter length={newPassword.length} />}
+          count={`${newPassword.length}/12`}
           hint="Entre 8 y 12 caracteres, distinta a la actual."
           disabled={sending}
         />
-        <div className="tx-actions">
-          <button type="submit" className="btn btn-primary" disabled={sending}>
+        <div>
+          <button type="submit" className="btn" disabled={sending}>
             {sending ? 'Guardando…' : 'Cambiar contraseña'}
           </button>
         </div>
       </form>
-    </section>
+    </div>
   );
 }
