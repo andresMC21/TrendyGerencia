@@ -1,9 +1,7 @@
-import { EmptyState } from '../components/EmptyState';
-import { Skeleton } from '../components/Skeleton';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { Footer, Header } from '../components/Brand';
-import { Alert, SelectField } from '../components/Form';
+import { Header } from '../components/Brand';
+import { Alert } from '../components/Form';
 import { ProductCard } from '../components/ProductCard';
 import { RadioSlider } from '../components/RadioSlider';
 import { productApi, type GeoPoint, type Product, type ProductCondition, type ProductSort } from '../lib/api';
@@ -61,6 +59,9 @@ export default function Explorar() {
   const categoria = delCatalogo(params.get('categoria'), CATEGORIAS);
   const condicion = delCatalogo(params.get('condicion'), Object.keys(CONDICION));
   const pagina = paginaDe(params.get('pagina'));
+  const q = (params.get('q') ?? '').slice(0, 80);
+  const [busqueda, setBusqueda] = useState(q);
+  const temporizadorQ = useRef<ReturnType<typeof setTimeout>>(undefined);
   const orden = delCatalogo(params.get('orden'), ORDENES.map((o) => o.valor)) as ProductSort | '';
   const radio = radioDeUrl(params.get('radio'));
   const centroBarrio = delCatalogo(params.get('centro'), BARRIO_IDS);
@@ -101,6 +102,7 @@ export default function Explorar() {
     productApi
       .feed({
         neighborhoodId: barrioId || undefined,
+        q: q || undefined,
         category: categoria || undefined,
         condition: (condicion || undefined) as ProductCondition | undefined,
         lat,
@@ -119,7 +121,7 @@ export default function Explorar() {
     return () => {
       vigente = false;
     };
-  }, [consulta, esperandoCentro, barrioId, categoria, condicion, lat, lng, radio, orden, pagina]);
+  }, [consulta, esperandoCentro, barrioId, q, categoria, condicion, lat, lng, radio, orden, pagina]);
 
   // Si el navegador ya dio permiso, una recarga recupera la ubicación sin preguntar.
   useEffect(() => {
@@ -151,6 +153,13 @@ export default function Explorar() {
   };
 
   const filtrar = (clave: string, valor: string) => cambiar({ [clave]: valor });
+
+  /** Búsqueda por texto: se aplica cuando la persona deja de escribir. */
+  const buscar = (texto: string) => {
+    setBusqueda(texto);
+    clearTimeout(temporizadorQ.current);
+    temporizadorQ.current = setTimeout(() => filtrar('q', texto.trim()), 350);
+  };
 
   /** Barrio y cercanía son excluyentes: elegir un barrio quita la búsqueda por radio. */
   const elegirBarrio = (valor: string) => {
@@ -232,6 +241,7 @@ export default function Explorar() {
   const quitarFiltros = () => {
     setPanel(null);
     setPuntoPrivado(null);
+    setBusqueda('');
     setParams({});
   };
 
@@ -241,195 +251,131 @@ export default function Explorar() {
     : centroPrivado === 'mi-ubicacion'
       ? 'tu ubicación'
       : 'el punto elegido';
-  const hayFiltros = Boolean(barrioId || categoria || condicion || cercania || orden);
+  const hayFiltros = Boolean(barrioId || q || categoria || condicion || cercania || orden);
   const paginas = Math.ceil(total / POR_PAGINA);
   const ordenVisible = orden === 'distance' && !centro ? 'recent' : orden || 'recent';
+
+  const DECO: [string, string, number, number, number][] = [['camara', '3%', 10, 42, -8], ['audifonos', '20%', 4, 38, 6], ['planta', '38%', 14, 44, 0], ['libros', '57%', 6, 52, 5], ['lampara', '74%', 14, 36, -6], ['bici', '88%', 8, 96, -4], ['guitarra', '42%', 118, 34, 14], ['chaqueta', '55%', 90, 38, 4]];
+  const CHIPS: [string, string, string | null][] = [['', 'Todo', null], ['deportes', 'Deportes', 'bici'], ['muebles', 'Muebles', 'silla'], ['libros', 'Libros', 'libros'], ['ropa', 'Ropa', 'chaqueta'], ['tecnologia', 'Tecnología', 'camara'], ['hogar', 'Hogar', 'planta'], ['juguetes', 'Juguetes', null], ['otros', 'Otros', 'guitarra']];
 
   return (
     <>
       <Header />
-      <main className="dashboard">
-        <div className="container">
-          <h1 className="dash-title">Explora tu barrio</h1>
-
-          <div className="filters">
-            <SelectField
-              label="Barrio"
-              value={barrioId}
-              hint={cercania ? 'Elegir un barrio quita la búsqueda por cercanía.' : 'Recordaremos tu barrio en este dispositivo.'}
-              onChange={(e) => elegirBarrio(e.target.value)}
-            >
-              <option value="">Toda Cali</option>
-              {BARRIOS.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {barrio(b.id)}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              label="Categoría"
-              value={categoria}
-              onChange={(e) => filtrar('categoria', e.target.value)}
-            >
-              <option value="">Todas</option>
-              {CATEGORIAS.map((c) => (
-                <option key={c} value={c}>
-                  {CATEGORIA[c] ?? c}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              label="Condición"
-              value={condicion}
-              onChange={(e) => filtrar('condicion', e.target.value)}
-            >
-              <option value="">Todas</option>
-              {Object.entries(CONDICION).map(([valor, etiqueta]) => (
-                <option key={valor} value={valor}>
-                  {etiqueta}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              label="Ordenar por"
-              value={ordenVisible}
-              hint={centro ? undefined : '«Más cercanos» te pedirá una ubicación.'}
-              onChange={(e) => elegirOrden(e.target.value)}
-            >
-              {ORDENES.map((o) => (
-                <option key={o.valor} value={o.valor}>
-                  {o.etiqueta}
-                </option>
-              ))}
-            </SelectField>
+      <main id="contenido" className="view on wrap">
+        <div className="band">
+          {DECO.map(([img, l, t, w, r]) => <img key={img} className="deco" src={`/img/${img}.webp`} alt="" style={{ left: l, top: t, width: w, transform: `rotate(${r}deg)` }} />)}
+          <div className="ex-head">
+            <div><h1>Explora tu barrio</h1><p className="mu" style={{ margin: '8px 0 0' }}>Lo que tus vecinos ya no usan, cerca de ti en Cali.</p></div>
+            <label className="search">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+              <input type="search" placeholder="Busca una chaqueta, una bici…" aria-label="Buscar productos" value={busqueda} onChange={(e) => buscar(e.target.value)} />
+            </label>
           </div>
-
-          {cercania && (
-            <section className="cerca-bar" aria-label="Búsqueda por cercanía">
-              <div className="cerca-centro">
-                <span className="cerca-kicker">Buscando cerca de</span>
-                <strong>{nombreCentro}</strong>
-              </div>
-              <RadioSlider value={radioVisible} onChange={cambiarRadio} />
-              <div className="cerca-acciones">
-                {panel === null && (
-                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setPanel('cambiar')}>
-                    Cambiar ubicación
-                  </button>
-                )}
-                <button type="button" className="link-button" onClick={quitarCercania}>
-                  Quitar ubicación
+          <div className="panel2">
+            <div className="cats" role="group" aria-label="Categorías">
+              {CHIPS.map(([v, n, img]) => (
+                <button key={n} className="cat" type="button" aria-pressed={categoria === v} onClick={() => filtrar('categoria', v)} style={img ? undefined : { paddingLeft: 16 }}>
+                  {img && <img src={`/img/${img}.webp`} alt="" />}{n}
                 </button>
-              </div>
-            </section>
-          )}
-
-          {(panel !== null || esperandoCentro) && (
-            <section className="ubicacion-panel" aria-labelledby="ubicacion-titulo">
-              <div className="ubicacion-panel-head">
-                <div>
-                  <h2 id="ubicacion-titulo">¿Desde dónde buscamos?</h2>
-                  <p>
-                    {esperandoCentro && panel === null
-                      ? 'Vuelve a compartir tu ubicación o elige un punto para ver los productos cercanos.'
-                      : 'Usa la ubicación de este dispositivo, toca un punto del mapa o elige uno de los barrios marcados.'}{' '}
-                    No guardamos tus coordenadas en el enlace de la página.
-                  </p>
-                </div>
-                {panel !== null && (
-                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setPanel(null)}>
-                    {centro ? 'Listo' : 'Cancelar'}
-                  </button>
-                )}
-              </div>
-              <div className="ubicacion-opciones">
-                <button type="button" className="btn btn-primary btn-sm" onClick={usarMiUbicacion} disabled={ubicando}>
-                  {ubicando ? 'Obteniendo ubicación…' : 'Usar mi ubicación'}
-                </button>
-                <SelectField
-                  label="O un barrio como centro"
-                  value={centroBarrio}
-                  onChange={(e) => e.target.value && aplicarCentro(e.target.value)}
-                >
-                  <option value="">Elige un barrio</option>
-                  {BARRIOS.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {barrio(b.id)}
-                    </option>
-                  ))}
-                </SelectField>
-              </div>
-              {errorUbicacion && <Alert tone="info">{errorUbicacion}</Alert>}
-              <Suspense fallback={<div className="mapa mapa--cargando">Cargando mapa…</div>}>
-                <MapaUbicacion centro={centro} radioKm={radioVisible} onElegir={elegirEnMapa} />
-              </Suspense>
-              <p className="field-hint">Toca el mapa para elegir un punto; el círculo muestra el radio de búsqueda.</p>
-            </section>
-          )}
-
-          <div className="feed-head">
-            <h2>
-              {centro
-                ? `Cerca de ${nombreCentro}`
-                : barrioId
-                  ? `Productos en ${barrio(barrioId)}`
-                  : 'Todos los productos'}
-            </h2>
-            {products && (
-              <span>
-                {total} {total === 1 ? 'publicación disponible' : 'publicaciones disponibles'}
-                {centro && ` a menos de ${kmTexto(radio)}`}
-              </span>
-            )}
-            {hayFiltros && (
-              <button className="link-button" onClick={quitarFiltros}>
-                Quitar filtros
-              </button>
-            )}
+              ))}
+            </div>
+            <div className="filters">
+              <label className="sel">Barrio
+                <select value={barrioId} onChange={(e) => elegirBarrio(e.target.value)}>
+                  <option value="">Toda Cali</option>
+                  {BARRIOS.map((b) => <option key={b.id} value={b.id}>{barrio(b.id)}</option>)}
+                </select>
+              </label>
+              <label className="sel">Condición
+                <select value={condicion} onChange={(e) => filtrar('condicion', e.target.value)}>
+                  <option value="">Todas</option>
+                  {Object.entries(CONDICION).map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}
+                </select>
+              </label>
+              <label className="sel">Ordenar por
+                <select value={ordenVisible} onChange={(e) => elegirOrden(e.target.value)}>
+                  {ORDENES.map((o) => <option key={o.valor} value={o.valor}>{o.etiqueta}</option>)}
+                </select>
+              </label>
+              {hayFiltros && <button type="button" className="linkbtn" style={{ alignSelf: 'center' }} onClick={quitarFiltros}>Quitar filtros</button>}
+            </div>
           </div>
-
-          {favoritos.error && <Alert tone="error">{favoritos.error}</Alert>}
-          {feedError && <Alert tone="info">No pudimos cargar las publicaciones por ahora.</Alert>}
-          {products?.length === 0 && (
-            <EmptyState kind="search">
-              {centro
-                ? `No hay productos a menos de ${kmTexto(radio)}. Prueba con un radio mayor.`
-                : hayFiltros
-                  ? 'No hay productos con estos filtros.'
-                  : 'Aún no hay publicaciones en Cali.'}
-            </EmptyState>
-          )}
-          {products === null && !feedError && !esperandoCentro && <Skeleton kind="products" />}
-          <div className="feed">
-            {products?.map((p) => (
-              <ProductCard key={p.id} product={p} favorito={favoritos.paraTarjeta(p)} />
-            ))}
-          </div>
-
-          {products && (paginas > 1 || pagina > 1) && (
-            <nav className="pager" aria-label="Paginación">
-              <button
-                className="btn btn-outline btn-sm"
-                disabled={pagina === 1}
-                onClick={() => irAPagina(Math.min(pagina - 1, Math.max(paginas, 1)))}
-              >
-                Anterior
-              </button>
-              <span>
-                Página {pagina} de {Math.max(paginas, 1)}
-              </span>
-              <button
-                className="btn btn-outline btn-sm"
-                disabled={pagina >= paginas}
-                onClick={() => irAPagina(pagina + 1)}
-              >
-                Siguiente
-              </button>
-            </nav>
-          )}
         </div>
+
+        {cercania && (
+          <section className="cerca" aria-label="Búsqueda por cercanía">
+            <div><small>Buscando cerca de</small><b>{nombreCentro}</b></div>
+            <RadioSlider value={radioVisible} onChange={cambiarRadio} />
+            <div className="ac">
+              {panel === null && <button type="button" className="sbtn" onClick={() => setPanel('cambiar')}>Cambiar ubicación</button>}
+              <button type="button" className="linkbtn" onClick={quitarCercania}>Quitar ubicación</button>
+            </div>
+          </section>
+        )}
+
+        {(panel !== null || esperandoCentro) && (
+          <section className="ubic" aria-labelledby="ubicacion-titulo">
+            <div className="uh2">
+              <div>
+                <h2 id="ubicacion-titulo">¿Desde dónde buscamos?</h2>
+                <p className="mu" style={{ margin: 0, fontSize: 14 }}>
+                  {esperandoCentro && panel === null
+                    ? 'Vuelve a compartir tu ubicación o elige un punto para ver los productos cercanos.'
+                    : 'Usa la ubicación de este dispositivo, toca un punto del mapa o elige uno de los barrios marcados.'}{' '}
+                  No guardamos tus coordenadas en el enlace de la página.
+                </p>
+              </div>
+              {panel !== null && <button type="button" className="btn2" onClick={() => setPanel(null)}>{centro ? 'Listo' : 'Cancelar'}</button>}
+            </div>
+            <div className="uops">
+              <button type="button" className="btn" onClick={usarMiUbicacion} disabled={ubicando}>{ubicando ? 'Obteniendo ubicación…' : 'Usar mi ubicación'}</button>
+              <label className="sel">O un barrio como centro
+                <select value={centroBarrio} onChange={(e) => e.target.value && aplicarCentro(e.target.value)}>
+                  <option value="">Elige un barrio</option>
+                  {BARRIOS.map((b) => <option key={b.id} value={b.id}>{barrio(b.id)}</option>)}
+                </select>
+              </label>
+            </div>
+            {errorUbicacion && <Alert tone="info">{errorUbicacion}</Alert>}
+            <Suspense fallback={<div className="mapa mapa--cargando">Cargando mapa…</div>}>
+              <MapaUbicacion centro={centro} radioKm={radioVisible} onElegir={elegirEnMapa} />
+            </Suspense>
+            <p className="mu" style={{ fontSize: 12, margin: '8px 0 0' }}>Toca el mapa para elegir un punto; el círculo muestra el radio de búsqueda.</p>
+          </section>
+        )}
+
+        <div className="results">
+          <h2>{centro ? `Cerca de ${nombreCentro}` : barrioId ? `Productos en ${barrio(barrioId)}` : categoria ? CATEGORIA[categoria] : 'Todo lo publicado'}</h2>
+          {products && <span className="count" aria-live="polite">{total === 1 ? '1 publicación' : `${total} publicaciones`}{centro && ` a menos de ${kmTexto(radio)}`}</span>}
+        </div>
+
+        {favoritos.error && <Alert tone="error">{favoritos.error}</Alert>}
+        {feedError && <Alert tone="info">No pudimos cargar las publicaciones por ahora.</Alert>}
+        <div className="grid">
+          {products === null && !feedError && !esperandoCentro && Array.from({ length: 8 }, (_, i) => <div key={i} className="card skel" />)}
+          {products?.length === 0 && (
+            <div className="empty">
+              <img src="/img/lampara.webp" alt="" />
+              <h2 style={{ marginTop: 10 }}>Nada por aquí todavía</h2>
+              <p className="mu" style={{ margin: '0 0 16px' }}>
+                {centro ? `No hay productos a menos de ${kmTexto(radio)}. Prueba con un radio mayor.` : hayFiltros ? 'Prueba con otra categoría o barrio.' : 'Aún no hay publicaciones en Cali.'}
+              </p>
+              {hayFiltros && <button className="btn2" type="button" onClick={quitarFiltros}>Ver todo</button>}
+            </div>
+          )}
+          {products?.map((p) => <ProductCard key={p.id} product={p} favorito={favoritos.paraTarjeta(p)} />)}
+        </div>
+
+        {products && (paginas > 1 || pagina > 1) && (
+          <nav className="pager" aria-label="Paginación">
+            <button type="button" disabled={pagina === 1} aria-label="Anterior" onClick={() => irAPagina(Math.min(pagina - 1, Math.max(paginas, 1)))}>←</button>
+            {Array.from({ length: Math.max(paginas, 1) }, (_, k) => k + 1).slice(Math.max(0, pagina - 4), Math.max(0, pagina - 4) + 7).map((n) => (
+              <button key={n} type="button" aria-current={n === pagina} onClick={() => irAPagina(n)}>{n}</button>
+            ))}
+            <button type="button" disabled={pagina >= paginas} aria-label="Siguiente" onClick={() => irAPagina(pagina + 1)}>→</button>
+          </nav>
+        )}
       </main>
-      <Footer />
     </>
   );
 }

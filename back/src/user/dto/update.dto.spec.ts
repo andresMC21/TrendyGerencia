@@ -65,4 +65,29 @@ describe('UpdateUserDto (HU-04)', () => {
       expect((error as BadRequestException).getStatus()).toBe(400);
     }
   });
+
+  describe('TRD-25 · avatar y foto subida', () => {
+    it('acepta un avatar de objeto y color del catálogo, y null para quitarlo', () => {
+      expect(run({ avatar: 'bici:#F77F00' }).errors).toHaveLength(0);
+      expect(run({ avatar: null }).errors).toHaveLength(0);
+    });
+
+    it.each(['bici', 'bici:#000000', 'cohete:#F77F00', '<script>:#F77F00', 42])('rechaza el avatar %p', (avatar) => {
+      expect(run({ avatar }).errors.map((e) => e.property)).toEqual(['avatar']);
+    });
+
+    it('acepta una foto JPEG en data URL y una URL https', () => {
+      expect(run({ photoUrl: 'data:image/jpeg;base64,QUJD' }).errors).toHaveLength(0);
+      expect(run({ photoUrl: 'https://cdn.trendy.test/a.jpg' }).errors).toHaveLength(0);
+    });
+
+    it.each([
+      ['data URL de otro tipo', 'data:image/svg+xml;base64,QUJD'],
+      ['data URL demasiado grande', `data:image/png;base64,${'A'.repeat(300000)}`],
+      ['javascript:', 'javascript:alert(1)'],
+      ['URL sin protocolo', 'trendy.test/a.jpg'],
+    ])('rechaza photoUrl: %s', (_label, photoUrl) => {
+      expect(run({ photoUrl }).errors.map((e) => e.property)).toEqual(['photoUrl']);
+    });
+  });
 });

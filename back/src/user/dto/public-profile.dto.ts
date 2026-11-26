@@ -57,6 +57,9 @@ export class PublicProfileDto {
   @ApiProperty({ type: String, format: 'uri', nullable: true })
   photoUrl: string | null;
 
+  @ApiProperty({ type: String, nullable: true, example: 'bici:#F77F00' })
+  avatar: string | null;
+
   @ApiProperty({
     type: String,
     enum: VerificationStatus,
@@ -110,6 +113,7 @@ export class PublicProfileDto {
     dto.fullName = user.fullName;
     dto.info = user.info ?? null;
     dto.photoUrl = user.photoUrl ?? null;
+    dto.avatar = user.avatar ?? null;
     dto.verificationStatus = user.verificationStatus;
     dto.ratingAverage = Number(user.ratingAverage ?? 0);
     dto.reviewsCount = user.reviewsCount ?? 0;

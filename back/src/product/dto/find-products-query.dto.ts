@@ -9,7 +9,9 @@ import {
   IsOptional,
   IsString,
   Max,
+  MaxLength,
   Min,
+  IsUUID,
 } from 'class-validator';
 import { ProductCondition } from '../enums/product-condition.enum';
 import { ProductSort } from '../enums/product-sort.enum';
@@ -78,6 +80,27 @@ export class FindProductsQueryDto {
   @Min(0.1)
   @Max(50)
   radius?: number;
+
+  @ApiPropertyOptional({
+    type: String,
+    maxLength: 80,
+    example: 'bicicleta',
+    description: 'TRD-25 · Busca el texto en el título o la descripción (sin distinguir mayúsculas).',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(80)
+  q?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'uuid',
+    description: 'TRD-25 · Solo las publicaciones de esta persona (perfil público).',
+  })
+  @IsOptional()
+  @IsUUID()
+  sellerId?: string;
 
   @ApiPropertyOptional({
     type: String,

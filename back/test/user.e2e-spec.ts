@@ -301,6 +301,24 @@ describe('Users (e2e)', () => {
     });
   });
 
+  it('TRD-25 · PATCH /user/me guarda el avatar de objeto y una foto subida', async () => {
+    const res = await http
+      .patch('/api/user/me')
+      .set(auth(token))
+      .send({ avatar: 'guitarra:#BFD7E6', photoUrl: 'data:image/webp;base64,UklGRg==' })
+      .expect(200);
+    expect(res.body).toMatchObject({ avatar: 'guitarra:#BFD7E6', photoUrl: 'data:image/webp;base64,UklGRg==' });
+
+    const pub = await http.get(`/api/user/${userId}`).set(auth(token)).expect(200);
+    expect(pub.body.avatar).toBe('guitarra:#BFD7E6');
+
+    await http.patch('/api/user/me').set(auth(token)).send({ avatar: 'cohete:#F77F00' }).expect(400);
+    await http.patch('/api/user/me').set(auth(token)).send({ photoUrl: 'data:image/svg+xml;base64,PHN2Zz4=' }).expect(400);
+
+    const cleared = await http.patch('/api/user/me').set(auth(token)).send({ avatar: null, photoUrl: null }).expect(200);
+    expect(cleared.body).toMatchObject({ avatar: null, photoUrl: null });
+  });
+
   it('PATCH /user/me valida los datos de actualización', async () => {
     await http
       .patch('/api/user/me')

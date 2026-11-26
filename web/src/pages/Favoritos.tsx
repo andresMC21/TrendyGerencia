@@ -1,116 +1,78 @@
-import { EmptyState } from '../components/EmptyState';
-import { Skeleton } from '../components/Skeleton';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Footer, Header } from '../components/Brand';
+import { Header } from '../components/Brand';
 import { Alert } from '../components/Form';
 import { ProductCard } from '../components/ProductCard';
 import { ApiError, productApi, type Product } from '../lib/api';
 import { useSession } from '../lib/session';
+import { notify } from '../lib/toast';
 
-type Estado =
-  | { tipo: 'cargando' }
-  | { tipo: 'ok'; items: Product[] }
-  | { tipo: 'error'; mensaje: string };
+type Estado = { tipo: 'cargando' } | { tipo: 'ok'; items: Product[] } | { tipo: 'error'; mensaje: string };
 
-/** HU-14 · Mis productos favoritos: ver la lista y quitar productos de ella. */
+/** HU-14 · Mis favoritos: quitar con animación y opción de deshacer. */
 export default function Favoritos() {
   const { token } = useSession();
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
-  const [aviso, setAviso] = useState('');
-  const [problema, setProblema] = useState('');
-  const [quitando, setQuitando] = useState<string | null>(null);
+  const [saliendo, setSaliendo] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
     let activo = true;
-    productApi
-      .favorites(token)
+    productApi.favorites(token)
       .then((items) => activo && setEstado({ tipo: 'ok', items }))
-      .catch(
-        (err) =>
-          activo &&
-          setEstado({
-            tipo: 'error',
-            mensaje:
-              err instanceof ApiError && err.status === 401
-                ? 'Tu sesión expiró. Vuelve a ingresar.'
-                : 'No pudimos cargar tus favoritos. Inténtalo de nuevo.',
-          }),
-      );
-    return () => {
-      activo = false;
-    };
+      .catch((err) => activo && setEstado({ tipo: 'error', mensaje: err instanceof ApiError && err.status === 401 ? 'Tu sesión expiró. Vuelve a ingresar.' : 'No pudimos cargar tus favoritos. Inténtalo de nuevo.' }));
+    return () => { activo = false; };
   }, [token]);
 
+  const items = estado.tipo === 'ok' ? estado.items : [];
+
   async function quitar(p: Product) {
-    if (!token || quitando) return;
-    setQuitando(p.id);
-    setAviso('');
-    setProblema('');
+    if (!token || saliendo) return;
+    const pos = items.findIndex((x) => x.id === p.id);
+    setSaliendo(p.id);
     try {
       await productApi.removeFavorite(token, p.id);
-      setEstado((e) =>
-        e.tipo === 'ok' ? { ...e, items: e.items.filter((x) => x.id !== p.id) } : e,
-      );
-      setAviso(`Quitaste «${p.title}» de tus favoritos. La publicación sigue en Trendy.`);
+      window.setTimeout(() => {
+        setEstado((e) => (e.tipo === 'ok' ? { ...e, items: e.items.filter((x) => x.id !== p.id) } : e));
+        setSaliendo(null);
+        notify(`Quitaste «${p.title}» de favoritos`, {
+          label: 'Deshacer',
+          run: () => {
+            void productApi.addFavorite(token, p.id).then(() =>
+              setEstado((e) => (e.tipo === 'ok' ? { ...e, items: [...e.items.slice(0, pos), p, ...e.items.slice(pos)] } : e)),
+            ).catch(() => notify('No pudimos deshacer el cambio.'));
+          },
+        });
+      }, 280);
     } catch {
-      setProblema('No pudimos quitar el producto de tus favoritos. Inténtalo de nuevo.');
-    } finally {
-      setQuitando(null);
+      setSaliendo(null);
+      notify('No pudimos quitar el producto de tus favoritos. Inténtalo de nuevo.');
     }
   }
+
+  const gone = (p: Product) => (p.status === 'RESERVED' ? 'Reservado' : p.status === 'SOLD' ? 'Vendido' : p.status === 'REMOVED' ? 'Retirado' : undefined);
 
   return (
     <>
       <Header />
-      <main className="dashboard">
-        <div className="container">
-          <Link viewTransition to="/inicio" className="back-link">
-            ← Volver a Mi Trendy
-          </Link>
-          <h1 className="dash-title">Mis favoritos</h1>
-          <p className="tx-lead">
-            Los productos que guardaste para volver a verlos. Quitarlos de aquí no afecta la
-            publicación.
-          </p>
-
-          {aviso && (
-            <div data-testid="aviso-favorito">
-              <Alert tone="success">{aviso}</Alert>
-            </div>
+      <main id="contenido" className="view on wrap">
+        <Link className="back" viewTransition to="/inicio" style={{ marginTop: 10 }}>← Volver a inicio</Link>
+        <div className="mph">
+          <div><h1>Mis favoritos</h1><p className="mu" style={{ margin: '8px 0 0', maxWidth: '62ch' }}>Lo que guardaste para volver a ver. Quitarlo de aquí no afecta la publicación.</p></div>
+          {estado.tipo === 'ok' && <span className="count">{items.length === 1 ? '1 guardado' : `${items.length} guardados`}</span>}
+        </div>
+        {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
+        <div className="grid favgrid" data-testid="favoritos-lista">
+          {estado.tipo === 'cargando' && [0, 1, 2, 3].map((i) => <div key={i} className="card skel" />)}
+          {estado.tipo === 'ok' && items.length === 0 && (
+            <div className="empty"><img src="/img/chaqueta.webp" alt="" /><h2 style={{ marginTop: 10 }}>Aún no tienes favoritos</h2><p className="mu" style={{ margin: '0 0 16px' }}>Toca el corazón en cualquier producto para guardarlo aquí.</p><Link className="btn" to="/explorar">Explorar productos</Link></div>
           )}
-          {problema && <Alert tone="error">{problema}</Alert>}
-          {estado.tipo === 'cargando' && <Skeleton kind="products" />}
-          {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
-
-          {estado.tipo === 'ok' && estado.items.length === 0 && (
-            <EmptyState kind="favorites">
-              Aún no tienes favoritos. <Link viewTransition to="/explorar">Explora los productos</Link> y guarda los
-              que te interesen.
-            </EmptyState>
-          )}
-
-          {estado.tipo === 'ok' && estado.items.length > 0 && (
-            <div className="feed" data-testid="favoritos-lista">
-              {estado.items.map((p) => (
-                <div key={p.id} className="fav-item" data-testid={`favorito-${p.id}`}>
-                  <ProductCard product={p} />
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    onClick={() => void quitar(p)}
-                    disabled={quitando !== null}
-                  >
-                    {quitando === p.id ? 'Quitando…' : 'Quitar de favoritos'}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          {items.map((p) => (
+            <ProductCard key={p.id} product={p} gone={gone(p)} className={saliendo === p.id ? 'out' : ''}
+              favorito={{ activo: true, ocupado: saliendo !== null, alternar: () => void quitar(p) }} />
+          ))}
         </div>
       </main>
-      <Footer />
     </>
   );
 }

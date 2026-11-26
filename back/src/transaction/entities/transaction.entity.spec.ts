@@ -78,6 +78,8 @@ describe('Transaction entity', () => {
     expect(result).toEqual({
       id: 'user-1',
       fullName: 'Usuario',
+      photoUrl: null,
+      avatar: null,
     });
     expect(TransactionUserDto.fromEntity(undefined)).toBeUndefined();
   });

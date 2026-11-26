@@ -127,6 +127,14 @@ export class ProductService {
     if (neighborhood) {
       qb.andWhere('product.neighborhoodId = :neighborhood', { neighborhood });
     }
+    if (query.sellerId) {
+      qb.andWhere('product.sellerId = :sellerId', { sellerId: query.sellerId });
+    }
+    if (query.q) {
+      // Los comodines de LIKE escritos por la persona se buscan como texto.
+      const text = `%${query.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      qb.andWhere('(product.title ILIKE :text OR product.description ILIKE :text)', { text });
+    }
     if (category) {
       qb.andWhere('LOWER(product.category) = LOWER(:category)', { category });
     }
@@ -541,6 +549,8 @@ export class ProductService {
       lat: query.lat ?? null,
       lng: query.lng ?? null,
       radius: query.radius ?? 5,
+      q: query.q?.toLowerCase() || null,
+      sellerId: query.sellerId ?? null,
       category: query.category?.toLowerCase() ?? null,
       condition: query.condition ?? null,
       sort: query.sort ?? ProductSort.RECENT,

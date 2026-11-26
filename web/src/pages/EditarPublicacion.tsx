@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { Footer, Header } from '../components/Brand';
-import { Alert, Field, SelectField, TextAreaField } from '../components/Form';
-import { PhotoPicker } from '../components/PhotoPicker';
+import { Header } from '../components/Brand';
+import { Alert } from '../components/Form';
+import { PreviewCard, ProductFields, ProductLayout, type ProductFormState, type Ubicacion } from '../components/ProductForm';
 import {
   ApiError,
   productApi,
@@ -11,8 +11,7 @@ import {
   type ProductCondition,
   type UpdateProductBody,
 } from '../lib/api';
-import { BARRIOS, CATEGORIAS } from '../lib/barrios';
-import { barrio, CATEGORIA, CONDICION, precio } from '../lib/format';
+import { BARRIOS } from '../lib/barrios';
 import { useSession } from '../lib/session';
 import {
   mapServerProductValidation,
@@ -21,7 +20,6 @@ import {
   type ProductField,
 } from '../lib/validation';
 
-type Ubicacion = { punto: GeoPoint; origen: 'barrio' | 'dispositivo' };
 
 type Estado =
   | { tipo: 'cargando' }
@@ -83,25 +81,21 @@ export default function EditarPublicacion() {
   return (
     <>
       <Header />
-      <main className="auth">
-        <div className="container container--narrow">
-          <Link viewTransition to="/mis-publicaciones" className="back-link">
-            ← Volver a Mis publicaciones
-          </Link>
-          <section className="form-card">
-            <span className="form-kicker">EDITAR PUBLICACIÓN</span>
-            <h1>Edita tu publicación</h1>
-            {estado.tipo === 'cargando' && <p className="form-sub">Cargando tu publicación…</p>}
-            {estado.tipo === 'error' && (
-              <div data-testid="editar-error">
-                <Alert tone="error">{estado.mensaje}</Alert>
-              </div>
-            )}
-            {estado.tipo === 'ok' && <Formulario producto={estado.producto} />}
-          </section>
-        </div>
+      <main id="contenido" className="view on wrap" data-view="editar">
+        {estado.tipo === 'ok' ? (
+          <Formulario producto={estado.producto} />
+        ) : (
+          <>
+            <Link className="back" viewTransition to="/mis-publicaciones" style={{ marginTop: 10 }}>← Volver a mis publicaciones</Link>
+            <div className="ficha" style={{ maxWidth: 640 }}>
+              <div className="kick">Editar publicación</div>
+              <h1>Edita tu publicación</h1>
+              {estado.tipo === 'cargando' && <p className="sub">Cargando tu publicación…</p>}
+              {estado.tipo === 'error' && <div data-testid="editar-error"><Alert tone="error">{estado.mensaje}</Alert><Link className="btn2" to="/mis-publicaciones">Volver a mis publicaciones</Link></div>}
+            </div>
+          </>
+        )}
       </main>
-      <Footer />
     </>
   );
 }
@@ -256,174 +250,33 @@ function Formulario({ producto }: { producto: Product }) {
     }
   };
 
+  const f: ProductFormState = {
+    photoUrl, setPhotoUrl, setPreparingPhoto, title, setTitle, description, setDescription, category, setCategory,
+    condition, setCondition, price, setPrice, neighborhoodId, elegirBarrio, ubicacion, usarMiUbicacion, usarUbicacionDelBarrio,
+    locating, acceptsBarter, setAcceptsBarter, errors, clear, sending,
+  };
+  const dirty = Object.keys(cambios()).length > 0;
+  const [descartar, setDescartar] = useState(false);
   return (
-    <>
-      <p className="form-sub">Cambia lo que necesites y guarda. Los cambios se ven de inmediato.</p>
-
-      {formError && (
-        <div data-testid="editar-form-error">
-          <Alert tone="error">{formError}</Alert>
-        </div>
-      )}
-      {sessionExpired && (
-        <Alert tone="error">
-          Tu sesión expiró. <Link viewTransition to="/ingresar">Vuelve a ingresar</Link> para guardar.
-        </Alert>
-      )}
-
-      <form onSubmit={onSubmit} noValidate aria-busy={sending} data-testid="editar-form">
-        <PhotoPicker
-          value={photoUrl}
-          onChange={(photo) => {
-            setPhotoUrl(photo);
-            clear('photoUrl');
-          }}
-          onBusyChange={setPreparingPhoto}
-          error={errors.photoUrl}
-          disabled={sending}
-        />
-        <Field
-          label="Título"
-          name="title"
-          maxLength={120}
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            clear('title');
-          }}
-          error={errors.title}
-          hint={`${title.trim().length}/120 caracteres · mínimo 3`}
-        />
-        <TextAreaField
-          label="Descripción"
-          name="description"
-          maxLength={2000}
-          rows={4}
-          value={description}
-          onChange={(e) => {
-            setDescription(e.target.value);
-            clear('description');
-          }}
-          error={errors.description}
-          hint={`${description.trim().length}/2000 caracteres`}
-        />
-        <div className="form-row">
-          <SelectField
-            label="Categoría"
-            name="category"
-            value={category}
-            onChange={(e) => {
-              setCategory(e.target.value);
-              clear('category');
-            }}
-            error={errors.category}
-          >
-            <option value="">Elige una categoría</option>
-            {!CATEGORIAS.includes(category as never) && category && (
-              <option value={category}>{CATEGORIA[category] ?? category}</option>
-            )}
-            {CATEGORIAS.map((c) => (
-              <option key={c} value={c}>
-                {CATEGORIA[c] ?? c}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
-            label="Condición"
-            name="condition"
-            value={condition}
-            onChange={(e) => {
-              setCondition(e.target.value as ProductCondition | '');
-              clear('condition');
-            }}
-            error={errors.condition}
-          >
-            <option value="">Elige la condición</option>
-            {Object.entries(CONDICION).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </SelectField>
-        </div>
-
-        <div className="form-row">
-          <Field
-            label="Precio (COP)"
-            name="price"
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step="any"
-            placeholder="0 = gratis o trueque"
-            value={price}
-            onChange={(e) => {
-              setPrice(e.target.value);
-              clear('price');
-            }}
-            error={errors.price}
-            hint={price.trim() ? precio(Number(price) || 0) : 'Opcional'}
-          />
-          <SelectField
-            label="Barrio"
-            name="neighborhoodId"
-            value={neighborhoodId}
-            onChange={(e) => elegirBarrio(e.target.value)}
-            error={errors.neighborhoodId}
-          >
-            <option value="">Elige tu barrio</option>
-            {!barrioInicial && neighborhoodId && (
-              <option value={neighborhoodId}>{barrio(neighborhoodId)}</option>
-            )}
-            {BARRIOS.map((b) => (
-              <option key={b.id} value={b.id}>
-                {barrio(b.id)}
-              </option>
-            ))}
-          </SelectField>
-        </div>
-
-        <div className="location-box" data-testid="editar-ubicacion">
-          <span>
-            {ubicacion
-              ? ubicacion.origen === 'dispositivo'
-                ? `📍 Ubicación guardada (${ubicacion.punto.lat}, ${ubicacion.punto.lng})`
-                : `📍 Punto aproximado de ${barrio(neighborhoodId)}`
-              : '📍 Elige un barrio para fijar la ubicación'}
-          </span>
-          {ubicacion?.origen === 'dispositivo' && BARRIOS.some((b) => b.id === neighborhoodId) ? (
-            <button type="button" className="link-button" onClick={usarUbicacionDelBarrio}>
-              Usar la del barrio
-            </button>
-          ) : (
-            <button type="button" className="link-button" onClick={usarMiUbicacion} disabled={locating}>
-              {locating ? 'Buscando…' : 'Usar mi ubicación'}
-            </button>
-          )}
-        </div>
-        <p className={`location-msg ${errors.location ? 'field-error' : 'field-hint'}`}>
-          {errors.location ?? ' '}
-        </p>
-
-        <label className="check">
-          <input
-            type="checkbox"
-            name="acceptsBarter"
-            checked={acceptsBarter}
-            onChange={(e) => setAcceptsBarter(e.target.checked)}
-          />
-          Acepto trueque
-        </label>
-
-        <div className="publish-actions">
-          <button type="submit" className="btn btn-primary" disabled={sending || preparingPhoto}>
-            {preparingPhoto ? 'Preparando fotografía…' : sending ? 'Guardando…' : 'Guardar cambios'}
-          </button>
-          <Link viewTransition to="/mis-publicaciones" className="btn btn-outline">
-            Cancelar
-          </Link>
-        </div>
-      </form>
-    </>
+    <div id="v-publicar" style={{ position: 'relative' }}>
+      <ProductLayout back={<Link className="back" viewTransition to="/mis-publicaciones" style={{ marginTop: 10 }}>← Volver a mis publicaciones</Link>} preview={<PreviewCard f={f} />}>
+        <div className="kick">Editar publicación</div>
+        <h1>Edita tu publicación</h1>
+        <p className="sub">Cambia lo que necesites. Los compradores verán la versión nueva de inmediato.</p>
+        {dirty && <p className="dirty"><i />Tienes cambios sin guardar</p>}
+        {formError && <div data-testid="editar-form-error"><Alert tone="error">{formError}</Alert></div>}
+        {sessionExpired && <Alert tone="error">Tu sesión expiró. <Link viewTransition to="/ingresar">Vuelve a ingresar</Link> para guardar.</Alert>}
+        <form onSubmit={onSubmit} noValidate aria-busy={sending} data-testid="editar-form">
+          <ProductFields {...f} />
+          <div className="actsrow">
+            <button className="btn" type="submit" disabled={sending || preparingPhoto}>{preparingPhoto ? 'Preparando fotografía…' : sending ? 'Guardando…' : 'Guardar cambios'}</button>
+            <button className="btn2" type="button" onClick={() => {
+              if (dirty && !descartar) { setDescartar(true); window.setTimeout(() => setDescartar(false), 2500); return; }
+              navigate('/mis-publicaciones');
+            }}>{descartar ? '¿Descartar cambios?' : 'Cancelar'}</button>
+          </div>
+        </form>
+      </ProductLayout>
+    </div>
   );
 }

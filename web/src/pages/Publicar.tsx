@@ -1,20 +1,19 @@
 import { notify } from '../lib/toast';
 import { useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
-import { Dot, Footer, Header } from '../components/Brand';
-import { Alert, Field, SelectField, TextAreaField } from '../components/Form';
+import { Header } from '../components/Brand';
+import { Alert } from '../components/Form';
+import { ProductCard } from '../components/ProductCard';
+import { PreviewCard, ProductFields, ProductLayout, type ProductFormState, type Ubicacion } from '../components/ProductForm';
 import {
   ApiError,
   productApi,
-  type GeoPoint,
   type Product,
   type ProductCondition,
 } from '../lib/api';
-import { BARRIOS, CATEGORIAS } from '../lib/barrios';
-import { barrio, CATEGORIA, CONDICION, precio } from '../lib/format';
+import { BARRIOS } from '../lib/barrios';
+import { barrio } from '../lib/format';
 import { useSession } from '../lib/session';
-import { PhotoPicker } from '../components/PhotoPicker';
-import { ProductPhoto } from '../components/ProductPhoto';
 import {
   mapServerProductValidation,
   validateProduct,
@@ -22,7 +21,6 @@ import {
   type ProductField,
 } from '../lib/validation';
 
-type Ubicacion = { punto: GeoPoint; origen: 'barrio' | 'dispositivo' };
 
 /** ~110 m: suficiente para «cerca de ti» sin exponer la dirección exacta. */
 const redondear = (v: number) => Math.round(v * 1000) / 1000;
@@ -160,237 +158,40 @@ export default function Publicar() {
     // Barrio y ubicación se conservan: lo normal es publicar varias cosas desde el mismo lugar.
   };
 
+  const f: ProductFormState = {
+    photoUrl, setPhotoUrl, setPreparingPhoto, title, setTitle, description, setDescription, category, setCategory,
+    condition, setCondition, price, setPrice, neighborhoodId, elegirBarrio, ubicacion, usarMiUbicacion, usarUbicacionDelBarrio,
+    locating, acceptsBarter, setAcceptsBarter, errors, clear, sending,
+  };
+  const hayErrores = Object.values(errors).some(Boolean);
   return (
     <>
       <Header />
-      <main className="auth">
-        <div className="container auth-grid">
-          <aside className="learning-card">
-            <h2>Publica en menos de un minuto</h2>
-            <div className="lc-box lc-box--wide">
-              <span className="lc-label">GRATIS</span>
-              <p>Publicar en Trendy no tiene costo. Tus vecinos verán el objeto en su barrio.</p>
-            </div>
-            <span className="lc-step">PARA VENDER MÁS RÁPIDO</span>
-            <ul className="lc-list">
-              <li>
-                <Dot /> Usa un título claro: qué es, marca y talla o tamaño.
-              </li>
-              <li>
-                <Dot /> Cuenta en la descripción el estado real y los detalles de uso.
-              </li>
-              <li>
-                <Dot /> Precio en 0 si lo regalas o si solo buscas un trueque.
-              </li>
-            </ul>
-            <span className="lc-step">TU UBICACIÓN</span>
-            <div className="lc-box">
-              <p>
-                Guardamos un punto aproximado (el del barrio o el de tu dispositivo redondeado), nunca
-                tu dirección exacta. Sirve para mostrar tu objeto a quienes están cerca.
-              </p>
-            </div>
-          </aside>
-
-          <section className="form-card">
-            <span className="form-kicker">NUEVA PUBLICACIÓN</span>
-            <h1>Publica un producto</h1>
-
+      <main id="contenido" className="view on wrap" data-view="publicar">
+        <div id="v-publicar" style={{ position: 'relative' }}>
+          <ProductLayout done={!!publicado} preview={<PreviewCard f={f} />}>
             {publicado ? (
-              <Publicado p={publicado} onOtro={reiniciar} />
+              <div className="done">
+                <div className="alert s" role="status" style={{ textAlign: 'left' }}><span aria-hidden="true">✓</span><span><b>¡Tu producto quedó publicado!</b> Ya está disponible para tus vecinos de {barrio(publicado.neighborhoodId)}.</span></div>
+                <div style={{ maxWidth: 300, margin: '18px auto' }} data-testid="publicado"><ProductCard product={publicado} /></div>
+                <div className="actsrow"><Link className="btn" viewTransition to={`/producto/${publicado.id}`}>Ver publicación</Link><button className="btn2" type="button" onClick={reiniciar}>Publicar otro</button></div>
+              </div>
             ) : (
               <>
-                <p className="form-sub">
-                  Completa los datos básicos. Quedará disponible de inmediato.
-                </p>
-
-                {formError && <Alert tone="error">{formError}</Alert>}
-                {sessionExpired && (
-                  <Alert tone="error">
-                    Tu sesión expiró. <Link viewTransition to="/ingresar">Vuelve a ingresar</Link> para publicar.
-                  </Alert>
-                )}
-
+                <div className="kick">Nueva publicación</div>
+                <h1>Publica un producto</h1>
+                <p className="sub">Completa los datos básicos. Quedará disponible de inmediato.</p>
+                {(formError || hayErrores) && <Alert tone="error">{formError ?? 'Revisa los campos marcados en rojo.'}</Alert>}
+                {sessionExpired && <Alert tone="error">Tu sesión expiró. <Link viewTransition to="/ingresar">Vuelve a ingresar</Link> para publicar.</Alert>}
                 <form onSubmit={onSubmit} noValidate aria-busy={sending}>
-                  <PhotoPicker value={photoUrl} onChange={(photo) => { setPhotoUrl(photo); clear('photoUrl'); }} onBusyChange={setPreparingPhoto} error={errors.photoUrl} disabled={sending} />
-                  <Field
-                    label="Título"
-                    name="title"
-                    placeholder="Bicicleta MTB rin 26"
-                    maxLength={120}
-                    value={title}
-                    onChange={(e) => {
-                      setTitle(e.target.value);
-                      clear('title');
-                    }}
-                    error={errors.title}
-                    hint={`${title.trim().length}/120 caracteres · mínimo 3`}
-                  />
-                  <TextAreaField
-                    label="Descripción"
-                    name="description"
-                    placeholder="Cambios Shimano, poco uso, incluye luces."
-                    maxLength={2000}
-                    rows={4}
-                    value={description}
-                    onChange={(e) => {
-                      setDescription(e.target.value);
-                      clear('description');
-                    }}
-                    error={errors.description}
-                    hint={`${description.trim().length}/2000 caracteres`}
-                  />
-                  <div className="form-row">
-                    <SelectField
-                      label="Categoría"
-                      name="category"
-                      value={category}
-                      onChange={(e) => {
-                        setCategory(e.target.value);
-                        clear('category');
-                      }}
-                      error={errors.category}
-                    >
-                      <option value="">Elige una categoría</option>
-                      {CATEGORIAS.map((c) => (
-                        <option key={c} value={c}>
-                          {CATEGORIA[c] ?? c}
-                        </option>
-                      ))}
-                    </SelectField>
-                    <SelectField
-                      label="Condición"
-                      name="condition"
-                      value={condition}
-                      onChange={(e) => {
-                        setCondition(e.target.value as ProductCondition | '');
-                        clear('condition');
-                      }}
-                      error={errors.condition}
-                    >
-                      <option value="">Elige la condición</option>
-                      {Object.entries(CONDICION).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </SelectField>
-                  </div>
-
-                  <div className="form-row">
-                    <Field
-                      label="Precio (COP)"
-                      name="price"
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      step="any"
-                      placeholder="0 = gratis o trueque"
-                      value={price}
-                      onChange={(e) => {
-                        setPrice(e.target.value);
-                        clear('price');
-                      }}
-                      error={errors.price}
-                      hint={price.trim() ? precio(Number(price) || 0) : 'Opcional'}
-                    />
-                    <SelectField
-                      label="Barrio"
-                      name="neighborhoodId"
-                      value={neighborhoodId}
-                      onChange={(e) => elegirBarrio(e.target.value)}
-                      error={errors.neighborhoodId}
-                    >
-                      <option value="">Elige tu barrio</option>
-                      {BARRIOS.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {barrio(b.id)}
-                        </option>
-                      ))}
-                    </SelectField>
-                  </div>
-
-                  <div className="location-box" data-testid="publicar-ubicacion">
-                    <span>
-                      {ubicacion
-                        ? ubicacion.origen === 'dispositivo'
-                          ? `📍 Ubicación de tu dispositivo (${ubicacion.punto.lat}, ${ubicacion.punto.lng})`
-                          : `📍 Punto aproximado de ${barrio(neighborhoodId)}`
-                        : '📍 Elige un barrio para fijar la ubicación'}
-                    </span>
-                    {ubicacion?.origen === 'dispositivo' && neighborhoodId ? (
-                      <button type="button" className="link-button" onClick={usarUbicacionDelBarrio}>
-                        Usar la del barrio
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="link-button"
-                        onClick={usarMiUbicacion}
-                        disabled={locating}
-                      >
-                        {locating ? 'Buscando…' : 'Usar mi ubicación'}
-                      </button>
-                    )}
-                  </div>
-                  <p className={`location-msg ${errors.location ? 'field-error' : 'field-hint'}`}>
-                    {errors.location ?? ' '}
-                  </p>
-
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      name="acceptsBarter"
-                      checked={acceptsBarter}
-                      onChange={(e) => setAcceptsBarter(e.target.checked)}
-                    />
-                    Acepto trueque
-                  </label>
-
-                  <button type="submit" className="btn btn-primary btn-block" disabled={sending || preparingPhoto}>
-                    {preparingPhoto ? 'Preparando fotografía…' : sending ? 'Publicando…' : 'Publicar producto'}
-                  </button>
+                  <ProductFields {...f} />
+                  <div className="actsrow"><button className="btn" type="submit" disabled={sending || preparingPhoto}>{preparingPhoto ? 'Preparando fotografía…' : sending ? 'Publicando…' : 'Publicar producto'}</button></div>
                 </form>
               </>
             )}
-          </section>
+          </ProductLayout>
         </div>
       </main>
-      <Footer />
-    </>
-  );
-}
-
-function Publicado({ p, onOtro }: { p: Product; onOtro: () => void }) {
-  return (
-    <>
-      <Alert tone="success">
-        <strong>¡Tu producto quedó publicado!</strong> Ya está disponible para tus vecinos de{' '}
-        {barrio(p.neighborhoodId)}.
-      </Alert>
-      <article className="product" data-testid="publicado">
-        <ProductPhoto src={p.photoUrl} title={p.title} />
-        <div className="product-top">
-          <span className="product-cat">{CATEGORIA[p.category] ?? p.category}</span>
-          <span className="chip chip--green">Disponible</span>
-        </div>
-        <h3>{p.title}</h3>
-        <p className="product-desc">{p.description}</p>
-        <div className="product-foot">
-          <span className="product-price">{precio(Number(p.price))}</span>
-          <span className="product-meta">
-            {barrio(p.neighborhoodId)} · {CONDICION[p.condition] ?? p.condition}
-          </span>
-        </div>
-      </article>
-      <div className="publish-actions">
-        <Link viewTransition to={`/producto/${p.id}`} className="btn btn-primary">
-          Ver publicación
-        </Link>
-        <button type="button" className="btn btn-outline" onClick={onOtro}>
-          Publicar otro
-        </button>
-      </div>
     </>
   );
 }
