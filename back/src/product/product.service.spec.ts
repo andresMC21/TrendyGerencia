@@ -236,6 +236,25 @@ describe('ProductService', () => {
       expect(qb.limit).toHaveBeenCalledWith(5);
     });
 
+    it('TRD-25 · q busca en título y descripción escapando comodines, y sellerId filtra por vendedor', async () => {
+      // Arrange
+      qb.getCount.mockResolvedValue(0);
+      qb.getRawAndEntities.mockResolvedValue({ entities: [], raw: [] });
+      qb.getRawMany.mockResolvedValue([]);
+
+      // Act
+      await service.findAll({ q: '50%_off', sellerId: '33333333-3333-4333-8333-333333333333' });
+
+      // Assert
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        '(product.title ILIKE :text OR product.description ILIKE :text)',
+        { text: '%50\\%\\_off%' },
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith('product.sellerId = :sellerId', {
+        sellerId: '33333333-3333-4333-8333-333333333333',
+      });
+    });
+
     it('con lat/lng filtra por ST_DWithin y devuelve distanceKm en km', async () => {
       // Arrange
       qb.getCount.mockResolvedValue(1);
@@ -413,6 +432,8 @@ describe('ProductService', () => {
       // Assert
       expect(service.buildFeedCacheKey({ neighborhood: 'granada' })).toMatch(/^feed:granada:/);
       expect(service.buildFeedCacheKey({})).toMatch(/^feed:all:/);
+      expect(service.buildFeedCacheKey({ q: 'Bici' })).toBe(service.buildFeedCacheKey({ q: 'bici' }));
+      expect(service.buildFeedCacheKey({ sellerId: 'a' })).not.toBe(service.buildFeedCacheKey({ sellerId: 'b' }));
     });
     it('HU-09 · comparte la clave entre neighborhoodId y su alias, y un barrio vacío cuenta como all', () => {
       // Assert

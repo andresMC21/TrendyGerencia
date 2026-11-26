@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Avatar } from '../components/Avatar';
-import { Footer, Header } from '../components/Brand';
-import { EmptyState } from '../components/EmptyState';
+import { Header } from '../components/Brand';
 import { Alert, TextAreaField } from '../components/Form';
-import { Skeleton } from '../components/Skeleton';
 import { ApiError, moderationApi, type UserProfile } from '../lib/api';
 import { fecha } from '../lib/format';
 import { useSession } from '../lib/session';
@@ -69,63 +67,33 @@ export default function ModerarVerificaciones() {
   return (
     <>
       <Header />
-      <main className="dashboard" id="contenido">
-        <div className="container container--narrow">
-          <h1 className="dash-title">Resolver verificaciones</h1>
-          <p className="tx-lead">
-            Revisa las solicitudes de verificación de identidad, de la más antigua a la más reciente.
-            Al aprobar, la cuenta queda verificada; al rechazar, la persona puede volver a
-            solicitarla. No puedes resolver tu propia solicitud.
-          </p>
-
-          {estado.tipo === 'cargando' && <Skeleton kind="transactions" />}
-          {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
-          {estado.tipo === 'ok' && estado.items.length === 0 && (
-            <EmptyState kind="search">No hay solicitudes de verificación pendientes.</EmptyState>
-          )}
-          {estado.tipo === 'ok' && estado.items.length > 0 && (
-            <>
-              <p className="admin-count">
-                {estado.total === 1 ? '1 solicitud pendiente' : `${estado.total} solicitudes pendientes`}
-              </p>
-              <ul className="tx-list" data-testid="verificaciones-pendientes">
-                {estado.items.map((u) => (
-                  <FilaSolicitud
-                    key={u.id}
-                    solicitante={u}
-                    esMia={u.id === user?.id}
-                    token={token!}
-                    onResuelta={() => setRecarga((n) => n + 1)}
-                  />
-                ))}
-              </ul>
-            </>
-          )}
-
-          {estado.tipo === 'ok' && paginas > 1 && (
-            <nav className="pager" aria-label="Paginación">
-              <button
-                className="btn btn-outline btn-sm"
-                disabled={pagina === 1}
-                onClick={() => setPagina(pagina - 1)}
-              >
-                Anterior
-              </button>
-              <span>
-                Página {pagina} de {paginas}
-              </span>
-              <button
-                className="btn btn-outline btn-sm"
-                disabled={pagina >= paginas}
-                onClick={() => setPagina(pagina + 1)}
-              >
-                Siguiente
-              </button>
-            </nav>
-          )}
+      <main className="view on wrap" id="contenido">
+        <div className="mph" style={{ marginTop: 18 }}>
+          <div>
+            <div className="kick" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.14em', color: '#F77F00', textTransform: 'uppercase' }}>Moderación</div>
+            <h1 style={{ marginTop: 6 }}>Verificaciones</h1>
+            <p className="mu" style={{ margin: '8px 0 0', maxWidth: '64ch' }}>Revisa las solicitudes de la más antigua a la más reciente. Al aprobar, la cuenta queda verificada; al rechazar, la persona puede volver a solicitarla. No puedes resolver tu propia solicitud.</p>
+          </div>
+          {estado.tipo === 'ok' && <span className="count">{estado.total === 1 ? '1 pendiente' : `${estado.total} pendientes`}</span>}
         </div>
+        {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
+        <ul className="ul vlist" data-testid="verificaciones-pendientes" aria-busy={estado.tipo === 'cargando'}>
+          {estado.tipo === 'cargando' && [0, 1].map((i) => <li key={i} className="ur skelrow"><div className="card skel" style={{ height: 44, gridColumn: '1/-1' }} /></li>)}
+          {estado.tipo === 'ok' && estado.items.length === 0 && (
+            <li className="empty" style={{ border: 0 }}><img src="/img/libros.webp" alt="" /><h2 style={{ marginTop: 10 }}>Todo al día</h2><p className="mu" style={{ margin: 0 }}>No hay solicitudes de verificación pendientes.</p></li>
+          )}
+          {estado.tipo === 'ok' && token && estado.items.map((u) => (
+            <FilaSolicitud key={u.id} solicitante={u} esMia={u.id === user?.id} token={token} onResuelta={() => setRecarga((n) => n + 1)} />
+          ))}
+        </ul>
+        {estado.tipo === 'ok' && paginas > 1 && (
+          <div className="pager" aria-label="Paginación">
+            <button type="button" disabled={pagina === 1} aria-label="Anterior" onClick={() => setPagina(pagina - 1)}>←</button>
+            {Array.from({ length: paginas }, (_, k) => <button key={k} type="button" aria-current={k + 1 === pagina} onClick={() => setPagina(k + 1)}>{k + 1}</button>)}
+            <button type="button" disabled={pagina >= paginas} aria-label="Siguiente" onClick={() => setPagina(pagina + 1)}>→</button>
+          </div>
+        )}
       </main>
-      <Footer />
     </>
   );
 }
@@ -151,11 +119,7 @@ function FilaSolicitud({
     setError(null);
     try {
       await moderationApi.resolve(token, solicitante.id, aprobar, motivo.trim() || undefined);
-      notify(
-        aprobar
-          ? `Verificación de ${solicitante.fullName} aprobada`
-          : `Verificación de ${solicitante.fullName} rechazada`,
-      );
+      notify(aprobar ? `Verificación de ${solicitante.fullName} aprobada` : `Verificación de ${solicitante.fullName} rechazada`);
       onResuelta();
     } catch (e) {
       setError(mensajeError(e));
@@ -165,84 +129,44 @@ function FilaSolicitud({
     }
   };
 
+  const pedida = solicitante.verificationRequestedAt ?? solicitante.updatedAt;
+
   return (
-    <li className="tx-item admin-user" data-testid={`verificacion-${solicitante.id}`}>
-      <div className="admin-user__head">
-        <Avatar name={solicitante.fullName} photoUrl={solicitante.photoUrl} />
-        <div className="admin-user__who">
-          <strong>
-            {solicitante.fullName}
-            {esMia && <span className="chip chip--blue admin-user__me">Tú</span>}
-          </strong>
-          <span className="tx-meta">{solicitante.email}</span>
-          {(solicitante.verificationRequestedAt ?? solicitante.updatedAt) && (
-            <span className="tx-meta" data-testid="solicitada-el">
-              Solicitada el {fecha((solicitante.verificationRequestedAt ?? solicitante.updatedAt)!)}
-            </span>
-          )}
+    <li className="vreq" data-testid={`verificacion-${solicitante.id}`}>
+      <div className="who">
+        <Avatar name={solicitante.fullName} photoUrl={solicitante.photoUrl} avatar={solicitante.avatar} />
+        <div>
+          <b>{solicitante.fullName}{esMia && <span className="chip bl" style={{ marginLeft: 6 }}>Tú</span>}</b>
+          <span>{solicitante.email}</span>
+          {pedida && <span data-testid="solicitada-el">Solicitada el {fecha(pedida)}</span>}
         </div>
-        <span className="chip chip--blue">En revisión</span>
+        <span className="chip bl" style={{ marginLeft: 'auto' }}>En revisión</span>
       </div>
-
-      {solicitante.info && <p className="tx-meta">{solicitante.info}</p>}
-
-      <div className="admin-user__actions">
+      {solicitante.info && <p className="bio">“{solicitante.info}”</p>}
+      <div className="ua">
         {esMia ? (
-          <span className="tx-meta">
-            Esta es tu solicitud: otra persona de moderación debe resolverla.
-          </span>
+          <span className="mu">Esta es tu solicitud: otra persona de moderación debe resolverla.</span>
         ) : rechazando ? (
-          <>
-            <TextAreaField
-              label="Motivo (opcional)"
-              value={motivo}
-              maxLength={MAX_MOTIVO}
-              rows={2}
-              hint={`${motivo.length}/${MAX_MOTIVO}. Queda en el registro del servidor, no en el perfil.`}
-              onChange={(e) => setMotivo(e.target.value)}
-            />
-            <button
-              type="button"
-              className="btn btn-danger-outline btn-sm"
-              data-testid={`confirmar-rechazo-${solicitante.id}`}
-              disabled={guardando !== null}
-              onClick={() => resolver(false)}
-            >
-              {guardando === 'rechazar' ? 'Rechazando…' : 'Confirmar rechazo'}
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm"
-              disabled={guardando !== null}
-              onClick={() => setRechazando(false)}
-            >
-              Cancelar
-            </button>
-          </>
+          <div className="rej">
+            <TextAreaField label="Motivo (opcional)" value={motivo} maxLength={MAX_MOTIVO} rows={2}
+              hint="La persona lo verá en su perfil para saber qué corregir." count={`${motivo.length}/${MAX_MOTIVO}`}
+              onChange={(e) => setMotivo(e.target.value)} />
+            <div className="acts">
+              <button type="button" className="sbtn rf" data-testid={`confirmar-rechazo-${solicitante.id}`} disabled={guardando !== null} onClick={() => void resolver(false)}>
+                {guardando === 'rechazar' ? 'Rechazando…' : 'Confirmar rechazo'}
+              </button>
+              <button type="button" className="sbtn" disabled={guardando !== null} onClick={() => setRechazando(false)}>Cancelar</button>
+            </div>
+          </div>
         ) : (
           <>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              data-testid={`aprobar-${solicitante.id}`}
-              disabled={guardando !== null}
-              onClick={() => resolver(true)}
-            >
+            <button type="button" className="btn" data-testid={`aprobar-${solicitante.id}`} disabled={guardando !== null} onClick={() => void resolver(true)}>
               {guardando === 'aprobar' ? 'Aprobando…' : 'Aprobar'}
             </button>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              data-testid={`rechazar-${solicitante.id}`}
-              disabled={guardando !== null}
-              onClick={() => setRechazando(true)}
-            >
-              Rechazar
-            </button>
+            <button type="button" className="sbtn r" data-testid={`rechazar-${solicitante.id}`} disabled={guardando !== null} onClick={() => setRechazando(true)}>Rechazar</button>
           </>
         )}
       </div>
-
       {error && <Alert tone="error">{error}</Alert>}
     </li>
   );

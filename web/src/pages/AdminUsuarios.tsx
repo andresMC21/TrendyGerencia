@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Avatar } from '../components/Avatar';
-import { Footer, Header } from '../components/Brand';
-import { EmptyState } from '../components/EmptyState';
-import { Alert, Field, SelectField } from '../components/Form';
-import { Skeleton } from '../components/Skeleton';
+import { Header } from '../components/Brand';
+import { Alert } from '../components/Form';
 import { adminApi, ApiError, type UserProfile, type UserRole } from '../lib/api';
-import { ROL } from '../lib/format';
 import { useSession } from '../lib/session';
 import { notify } from '../lib/toast';
 
-const POR_PAGINA = 10;
+const POR_PAGINA = 6;
 const ROLES: UserRole[] = ['USER', 'MODERATOR', 'ADMIN'];
+const RL: Record<UserRole, string> = { USER: 'Usuario', MODERATOR: 'Moderador', ADMIN: 'Administrador' };
 
 type Estado =
   | { tipo: 'cargando' }
@@ -39,6 +37,19 @@ export default function AdminUsuarios() {
   const [activo, setActivo] = useState<'' | 'true' | 'false'>('');
   const [pagina, setPagina] = useState(1);
   const [resultado, setResultado] = useState<{ clave: string; estado: Estado } | null>(null);
+  const [stats, setStats] = useState<number[] | null>(null);
+  const [version, setVersion] = useState(0);
+
+  // Totales de la cabecera: se recalculan cuando cambia un rol o el estado de una cuenta.
+  useEffect(() => {
+    if (!token) return;
+    let vigente = true;
+    const contar = (f: Parameters<typeof adminApi.users>[1]) => adminApi.users(token, { ...f, limit: 1 }).then((r) => r.total);
+    Promise.all([contar({}), contar({ isActive: true }), contar({ isActive: false }), contar({ role: 'ADMIN' }), contar({ role: 'MODERATOR' })])
+      .then(([t, a, d, ad, mo]) => vigente && setStats([t, a, d, ad + mo]))
+      .catch(() => vigente && setStats(null));
+    return () => { vigente = false; };
+  }, [token, version]);
 
   // Espera a que la persona deje de escribir antes de buscar.
   useEffect(() => {
@@ -80,112 +91,65 @@ export default function AdminUsuarios() {
     };
   }, [token, clave, termino, rol, activo, pagina]);
 
-  const reemplazar = (actualizado: UserProfile) =>
+  const reemplazar = (actualizado: UserProfile) => {
+    setVersion((v) => v + 1);
     setEstado((e) =>
       e.tipo === 'ok'
         ? { ...e, items: e.items.map((u) => (u.id === actualizado.id ? actualizado : u)) }
         : e,
     );
+  };
 
   const paginas = estado.tipo === 'ok' ? Math.max(1, Math.ceil(estado.total / POR_PAGINA)) : 1;
+  const seg = <T extends string>(valor: T, set: (v: T) => void, opciones: [T, string][]) => (
+    <div className="seg">
+      {opciones.map(([v, l]) => (
+        <button key={v || 'todos'} type="button" aria-pressed={valor === v} onClick={() => { set(v); setPagina(1); }}>{l}</button>
+      ))}
+    </div>
+  );
 
   return (
     <>
       <Header />
-      <main className="dashboard" id="contenido">
-        <div className="container container--narrow">
-          <h1 className="dash-title">Administrar usuarios</h1>
-          <p className="tx-lead">
-            Cambia los roles y activa o desactiva cuentas. Desactivar una cuenta conserva sus datos y
-            cierra todas sus sesiones abiertas.
-          </p>
-
-          <div className="filters" role="search">
-            <Field
-              label="Buscar"
-              type="search"
-              placeholder="Nombre o correo"
-              value={busqueda}
-              maxLength={100}
-              onChange={(e) => setBusqueda(e.target.value)}
-            />
-            <SelectField
-              label="Rol"
-              value={rol}
-              onChange={(e) => {
-                setRol(e.target.value as '' | UserRole);
-                setPagina(1);
-              }}
-            >
-              <option value="">Todos</option>
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {ROL[r]}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              label="Estado"
-              value={activo}
-              onChange={(e) => {
-                setActivo(e.target.value as '' | 'true' | 'false');
-                setPagina(1);
-              }}
-            >
-              <option value="">Todas</option>
-              <option value="true">Activas</option>
-              <option value="false">Desactivadas</option>
-            </SelectField>
+      <main className="view on wrap" id="contenido">
+        <div className="mph" style={{ marginTop: 18 }}>
+          <div>
+            <div className="kick" style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.14em', color: '#F77F00', textTransform: 'uppercase' }}>Administración</div>
+            <h1 style={{ marginTop: 6 }}>Usuarios</h1>
+            <p className="mu" style={{ margin: '8px 0 0', maxWidth: '62ch' }}>Cambia roles o desactiva cuentas. Desactivar cierra sus sesiones y le impide ingresar; sus datos se conservan.</p>
           </div>
-
-          {estado.tipo === 'cargando' && <Skeleton kind="transactions" />}
-          {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
-          {estado.tipo === 'ok' && estado.items.length === 0 && (
-            <EmptyState kind="search">No hay usuarios que coincidan con estos filtros.</EmptyState>
-          )}
-          {estado.tipo === 'ok' && estado.items.length > 0 && (
-            <>
-              <p className="admin-count">
-                {estado.total === 1 ? '1 usuario' : `${estado.total} usuarios`}
-              </p>
-              <ul className="tx-list" data-testid="admin-usuarios">
-                {estado.items.map((u) => (
-                  <FilaUsuario
-                    key={`${u.id}-${u.role.join()}-${u.isActive}`}
-                    usuario={u}
-                    soyYo={u.id === user?.id}
-                    token={token!}
-                    onCambio={reemplazar}
-                  />
-                ))}
-              </ul>
-            </>
-          )}
-
-          {estado.tipo === 'ok' && paginas > 1 && (
-            <nav className="pager" aria-label="Paginación">
-              <button
-                className="btn btn-outline btn-sm"
-                disabled={pagina === 1}
-                onClick={() => setPagina(pagina - 1)}
-              >
-                Anterior
-              </button>
-              <span>
-                Página {pagina} de {paginas}
-              </span>
-              <button
-                className="btn btn-outline btn-sm"
-                disabled={pagina >= paginas}
-                onClick={() => setPagina(pagina + 1)}
-              >
-                Siguiente
-              </button>
-            </nav>
-          )}
         </div>
+        <div className="stats">
+          {[['Usuarios', 0], ['Activas', 1], ['Desactivadas', 2], ['Admins y moderadores', 3]].map(([l, k]) => (
+            <div key={l}><b>{stats ? stats[k as number] : '—'}</b><span>{l}</span></div>
+          ))}
+        </div>
+        <div className="adbar" role="search">
+          <label className="search">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            <input type="search" placeholder="Nombre o correo" aria-label="Buscar usuarios" value={busqueda} maxLength={100} onChange={(e) => setBusqueda(e.target.value)} />
+          </label>
+          <div className="sel">Rol{seg<'' | UserRole>(rol, setRol, [['', 'Todos'], ['USER', 'Usuario'], ['MODERATOR', 'Moderador'], ['ADMIN', 'Admin']])}</div>
+          <div className="sel">Estado{seg<'' | 'true' | 'false'>(activo, setActivo, [['', 'Todas'], ['true', 'Activas'], ['false', 'Desactivadas']])}</div>
+        </div>
+        {estado.tipo === 'error' && <Alert tone="error">{estado.mensaje}</Alert>}
+        <ul className="ul" data-testid="admin-usuarios" aria-busy={estado.tipo === 'cargando'}>
+          <li className="uh" aria-hidden="true"><span>Usuario</span><span>Roles</span><span>Estado</span><span style={{ textAlign: 'right' }}>Acciones</span></li>
+          {estado.tipo === 'cargando' && [0, 1, 2].map((i) => <li key={i} className="ur skelrow"><div className="card skel" style={{ height: 44, gridColumn: '1/-1' }} /></li>)}
+          {estado.tipo === 'ok' && estado.items.length === 0 && <li className="empty" style={{ border: 0 }}>No hay usuarios que coincidan con estos filtros.</li>}
+          {estado.tipo === 'ok' && token && estado.items.map((u) => (
+            <FilaUsuario key={`${u.id}-${u.role.join()}-${u.isActive}`} usuario={u} soyYo={u.id === user?.id} token={token} onCambio={reemplazar} />
+          ))}
+        </ul>
+        {paginas > 1 && (
+          <div className="pager" aria-label="Paginación">
+            <button type="button" disabled={pagina === 1} aria-label="Anterior" onClick={() => setPagina(pagina - 1)}>←</button>
+            {Array.from({ length: paginas }, (_, k) => <button key={k} type="button" aria-current={k + 1 === pagina} onClick={() => setPagina(k + 1)}>{k + 1}</button>)}
+            <button type="button" disabled={pagina === paginas} aria-label="Siguiente" onClick={() => setPagina(pagina + 1)}>→</button>
+          </div>
+        )}
       </main>
-      <Footer />
     </>
   );
 }
@@ -242,106 +206,34 @@ function FilaUsuario({
   };
 
   return (
-    <li
-      className={`tx-item admin-user${usuario.isActive ? '' : ' admin-user--inactive'}`}
-      data-testid="admin-usuario"
-    >
-      <div className="admin-user__head">
-        <Avatar name={usuario.fullName} photoUrl={usuario.photoUrl} />
-        <div className="admin-user__who">
-          <strong>
-            {usuario.fullName}
-            {soyYo && <span className="chip chip--blue admin-user__me">Tú</span>}
-          </strong>
-          <span className="tx-meta">{usuario.email}</span>
+    <li className={`ur${usuario.isActive ? '' : ' off'}`} data-testid="admin-usuario">
+      <div className="who">
+        <Avatar name={usuario.fullName} photoUrl={usuario.photoUrl} avatar={usuario.avatar} />
+        <div>
+          <b>{usuario.fullName}{soyYo && <span className="chip bl" style={{ marginLeft: 4 }}>Tú</span>}</b>
+          <span>{usuario.email}</span>
         </div>
-        <span className={`chip chip--${usuario.isActive ? 'green' : 'gray'}`}>
-          {usuario.isActive ? 'Activa' : 'Desactivada'}
-        </span>
       </div>
-
-      <fieldset className="admin-roles" disabled={guardando !== null}>
-        <legend>Roles</legend>
-        {ROLES.map((r) => {
-          const bloqueado = soyYo && r === 'ADMIN';
-          return (
-            <label
-              key={r}
-              className={`check admin-role${roles.includes(r) ? ' admin-role--on' : ''}`}
-              title={bloqueado ? 'No puedes quitarte el rol de administrador' : undefined}
-            >
-              <input
-                type="checkbox"
-                checked={roles.includes(r)}
-                disabled={bloqueado}
-                onChange={() => alternar(r)}
-              />
-              {ROL[r]}
-            </label>
-          );
-        })}
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
-          disabled={!cambiaron || roles.length === 0}
-          onClick={guardarRoles}
-        >
-          {guardando === 'roles' ? 'Guardando…' : 'Guardar roles'}
-        </button>
-      </fieldset>
-      {roles.length === 0 && <p className="field-error">Elige al menos un rol.</p>}
-
-      <div className="admin-user__actions">
-        {soyYo ? (
-          <span className="tx-meta">
-            Esta es tu cuenta: no puedes quitarte el rol de administrador ni desactivarla.
-          </span>
-        ) : usuario.isActive ? (
-          confirmar ? (
-            <>
-              <span className="tx-meta tx-meta--todo">
-                Se cerrarán sus sesiones y no podrá ingresar. Sus datos se conservan.
-              </span>
-              <button
-                type="button"
-                className="btn btn-danger-outline btn-sm"
-                disabled={guardando !== null}
-                onClick={() => cambiarEstado(false)}
-              >
-                {guardando === 'estado' ? 'Desactivando…' : 'Sí, desactivar'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm"
-                disabled={guardando !== null}
-                onClick={() => setConfirmar(false)}
-              >
-                Cancelar
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              disabled={guardando !== null}
-              onClick={() => setConfirmar(true)}
-            >
-              Desactivar cuenta
-            </button>
-          )
-        ) : (
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            disabled={guardando !== null}
-            onClick={() => cambiarEstado(true)}
-          >
-            {guardando === 'estado' ? 'Reactivando…' : 'Reactivar cuenta'}
-          </button>
-        )}
+      <div className="rl" role="group" aria-label={`Roles de ${usuario.fullName}`}>
+        {ROLES.map((r) => (
+          <button key={r} type="button" aria-pressed={roles.includes(r)} disabled={guardando !== null || (soyYo && r === 'ADMIN')}
+            title={soyYo && r === 'ADMIN' ? 'No puedes quitarte el rol de administrador' : undefined} onClick={() => alternar(r)}>{RL[r]}</button>
+        ))}
+        {cambiaron && roles.length > 0 && <button type="button" className="save" disabled={guardando !== null} onClick={() => void guardarRoles()}>{guardando === 'roles' ? 'Guardando…' : 'Guardar'}</button>}
+        {roles.length === 0 && <span className="err">Elige al menos un rol.</span>}
       </div>
-
-      {error && <Alert tone="error">{error}</Alert>}
+      <div className="st"><span className={`chip ${usuario.isActive ? 'ok2' : 'n'}`}>{usuario.isActive ? 'Activa' : 'Desactivada'}</span></div>
+      <div className="ua">
+        {soyYo ? <span>Tu cuenta: no puedes quitarte el rol de admin ni desactivarla.</span>
+          : confirmar ? <>
+            <span style={{ color: '#B35C00' }}>Se cerrarán sus sesiones. ¿Seguro?</span>
+            <button className="sbtn rf" type="button" disabled={guardando !== null} onClick={() => void cambiarEstado(false)}>{guardando === 'estado' ? 'Desactivando…' : 'Sí, desactivar'}</button>
+            <button className="sbtn" type="button" disabled={guardando !== null} onClick={() => setConfirmar(false)}>No</button>
+          </>
+          : usuario.isActive ? <button className="sbtn r" type="button" disabled={guardando !== null} onClick={() => setConfirmar(true)}>Desactivar</button>
+          : <button className="sbtn" type="button" disabled={guardando !== null} onClick={() => void cambiarEstado(true)}>{guardando === 'estado' ? 'Reactivando…' : 'Reactivar'}</button>}
+      </div>
+      {error && <p className="err" role="alert" style={{ gridColumn: '1/-1', margin: 0 }}>{error}</p>}
     </li>
   );
 }

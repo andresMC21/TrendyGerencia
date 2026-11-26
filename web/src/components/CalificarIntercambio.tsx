@@ -98,7 +98,7 @@ export function CalificarIntercambio({ tx }: { tx: Transaction }) {
 
   return (
     <section className="rate-exchange" aria-labelledby="rate-title" data-testid="calificar">
-      <h2 id="rate-title" className="detail-h">
+      <h2 id="rate-title" className="plabel" style={{ fontSize: 18 }}>
         Califica a {otro}
       </h2>
       {errorCarga && <Alert tone="error">No pudimos cargar las calificaciones de esta transacción.</Alert>}
@@ -122,26 +122,26 @@ export function CalificarIntercambio({ tx }: { tx: Transaction }) {
             <strong>Tu calificación</strong>
             <Estrellas valor={mia.rating} />
           </div>
-          <p>{mia.comment ?? <span className="field-hint">Sin comentario.</span>}</p>
+          <p>{mia.comment ?? <span className="mu" style={{ fontSize: 12 }}>Sin comentario.</span>}</p>
           {borrando ? (
             <div className="tx-confirm tx-confirm--danger" role="alertdialog" aria-label="Confirmar borrado">
               <strong>¿Borrar tu calificación?</strong>
               <p>El promedio de {otro} se recalculará. Después podrás calificar de nuevo.</p>
               <div className="tx-actions">
-                <button type="button" className="btn btn-danger" onClick={borrar} disabled={sending} data-testid="btn-confirmar-borrar">
+                <button type="button" className="sbtn rf" onClick={borrar} disabled={sending} data-testid="btn-confirmar-borrar">
                   {sending ? 'Borrando…' : 'Sí, borrar'}
                 </button>
-                <button type="button" className="btn btn-outline" onClick={() => setBorrando(false)} disabled={sending}>
+                <button type="button" className="btn2" onClick={() => setBorrando(false)} disabled={sending}>
                   No, volver
                 </button>
               </div>
             </div>
           ) : (
             <div className="tx-actions">
-              <button type="button" className="btn btn-outline" onClick={() => setEditando(true)} data-testid="btn-editar-calificacion">
+              <button type="button" className="btn2" onClick={() => setEditando(true)} data-testid="btn-editar-calificacion">
                 Editar
               </button>
-              <button type="button" className="btn btn-danger-outline" onClick={() => setBorrando(true)} data-testid="btn-borrar-calificacion">
+              <button type="button" className="sbtn r" onClick={() => setBorrando(true)} data-testid="btn-borrar-calificacion">
                 Borrar
               </button>
             </div>
@@ -158,10 +158,10 @@ export function CalificarIntercambio({ tx }: { tx: Transaction }) {
                 <Estrellas valor={suya.rating} />
               </div>
               {suya.comment && <p>{suya.comment}</p>}
-              <small className="field-hint">{fecha(suya.createdAt)}</small>
+              <small className="mu" style={{ fontSize: 12 }}>{fecha(suya.createdAt)}</small>
             </>
           ) : (
-            <span className="field-hint">{otro} todavía no te ha calificado.</span>
+            <span className="mu" style={{ fontSize: 12 }}>{otro} todavía no te ha calificado.</span>
           )}
         </div>
       )}
@@ -202,12 +202,12 @@ function FormularioCalificacion({
     <form className="review-form" onSubmit={enviar} noValidate>
       <fieldset className="star-picker" disabled={sending} onMouseLeave={() => setHover(0)}>
         <legend>¿Cómo fue el intercambio con {otro}?</legend>
-        <div className="star-picker__stars">
+        <div className="rstars">
           {[1, 2, 3, 4, 5].map((n) => (
             <button
               key={n}
               type="button"
-              className={`star-picker__star${n <= visible ? ' is-on' : ''}`}
+              className={n <= visible ? 'lit' : ''}
               aria-label={`${n} ${n === 1 ? 'estrella' : 'estrellas'}: ${ETIQUETAS[n]}`}
               aria-pressed={rating === n}
               onMouseEnter={() => setHover(n)}
@@ -227,14 +227,14 @@ function FormularioCalificacion({
           </span>
         </div>
       </fieldset>
-      {aviso && <p className="field-error">{aviso}</p>}
+      {aviso && <p className="err">{aviso}</p>}
 
-      <div className="field">
+      <div className="rfield">
         <label htmlFor="review-comment">Comentario (opcional)</label>
-        <div className="field-box">
+        <div>
           <textarea
             id="review-comment"
-            className="transaction-message"
+            className="rtext"
             rows={3}
             maxLength={MAX_COMENTARIO}
             value={comentario}
@@ -243,17 +243,17 @@ function FormularioCalificacion({
             disabled={sending}
           />
         </div>
-        <small className="field-hint">
+        <small className="mu" style={{ fontSize: 12 }}>
           {comentario.length}/{MAX_COMENTARIO}
         </small>
       </div>
 
       <div className="tx-actions">
-        <button type="submit" className="btn btn-primary" disabled={sending} data-testid="btn-enviar-calificacion">
+        <button type="submit" className="btn" disabled={sending} data-testid="btn-enviar-calificacion">
           {sending ? 'Guardando…' : inicial ? 'Guardar cambios' : 'Enviar calificación'}
         </button>
         {onCancelar && (
-          <button type="button" className="btn btn-outline" onClick={onCancelar} disabled={sending}>
+          <button type="button" className="btn2" onClick={onCancelar} disabled={sending}>
             Cancelar
           </button>
         )}

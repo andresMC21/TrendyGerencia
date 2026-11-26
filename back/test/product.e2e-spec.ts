@@ -141,6 +141,23 @@ describe('Products (e2e)', () => {
     expect(otro.body.total).toBe(0);
   });
 
+  it('TRD-25 · GET /products busca texto con q y filtra por sellerId', async () => {
+    const found = await http.get('/api/products').query({ neighborhood: hood, q: '  ' + body().title.slice(0, 6).toUpperCase() }).expect(200);
+    expect(found.body.items.map((p: { id: string }) => p.id)).toContain(productId);
+
+    const none = await http.get('/api/products').query({ neighborhood: hood, q: '%' }).expect(200);
+    expect(none.body.total).toBe(0);
+
+    const detail = await http.get(`/api/products/${productId}`).expect(200);
+    const mine = await http.get('/api/products').query({ neighborhood: hood, sellerId: detail.body.seller.id }).expect(200);
+    expect(mine.body.total).toBe(1);
+    const other = await http.get('/api/products').query({ neighborhood: hood, sellerId: '00000000-0000-4000-8000-000000000000' }).expect(200);
+    expect(other.body.total).toBe(0);
+
+    await http.get('/api/products').query({ sellerId: 'no-uuid' }).expect(400);
+    await http.get('/api/products').query({ q: 'x'.repeat(81) }).expect(400);
+  });
+
   it('GET /products con lat/lng/radius usa PostGIS', async () => {
     const near = await http
       .get('/api/products')

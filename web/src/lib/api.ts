@@ -59,6 +59,8 @@ export type UserProfile = {
   info: string | null;
   /** HU-03 · URL de la foto de perfil (null si no tiene). */
   photoUrl?: string | null;
+  /** TRD-25 · Avatar de objeto elegido ("planta:#FCBF49"). */
+  avatar?: string | null;
   role: ('USER' | 'ADMIN' | 'MODERATOR')[];
   verificationStatus: 'UNVERIFIED' | 'PENDING' | 'VERIFIED' | 'REJECTED';
   isActive: boolean;
@@ -135,6 +137,10 @@ export type ProductSort = 'recent' | 'price_asc' | 'price_desc' | 'popular' | 'd
 /** HU-09 · Filtros del feed público. */
 export type FeedFilters = {
   neighborhoodId?: string;
+  /** Búsqueda por texto en título y descripción. */
+  q?: string;
+  /** TRD-25 · solo las publicaciones de esta persona. */
+  sellerId?: string;
   category?: string;
   condition?: ProductCondition;
   /** HU-10 · centro y radio (km) de la búsqueda por cercanía. */
@@ -153,7 +159,7 @@ export const authApi = {
     apiRequest<LoginResponse>('/user/login', { method: 'POST', body: { email, password } }),
   me: (token: string) => apiRequest<UserProfile>('/user/me', { token }),
   /** HU-03 · actualizar datos del perfil propio (por ejemplo, la foto). */
-  updateMe: (token: string, body: { photoUrl?: string | null; info?: string; fullName?: string }) =>
+  updateMe: (token: string, body: { photoUrl?: string | null; avatar?: string | null; info?: string; fullName?: string }) =>
     apiRequest<UserProfile>('/user/me', { method: 'PATCH', token, body }),
   logout: (token: string) =>
     apiRequest<{ message: string }>('/user/logout', { method: 'POST', token }),
@@ -260,6 +266,7 @@ export type PublicProfile = {
   fullName: string;
   info: string | null;
   photoUrl: string | null;
+  avatar?: string | null;
   verificationStatus: UserProfile['verificationStatus'];
   ratingAverage: number;
   reviewsCount: number;
@@ -352,7 +359,10 @@ export const productApi = {
 
 export type TransactionStatus = 'PENDING' | 'AGREED_POINT' | 'COMPLETED' | 'CANCELLED';
 
-export type TransactionUser = { id: string; fullName: string };
+export type TransactionUser = { id: string; fullName: string; photoUrl?: string | null; avatar?: string | null };
+
+/** TRD-25 · Mensaje del chat de una transacción. */
+export type TransactionMessage = { id: string; transactionId: string; senderId: string; body: string; createdAt: string };
 
 export type Transaction = {
   id: string;
@@ -394,6 +404,12 @@ export const transactionApi = {
       token,
       body: { productId, ...(message ? { message } : {}) },
     }),
+  /** TRD-25 · Mensajes del chat (solo participantes). */
+  messages: (token: string, id: string) =>
+    apiRequest<TransactionMessage[]>(`/transactions/${encodeURIComponent(id)}/messages`, { token }),
+  /** TRD-25 · Enviar un mensaje al chat (solo participantes; 409 si la transacción fue cancelada). */
+  sendMessage: (token: string, id: string, body: string) =>
+    apiRequest<TransactionMessage>(`/transactions/${encodeURIComponent(id)}/messages`, { method: 'POST', token, body: { body } }),
   /** Transacciones donde el usuario es comprador o vendedor. */
   list: (token: string) => apiRequest<Transaction[]>('/transactions', { token }),
   /** Solo los participantes pueden consultarla (403 para terceros). */

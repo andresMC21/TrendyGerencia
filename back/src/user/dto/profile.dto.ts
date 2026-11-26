@@ -50,6 +50,15 @@ export class UserProfileDto {
 
   @ApiProperty({
     type: String,
+    nullable: true,
+    example: 'planta:#FCBF49',
+    description: 'TRD-25 · Avatar de objeto elegido o null.',
+  })
+  @Expose()
+  avatar: string | null;
+
+  @ApiProperty({
+    type: String,
     enum: ValidRoles,
     isArray: true,
     example: [ValidRoles.USER],

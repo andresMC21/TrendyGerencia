@@ -1,27 +1,23 @@
-import { notify } from '../lib/toast';
-import { Rating } from '../components/Rating';
-import { FavoriteIcon } from '../components/FavoriteIcon';
-import { Skeleton } from '../components/Skeleton';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
-import { Footer, Header } from '../components/Brand';
+import { Avatar } from '../components/Avatar';
+import { Header } from '../components/Brand';
 import { Alert } from '../components/Form';
+import { Heart, PriceTag } from '../components/PriceTag';
 import { RetirarPublicacion } from '../components/RetirarPublicacion';
-import { ApiError, productApi, transactionApi, type ProductDetail, type Transaction } from '../lib/api';
+import { ApiError, productApi, transactionApi, userApi, type Product, type ProductDetail, type PublicProfile } from '../lib/api';
+import { barrio, CATEGORIA, CONDICION, precio } from '../lib/format';
 import { useSession } from '../lib/session';
-import { ProductPhoto } from '../components/ProductPhoto';
-import { barrio, CONDICION, ESTADO_PRODUCTO, fecha, iniciales, precio } from '../lib/format';
+import { notify } from '../lib/toast';
 
-type Estado =
-  | { tipo: 'cargando' }
-  | { tipo: 'ok'; producto: ProductDetail }
-  | { tipo: 'no-existe' }
-  | { tipo: 'error' };
+type Estado = { tipo: 'cargando' } | { tipo: 'ok'; producto: ProductDetail } | { tipo: 'no-existe' } | { tipo: 'error' };
 
-/** HU-11 · Consultar un producto (GET /products/:id). */
+const fechaLarga = (iso: string) => new Date(iso).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' });
+const estrellas = (n: number) => '★'.repeat(Math.round(n)) + '☆'.repeat(5 - Math.round(n));
+
+/** HU-11 · Detalle de producto (prototipo TRD-25). */
 export default function Producto() {
   const { id = '' } = useParams();
-  // key={id}: al cambiar de producto se reinicia el estado sin setState en el efecto.
   return <ProductoPagina key={id} id={id} />;
 }
 
@@ -29,327 +25,209 @@ function ProductoPagina({ id }: { id: string }) {
   const [estado, setEstado] = useState<Estado>({ tipo: 'cargando' });
   const { state } = useLocation();
   const preview = state as { photoUrl?: string; title?: string } | null;
-
   useEffect(() => {
     let activo = true;
-    productApi
-      .get(id)
+    productApi.get(id)
       .then((producto) => activo && setEstado({ tipo: 'ok', producto }))
       .catch((err) => {
         if (!activo) return;
-        // 400 = id con formato inválido, 404 = no existe o fue retirado.
         const noExiste = err instanceof ApiError && (err.status === 404 || err.status === 400);
         setEstado({ tipo: noExiste ? 'no-existe' : 'error' });
       });
-    return () => {
-      activo = false;
-    };
+    return () => { activo = false; };
   }, [id]);
 
   return (
     <>
       <Header />
-      <main className="dashboard">
-        <div className="container container--narrow">
-          <Link viewTransition to="/explorar" className="back-link">
-            ← Volver a las publicaciones
-          </Link>
-
-          {estado.tipo === 'cargando' && (preview?.photoUrl ? <><ProductPhoto transitionId={id} src={preview?.photoUrl} title={preview?.title ?? "Producto"} detail /><Skeleton kind="transactions" /></> : <Skeleton kind="detail" />)}
-
-          {estado.tipo === 'no-existe' && (
-            <Alert tone="info">
-              Este producto no existe o ya no está publicado.{' '}
-              <Link viewTransition to="/explorar">Ver otras publicaciones</Link>
-            </Alert>
-          )}
-
-          {estado.tipo === 'error' && (
-            <Alert tone="error">No pudimos cargar el producto. Inténtalo de nuevo en un momento.</Alert>
-          )}
-
-          {estado.tipo === 'ok' && <Detalle p={estado.producto} />}
-        </div>
+      <main id="contenido" className="view on wrap">
+        <p className="crumbs">
+          <Link viewTransition to="/explorar">← Volver a las publicaciones</Link>
+          {estado.tipo === 'ok' && <> <span aria-hidden="true">·</span> <Link viewTransition to={`/explorar?categoria=${estado.producto.category}`}>{CATEGORIA[estado.producto.category] ?? estado.producto.category}</Link></>}
+        </p>
+        {estado.tipo === 'cargando' && (
+          <div className="pd"><div><div className="gal">{preview?.photoUrl && <div className="zoomwrap"><img src={preview.photoUrl} alt="" /></div>}</div></div><div className="pinfo"><h1 style={{ opacity: 0.4 }}>{preview?.title ?? 'Cargando…'}</h1></div></div>
+        )}
+        {estado.tipo === 'no-existe' && <Alert tone="info">Este producto no existe o ya no está publicado. <Link viewTransition to="/explorar">Ver otras publicaciones</Link></Alert>}
+        {estado.tipo === 'error' && <Alert tone="error">No pudimos cargar el producto. Inténtalo de nuevo en un momento.</Alert>}
+        {estado.tipo === 'ok' && <Detalle p={estado.producto} />}
       </main>
-      <Footer />
     </>
   );
 }
 
-function Detalle({ p }: { p: ProductDetail }) {
-  const [producto, setProducto] = useState(p);
-  const estado = ESTADO_PRODUCTO[producto.status] ?? { label: producto.status, tone: 'gray' };
-  const tieneRating = p.seller.reviewsCount > 0;
-
-  return (
-    <article className="product-detail">
-      <ProductPhoto transitionId={p.id} src={p.photoUrl} title={p.title} detail />
-      <div className="product-top">
-        <span className="product-cat">{p.category}</span>
-        <span className={`chip chip--${estado.tone}`}>{estado.label}</span>
-      </div>
-
-      <h1 data-testid="producto-titulo">{p.title}</h1>
-      <p className="product-detail-price" data-testid="producto-precio">
-        {precio(Number(p.price))}
-        {p.acceptsBarter && <span className="chip chip--orange">Acepta trueque</span>}
-      </p>
-
-      <h2 className="detail-h">Descripción</h2>
-      <p className="product-detail-desc">{p.description}</p>
-
-      <dl className="profile-data profile-data--plain">
-        <div>
-          <dt>Condición</dt>
-          <dd>{CONDICION[p.condition] ?? p.condition}</dd>
-        </div>
-        <div>
-          <dt>Barrio</dt>
-          <dd>{barrio(p.neighborhoodId)}</dd>
-        </div>
-        <div>
-          <dt>Publicado</dt>
-          <dd>{fecha(p.createdAt)}</dd>
-        </div>
-        <div>
-          <dt>Visitas · Favoritos</dt>
-          <dd>
-            {producto.viewsCount} · {producto.favoritesCount}
-          </dd>
-        </div>
-      </dl>
-
-      <h2 className="detail-h">Vendedor</h2>
-      <div className="seller-box" data-testid="producto-vendedor">
-        <span className="avatar">{iniciales(p.seller.fullName)}</span>
-        <div>
-          <strong>{p.seller.fullName}</strong>
-          <span>
-            {tieneRating
-              ? <Rating value={Number(p.seller.ratingAverage)} count={p.seller.reviewsCount} />
-              : 'Vendedor sin calificaciones todavía'}
-          </span>
-          <Link
-            to={`/usuario/${p.seller.id}`}
-            className="seller-box__link"
-            data-testid="ver-perfil-vendedor"
-          >
-            Ver perfil y reputación →
-          </Link>
-        </div>
-      </div>
-      <Favorito
-        p={producto}
-        onCountChange={(delta) =>
-          setProducto((actual) => ({
-            ...actual,
-            favoritesCount: Math.max(0, actual.favoritesCount + delta),
-          }))
-        }
-      />
-      <IniciarTransaccion p={producto} onProductChange={setProducto} />
-    </article>
-  );
-}
-
-/**
- * HU-14 · Guardar o quitar el producto de mis favoritos. Usa PUT y DELETE, que son
- * idempotentes: un doble clic o un reintento nunca duplica ni falla.
- */
-function Favorito({ p, onCountChange }: {
-  p: ProductDetail;
-  onCountChange: (delta: number) => void;
-}) {
-  const { user, token } = useSession();
-  // null = todavía no sabemos si ya lo tengo en favoritos.
-  const [esFavorito, setEsFavorito] = useState<boolean | null>(null);
+function Detalle({ p: inicial }: { p: ProductDetail }) {
+  const { user, token, loading } = useSession();
+  const navigate = useNavigate();
+  const [p, setP] = useState(inicial);
+  const [perfil, setPerfil] = useState<PublicProfile | null>(null);
+  const [verRevs, setVerRevs] = useState(false);
+  const [esFav, setEsFav] = useState<boolean | null>(null);
+  const [burst, setBurst] = useState(0);
+  const [zoom, setZoom] = useState<string | null>(null);
+  const [panel, setPanel] = useState<null | 'compra' | 'trueque'>(null);
+  const [msg, setMsg] = useState('');
+  const [mios, setMios] = useState<Product[] | null>(null);
+  const [ofrezco, setOfrezco] = useState<string[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState('');
-  const inFlight = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const soyDueno = user?.id === p.seller.id;
 
   useEffect(() => {
     if (!token) return;
-    let activo = true;
-    productApi
-      .favorites(token)
-      .then((lista) => activo && setEsFavorito(lista.some((f) => f.id === p.id)))
-      .catch(() => activo && setEsFavorito(false));
-    return () => {
-      activo = false;
-    };
-  }, [token, p.id]);
+    userApi.publicProfile(token, p.seller.id).then(setPerfil).catch(() => undefined);
+    productApi.favorites(token).then((l) => setEsFav(l.some((f) => f.id === p.id))).catch(() => setEsFav(false));
+    productApi.mine(token).then((l) => setMios(l.filter((x) => x.status === 'AVAILABLE'))).catch(() => setMios([]));
+  }, [token, p.seller.id, p.id]);
 
-  // Quien publicó el producto no lo guarda como favorito; los visitantes ven el aviso de ingreso.
-  if (!user || !token || user.id === p.seller.id) return null;
+  const alternarFav = async () => {
+    if (!token || esFav === null) return;
+    const quiere = !esFav;
+    try {
+      if (quiere) await productApi.addFavorite(token, p.id); else await productApi.removeFavorite(token, p.id);
+      setEsFav(quiere);
+      if (quiere) setBurst((b) => b + 1);
+      setP((x) => ({ ...x, favoritesCount: Math.max(0, x.favoritesCount + (quiere ? 1 : -1)) }));
+      notify(quiere ? 'Guardado en favoritos' : 'Quitado de favoritos');
+    } catch { notify('No pudimos actualizar tus favoritos'); }
+  };
 
-  async function alternar() {
-    if (!token || inFlight.current || esFavorito === null) return;
-    const quiere = !esFavorito;
-    inFlight.current = true;
+  const abrir = (tipo: 'compra' | 'trueque') => {
+    if (!user) { navigate('/ingresar'); return; }
+    setPanel(tipo);
+    setError('');
+    window.setTimeout(() => panelRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 30);
+  };
+
+  const enviar = async () => {
+    if (!token) return;
+    if (panel === 'trueque' && ofrezco.length === 0) { notify('Elige al menos una publicación para ofrecer'); return; }
+    const ofertas = (mios ?? []).filter((x) => ofrezco.includes(x.id)).map((x) => x.title);
+    const texto = [panel === 'trueque' && ofertas.length ? `Propongo un trueque: ofrezco ${ofertas.join(', ')}.` : '', msg.trim()].filter(Boolean).join(' ');
     setEnviando(true);
     setError('');
     try {
-      if (quiere) await productApi.addFavorite(token, p.id);
-      else await productApi.removeFavorite(token, p.id);
-      setEsFavorito(quiere);
-      notify(quiere ? 'Guardado en favoritos.' : 'Eliminado de favoritos.');
-      onCountChange(quiere ? 1 : -1);
+      const tx = await transactionApi.create(token, p.id, texto || undefined);
+      notify('Solicitud enviada · ahora acuerden el encuentro');
+      navigate(`/transacciones/${tx.id}`);
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 401
-          ? 'Tu sesión expiró. Vuelve a ingresar para usar tus favoritos.'
-          : err instanceof ApiError && err.status === 404
-            ? 'Este producto ya no está publicado.'
-            : 'No pudimos actualizar tus favoritos. Inténtalo de nuevo.',
-      );
-    } finally {
-      inFlight.current = false;
-      setEnviando(false);
-    }
-  }
+      setError(err instanceof ApiError ? (err.status === 401 ? 'Tu sesión expiró. Vuelve a ingresar.' : err.message) : 'No pudimos iniciar la transacción. Inténtalo de nuevo.');
+      if (err instanceof ApiError && (err.status === 409 || err.status === 404)) await productApi.get(p.id).then(setP).catch(() => undefined);
+    } finally { setEnviando(false); }
+  };
+
+  const disponible = p.status === 'AVAILABLE';
+  const chipEstado = disponible ? ['● Disponible', 'g'] : p.status === 'RESERVED' ? ['Reservado', 'o'] : p.status === 'SOLD' ? ['Vendido', 'n'] : ['Retirado', 'n'];
+  const verificado = perfil?.verificationStatus === 'VERIFIED';
+  const nombre = p.seller.fullName.split(' ')[0];
 
   return (
-    <section className="favorite-box" aria-label="Favoritos">
-      {error && <Alert tone="error">{error}</Alert>}
-      <div className="tx-actions">
-        <button
-          type="button"
-          className={`btn ${esFavorito ? 'btn-primary' : 'btn-outline'}`}
-          onClick={() => void alternar()}
-          disabled={enviando || esFavorito === null}
-          aria-label={esFavorito ? "Quitar de favoritos" : "Guardar en favoritos"}
-          aria-pressed={esFavorito === true}
-          data-testid="boton-favorito"
-        >
-          <FavoriteIcon active={esFavorito === true} />{esFavorito ? 'Guardado en favoritos' : 'Guardar en favoritos'}
-        </button>
-        {esFavorito && <Link viewTransition to="/favoritos">Ver mis favoritos</Link>}
-      </div>
-    </section>
-  );
-}
-
-function IniciarTransaccion({ p, onProductChange }: {
-  p: ProductDetail;
-  onProductChange: (product: ProductDetail) => void;
-}) {
-  const { user, token, loading } = useSession();
-  const [message, setMessage] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
-  const [transaction, setTransaction] = useState<Transaction | null>(null);
-  const inFlight = useRef(false);
-
-  async function iniciar(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!token || !user || inFlight.current || transaction || p.status !== 'AVAILABLE' || user.id === p.seller.id) return;
-    inFlight.current = true;
-    setSending(true);
-    setError('');
-    try {
-      const created = await transactionApi.create(token, p.id, message.trim() || undefined);
-      setTransaction(created);
-      onProductChange({ ...p, status: 'RESERVED' });
-    } catch (err) {
-      setError(err instanceof ApiError
-        ? err.status === 401
-          ? 'Tu sesión expiró. Vuelve a ingresar para iniciar la transacción.'
-          : err.message
-        : 'No pudimos iniciar la transacción. Inténtalo de nuevo.');
-      if (err instanceof ApiError && (err.status === 409 || err.status === 404)) {
-        // Otro comprador pudo reservarlo desde que se abrió el detalle.
-        await productApi.get(p.id).then(onProductChange).catch(() => undefined);
-      }
-    } finally {
-      inFlight.current = false;
-      setSending(false);
-    }
-  }
-
-  if (loading) return <p role="status">Comprobando sesión…</p>;
-  if (!user || !token) return <Alert tone="info"><Link viewTransition to="/ingresar">Ingresa a tu cuenta</Link> para iniciar una compra o un trueque.</Alert>;
-  if (user.id === p.seller.id) return <MiProducto p={p} onProductChange={onProductChange} />;
-
-  return (
-    <section className="transaction-start" aria-label="Iniciar una transacción">
-      <h2 className="detail-h">{p.acceptsBarter ? 'Comprar o proponer un trueque' : 'Iniciar compra'}</h2>
-      {error && <Alert tone="error">{error}</Alert>}
-      {transaction ? (
-        <Alert tone="success">
-          Transacción iniciada en estado PENDING (pendiente) con {p.seller.fullName}.
-          {' '}El producto quedó reservado. Referencia: {transaction.id}.{' '}
-          <Link viewTransition to={`/transacciones/${transaction.id}`}>Acordar punto seguro y horario</Link>
-        </Alert>
-      ) : p.status !== 'AVAILABLE' ? (
-        <Alert tone="info">Este producto ya no está disponible para iniciar una transacción.</Alert>
-      ) : (
-        <form onSubmit={iniciar} aria-busy={sending}>
-          <div className="field">
-            <label htmlFor="transaction-message">Mensaje para el vendedor (opcional)</label>
-            <textarea
-              id="transaction-message"
-              className="transaction-message"
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              maxLength={500}
-              rows={3}
-              disabled={sending}
-              aria-describedby="transaction-message-hint"
-              placeholder={p.acceptsBarter ? 'Cuéntale si quieres comprar o qué propones intercambiar.' : 'Cuéntale que te interesa su producto.'}
-            />
-            <p id="transaction-message-hint" className="field-hint">{message.length}/500 caracteres</p>
+    <>
+      <div className="pd">
+        <div>
+          <div className={`gal${zoom ? ' zoom' : ''}`} tabIndex={0} aria-label="Foto del producto"
+            onMouseMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); setZoom(`${(((e.clientX - r.left) / r.width) * 100).toFixed(1)}% ${(((e.clientY - r.top) / r.height) * 100).toFixed(1)}%`); }}
+            onMouseLeave={() => setZoom(null)}>
+            <PriceTag price={p.price} className="bigtag" big />
+            <div className="zoomwrap">{p.photoUrl ? <img src={p.photoUrl} alt={p.title} style={zoom ? { transformOrigin: zoom } : undefined} /> : <span className="noph" style={{ display: 'grid', placeItems: 'center', height: '100%' }}>Sin fotografía</span>}</div>
+            {p.photoUrl && <span className="zhint" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5M11 8v6M8 11h6" /></svg>Pasa el mouse para ver de cerca</span>}
           </div>
-          <button type="submit" className="btn btn-primary" disabled={sending}>
-            {sending ? 'Iniciando…' : p.acceptsBarter ? 'Iniciar compra o trueque' : 'Iniciar compra'}
-          </button>
-        </form>
-      )}
-    </section>
-  );
-}
+        </div>
+        <div className="pinfo">
+          <span className="mu" style={{ fontSize: 14, fontWeight: 700 }}>{CATEGORIA[p.category] ?? p.category}</span>
+          <h1 style={{ marginTop: 6 }} data-testid="producto-titulo">{p.title}</h1>
+          <p className="price" data-testid="producto-precio">{precio(Number(p.price))}</p>
+          <div className="chips">
+            <span className={`chip ${chipEstado[1]}`}>{chipEstado[0]}</span>
+            {p.acceptsBarter && <span className="chip o">Acepta trueque</span>}
+            <span className="chip n">{CONDICION[p.condition] ?? p.condition}</span>
+            <span className="chip n">{barrio(p.neighborhoodId)}</span>
+          </div>
+          <p className="stats"><span>{p.viewsCount} visitas</span><span aria-hidden="true">·</span><span><b>{p.favoritesCount}</b> lo guardaron</span><span aria-hidden="true">·</span><span>Publicado el {new Date(p.createdAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'long' })}</span></p>
+          <div className="seller" data-testid="producto-vendedor">
+            <Avatar name={p.seller.fullName} photoUrl={perfil?.photoUrl} avatar={perfil?.avatar} />
+            <div style={{ flex: 1 }}>
+              <Link to={soyDueno ? '/perfil' : `/usuario/${p.seller.id}`} style={{ color: 'var(--ink)', fontWeight: 700 }} data-testid="ver-perfil-vendedor">{p.seller.fullName}</Link>
+              {verificado && <span className="chip b" style={{ marginLeft: 6 }}>Verificada</span>}
+              <div className="mu" style={{ fontSize: 14 }}>
+                {p.seller.reviewsCount > 0
+                  ? <><span className="stars" aria-label={`${Number(p.seller.ratingAverage).toFixed(1)} de 5`}>{estrellas(Number(p.seller.ratingAverage))}</span> {Number(p.seller.ratingAverage).toLocaleString('es-CO', { maximumFractionDigits: 1 })} · {p.seller.reviewsCount} {p.seller.reviewsCount === 1 ? 'reseña' : 'reseñas'}</>
+                  : 'Sin calificaciones todavía'}
+              </div>
+            </div>
+            {perfil && perfil.recentReviews.length > 0 && <button className="ghost" type="button" aria-expanded={verRevs} onClick={() => setVerRevs((v) => !v)}>{verRevs ? 'Ocultar reseñas' : 'Ver reseñas'}</button>}
+          </div>
+          {verRevs && perfil && (
+            <div className="revs">
+              {perfil.recentReviews.slice(0, 3).map((r, i) => (
+                <div className="rev" key={i}><span className="stars">{estrellas(r.rating)}</span>{r.comment && <p>“{r.comment}”</p>}<small>{r.reviewerName.split(' ')[0]} · {new Date(r.createdAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })}</small></div>
+              ))}
+            </div>
+          )}
 
-/** HU-13 · Vista del dueño: en lugar de comprar, puede retirar la publicación. */
-function MiProducto({ p, onProductChange }: {
-  p: ProductDetail;
-  onProductChange: (product: ProductDetail) => void;
-}) {
-  const navigate = useNavigate();
-  const [problema, setProblema] = useState('');
-  return (
-    <section className="transaction-start" aria-label="Tu publicación">
-      <h2 className="detail-h">Tu publicación</h2>
-      {problema && <Alert tone="error">{problema}</Alert>}
-      {p.status === 'AVAILABLE' ? (
-        <>
-          <p className="field-hint">
-            ¿Algo cambió? <Link viewTransition to={`/editar/${p.id}`}>Edita tu publicación</Link> para
-            mantenerla al día.
-          </p>
-          <p className="field-hint">
-            Si ya no quieres ofrecer este artículo, retíralo: dejará de aparecer en Trendy y se
-            conservará en <Link viewTransition to="/mis-publicaciones">tu historial</Link>.
-          </p>
-          <RetirarPublicacion
-            productId={p.id}
-            title={p.title}
-            onRemoved={() => navigate('/mis-publicaciones', { state: { retirado: p.title } })}
-            onConflict={(mensaje) => {
-              setProblema(mensaje);
-              void productApi.get(p.id).then(onProductChange).catch(() => undefined);
-            }}
-          />
-        </>
-      ) : (
-        <Alert tone="info">
-          {p.status === 'RESERVED'
-            ? 'Está reservada en una transacción. Para retirarla, primero cancela la transacción en '
-            : 'Esta publicación ya no está disponible. Revisa '}
-          <Link viewTransition to={p.status === 'RESERVED' ? '/transacciones' : '/mis-publicaciones'}>
-            {p.status === 'RESERVED' ? 'Transacciones' : 'Mis publicaciones'}
-          </Link>
-          .
-        </Alert>
-      )}
-    </section>
+          {loading ? null : soyDueno ? (
+            <div className="acts">
+              {disponible ? (
+                <>
+                  <Link className="btn2" viewTransition to={`/editar/${p.id}`}>Editar publicación</Link>
+                  <RetirarPublicacion productId={p.id} title={p.title} onRemoved={() => navigate('/mis-publicaciones', { state: { retirado: p.title } })}
+                    onConflict={(m) => { notify(m); void productApi.get(p.id).then(setP).catch(() => undefined); }} />
+                </>
+              ) : (
+                <p className="noswap">{p.status === 'RESERVED' ? <>Está reservada en una transacción. Para retirarla, primero cancélala en <Link to="/transacciones">Transacciones</Link>.</> : <>Ya no está disponible. Revisa <Link to="/mis-publicaciones">Mis publicaciones</Link>.</>}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="acts">
+                <button className="btn" type="button" disabled={!disponible} onClick={() => abrir('compra')}>Comprar</button>
+                {p.acceptsBarter && (mios === null || mios.length > 0) && <button className="btn2" type="button" disabled={!disponible} onClick={() => abrir('trueque')}>Proponer trueque</button>}
+                {user && esFav !== null && (
+                  <button className={`fav big${burst ? ' burst' : ''}`} key={burst} type="button" aria-pressed={esFav} aria-label={esFav ? 'Quitar de favoritos' : 'Guardar en favoritos'} onClick={() => void alternarFav()} data-testid="boton-favorito"><Heart /></button>
+                )}
+              </div>
+              {!disponible && <p className="noswap">Este producto ya no está disponible para iniciar una transacción.</p>}
+              {p.acceptsBarter && mios !== null && mios.length === 0 && <p className="noswap">¿Quieres intercambiar? <Link to="/publicar">Publica algo primero →</Link></p>}
+              {!user && <p className="noswap"><Link to="/ingresar">Ingresa a tu cuenta</Link> para comprar, proponer un trueque o guardarlo.</p>}
+              <div className={`panel${panel ? ' on' : ''}`} ref={panelRef} role="region" aria-labelledby="panel-t">
+                <h2 id="panel-t" style={{ fontSize: 20 }}>{panel === 'trueque' ? 'Proponer trueque' : 'Iniciar compra'}</h2>
+                {error && <Alert tone="error">{error}</Alert>}
+                {panel === 'trueque' && (
+                  <div>
+                    <p className="plabel">¿Qué ofreces a cambio? <span className="mu" style={{ fontWeight: 400 }}>Elige una o varias de tus publicaciones</span></p>
+                    <div className="mine">
+                      {(mios ?? []).map((x) => (
+                        <label className="mi" key={x.id}>
+                          <input type="checkbox" checked={ofrezco.includes(x.id)} onChange={(e) => setOfrezco((o) => e.target.checked ? [...o, x.id] : o.filter((v) => v !== x.id))} />
+                          {x.photoUrl ? <img src={x.photoUrl} alt="" /> : <span />}
+                          <span><b>{x.title}</b><small>{precio(Number(x.price))}</small></span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <label className="plabel" htmlFor="msg">Mensaje para {nombre} <span className="mu" style={{ fontWeight: 400 }}>(opcional)</span></label>
+                <textarea id="msg" maxLength={500} value={msg} onChange={(e) => setMsg(e.target.value)} placeholder={panel === 'trueque' ? 'Cuéntale por qué te interesa o qué más podrías agregar' : 'Hola, me interesa. ¿Podemos vernos esta semana?'} />
+                <div className="mu" style={{ fontSize: 12, textAlign: 'right' }}>{msg.length}/500</div>
+                <div style={{ display: 'flex', gap: 12, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button className="btn" type="button" disabled={enviando} onClick={() => void enviar()}>{enviando ? 'Enviando…' : panel === 'trueque' ? 'Enviar propuesta de trueque' : 'Enviar solicitud'}</button>
+                  <button className="ghost" type="button" onClick={() => setPanel(null)}>Cancelar</button>
+                </div>
+              </div>
+            </>
+          )}
+          <div className="safe">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6l-8-3Z" /><path d="m9 12 2 2 4-4" /></svg>
+            <div><b style={{ color: 'var(--ink)' }}>Entrega presencial en un punto seguro</b><div className="mu" style={{ fontSize: 14 }}>Después de iniciar, uno propone un CAI o una estación del MIO con la hora, y el otro lo acepta.</div></div>
+          </div>
+        </div>
+      </div>
+      <div className="desc">
+        <h2>Descripción</h2>
+        <p className="mu" style={{ maxWidth: 720, margin: 0, whiteSpace: 'pre-line' }}>{p.description}</p>
+        <dl className="dl"><div><dt>Condición</dt><dd>{CONDICION[p.condition] ?? p.condition}</dd></div><div><dt>Barrio</dt><dd>{barrio(p.neighborhoodId)}</dd></div><div><dt>Publicado</dt><dd>{fechaLarga(p.createdAt)}</dd></div></dl>
+      </div>
+    </>
   );
 }

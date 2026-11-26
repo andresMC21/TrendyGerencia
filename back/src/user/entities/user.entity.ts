@@ -51,6 +51,14 @@ export class User {
   })
   photoUrl: string | null;
 
+  /** TRD-25 · Avatar de objeto elegido («planta:#FCBF49»), o null para el automático. */
+  @Column({
+    type: 'varchar',
+    length: 40,
+    nullable: true,
+  })
+  avatar: string | null;
+
   @Column({
     type: 'text',
     default: VerificationStatus.UNVERIFIED,
