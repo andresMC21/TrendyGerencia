@@ -1,0 +1,114 @@
+/*
+ * TRD-25 · Ajustes para celular. Solo media queries: la versión de computador no cambia.
+ * Se carga al final para que estas reglas ganen a las reglas base del prototipo,
+ * que en app.css quedaron después de sus propias media queries.
+ */
+@media (max-width:900px){.pg-app .dash{grid-template-columns:minmax(0,1fr)}
+.pg-app .acct{position:static}}
+@media (max-width:600px){.pg-app .pend{grid-template-columns:52px minmax(0,1fr)}
+.pg-app .pend img{width:52px;height:52px}
+.pg-app .pend .go{grid-column:1/-1}}
+@media (max-width:900px){.pg-app .pub{grid-template-columns:minmax(0,1fr)}
+.pg-app .prev{position:static;order:-1}
+.pg-app .prev .box{display:none}}
+@media (max-width:600px){.pg-app .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.pg-app .stats div{min-width:0;padding:10px 12px}
+.pg-app .row2{grid-template-columns:minmax(0,1fr)}
+.pg-app .myit{grid-template-columns:64px minmax(0,1fr)}
+.pg-app .myit img{width:64px;height:56px}
+.pg-app .myit .ac{grid-column:1/-1}
+.pg-app .drop{grid-template-columns:90px minmax(0,1fr)}
+.pg-app .drop .th{width:90px;height:72px}}
+@media (max-width:900px){.pg-app .txi{grid-template-columns:80px minmax(0,1fr)}
+.pg-app .txi img{width:80px;height:68px}
+.pg-app .txi .prog{grid-column:1/-1}}
+@media (max-width:600px){.pg-app .pubhead .ava{width:64px;height:64px;font-size:22px}}
+@media (max-width:900px){.pg-app .prof,.pg-app .pubgrid{grid-template-columns:minmax(0,1fr)}
+.pg-app .pubhead{grid-template-columns:auto minmax(0,1fr)}
+.pg-app .score{grid-column:1/-1;border-left:0;border-top:1.5px dashed var(--ln);padding:14px 0 0;display:flex;align-items:center;gap:14px;justify-content:center}}
+@media (max-width:480px){.pg-app .objs{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (max-width:900px){.pg-app .cbody{height:300px}}
+@media (max-width:600px){body[data-view=ingresar] nav.main a.guest:not(.btn2),body[data-view=registro] nav.main a.guest:not(.btn2){display:none}}
+@media (max-width:900px){.pg-app .auth{grid-template-columns:minmax(0,1fr)}
+.pg-app .vitrina{min-height:0;order:2}
+.pg-app .shelf{height:170px}
+.pg-app .shelf img{scale:.75;transform-origin:50% 100%}}
+@media (max-width:760px){.pg-app .pick{grid-template-columns:minmax(0,1fr)}
+.pg-app .pick .mapbox{position:static}
+.pg-app .tips{grid-template-columns:minmax(0,1fr)}
+.pg-app .bub{max-width:100%}
+.pg-app .role.demo span{display:none}}
+@media (max-width:600px){.pg-app .mine,.pg-app .points{grid-template-columns:minmax(0,1fr)}
+.pg-app .track.t4 li{font-size:10px}}
+@media (max-width:900px){.pg-app .dl{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pg-app nav.main .hide{display:none}}
+@media (max-width:900px){.pg-app .band .deco:nth-child(n+5){display:none}}
+@media (max-width:600px){.pg-app header .wrap{gap:12px}
+.pg-app .lamp span{display:none}
+.pg-app .points{grid-template-columns:minmax(0,1fr)}
+.pg-app .deal{grid-template-columns:64px minmax(0,1fr)}
+.pg-app .deal .chip{grid-column:1/-1;justify-self:start}
+.pg-app .count{margin-left:0;width:100%}
+.pg-app .track li{font-size:11px}}
+@media (max-width:900px){
+  .pg-app .pd,.pg-app .tx{grid-template-columns:minmax(0,1fr)}
+  .pg-app .tx .side,.pg-app .side{position:static}
+}
+
+@media (max-width:600px){
+  /* Cabecera: nada parte en dos líneas */
+  .pg-app header nav.main,.pg-land header nav{gap:14px}
+  .pg-app header nav.main a,.pg-land header nav a{white-space:nowrap}
+  .pg-app header .btn2.cta{padding:8px 12px;min-height:40px;font-size:14px}
+  .pg-app header .logo,.pg-land header .logo{font-size:30px}
+
+  /* Landing: el sello no tapa el título del recibo ni desborda la pantalla */
+  .pg-land,.pg-app{overflow-x:clip}
+  .pg-land .stamp{top:-16px;right:8px;font-size:17px;padding:2px 10px;background:var(--sf)}
+
+  /* Encabezados de resultados: el conteo baja a su propia línea */
+  .pg-app .results{flex-wrap:wrap;row-gap:4px;margin:26px 0 14px}
+  .pg-app .results .count{width:auto}
+
+  /* Filtros de explorar */
+  .pg-app .filters{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+  .pg-app .filters .sel select{min-width:0;width:100%}
+  .pg-app .filters .linkbtn{grid-column:1/-1;justify-self:start}
+
+  /* Tarjetas en dos columnas: las etiquetas se acomodan en vez de montarse */
+  .pg-app .cardtop{flex-wrap:wrap;row-gap:4px}
+  .pg-app .grid.small .cardtop .cond,.pg-app .grid.small .cardtop>span:last-child{font-size:11px}
+
+  /* Producto */
+  .pg-app .pd .stats{display:flex;flex-wrap:wrap;gap:6px 14px}
+  .pg-app .pd .chips{flex-wrap:wrap}
+  .pg-app .dl{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+
+  /* Transacción */
+  .pg-app .tx .points,.pg-app .tx .slots{grid-template-columns:minmax(0,1fr)}
+  .pg-app .receipt .stampwrap{right:8px;top:-14px}
+
+  /* Perfil: las pestañas no parten "Mis datos" */
+  .pg-app .tabs button{white-space:nowrap}
+}
+
+@media (max-width:760px){
+  /* El mapa deja de ser fijo, pero sus botones de zoom siguen dentro del mapa */
+  .pg-app .pick .mapbox{position:relative;top:auto}
+}
+
+/* En pantallas táctiles no hay mouse: se oculta la pista "Pasa el mouse…" */
+@media (hover:none) and (max-width:900px){
+  .pg-app .zhint{display:none}
+}
+
+@media (max-width:600px){
+  .pg-app .filters .sel:nth-of-type(3){grid-column:1/-1}
+}
+
+@media (max-width:420px){
+  .pg-app header .logo,.pg-land header .logo{font-size:26px}
+  .pg-app header .wrap,.pg-land header .wrap{gap:8px}
+  .pg-app header nav.main,.pg-land header nav{gap:10px}
+  .pg-app header .btn2.cta{padding:6px 10px;min-height:36px;font-size:13px}
+}
