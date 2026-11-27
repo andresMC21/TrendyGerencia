@@ -5,6 +5,7 @@ import '@fontsource/schibsted-grotesk/700.css';
 import './styles/app.css';
 import './styles/app-extra.css';
 import './styles/landing.css';
+import './styles/app-mobile.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
