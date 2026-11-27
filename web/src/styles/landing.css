@@ -90,21 +90,19 @@ body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.6 'Schibsted Grot
 .pg-land .cat:hover{border-color:var(--ink);transform:translateY(-2px)}
 .pg-land .cat:hover img{transform:rotate(-6deg) scale(1.08)}
 .pg-land .how{background:var(--cr);transition:background .6s}
-.pg-land .receipt{position:relative;max-width:980px;margin:0 auto;background:var(--sf);border-radius:6px;padding:clamp(24px,4vw,44px);border:1.5px dashed color-mix(in srgb,var(--mu) 60%,transparent);transition:background .6s}
-.pg-land .receipt:before,.pg-land .receipt:after{content:"";position:absolute;top:50%;width:22px;height:22px;margin-top:-11px;border-radius:50%;background:var(--cr);transition:background .6s}
-.pg-land .receipt:before{left:-12px}
-.pg-land .receipt:after{right:-12px}
-.pg-land .rh{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:13px;font-weight:700;letter-spacing:1.5px;color:var(--mu);border-bottom:1.5px dashed var(--ln);padding-bottom:14px;margin-bottom:8px}
+.pg-land .receipt{position:relative;max-width:720px;margin:0 auto;background:var(--sf);border-radius:12px;padding:clamp(22px,4vw,40px);border:1.5px dashed color-mix(in srgb,var(--mu) 55%,transparent);box-shadow:0 10px 30px rgba(0,48,73,.06);transition:background .6s}
+.pg-land .rh{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:18px;margin-bottom:6px;border-bottom:1.5px dashed var(--ln)}
+.pg-land .rh .rk{display:block;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mu);line-height:1.4}
+.pg-land .rh .rn{display:block;margin-top:4px;font-family:'Young Serif',Georgia,serif;font-size:20px;line-height:1.2;color:var(--ink)}
 .pg-land .steps{list-style:none;margin:0;padding:0}
-.pg-land .steps li{display:grid;grid-template-columns:56px minmax(0,1fr);gap:18px;padding:20px 0;border-bottom:1.5px dashed var(--ln)}
-.pg-land .steps li:last-child{border-bottom:0}
-.pg-land .n{width:56px;height:56px;border-radius:50%;border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;font-family:'Young Serif',Georgia,serif;font-size:22px;color:#003049;background:#FCBF49}
-.pg-land .steps h3{font-family:'Young Serif',Georgia,serif;font-weight:400;font-size:22px;margin:4px 0 4px;color:var(--ink)}
-.pg-land .steps p{margin:0;color:var(--mu)}
-.pg-land .stamp{position:absolute;right:clamp(20px,6vw,70px);top:46%;font-family:'Young Serif',Georgia,serif;font-size:clamp(22px,2.6vw,32px);color:#2E7D4F;border:3px solid #2E7D4F;border-radius:10px;padding:4px 16px;transform:rotate(-12deg) scale(2.4);opacity:0;pointer-events:none}
-.night .pg-land .stamp{color:#7FC79B;border-color:#7FC79B}
-.pg-land .stamp.on{animation:l-stp .5s cubic-bezier(.2,1.6,.4,1) forwards}
-@keyframes l-stp{to{transform:rotate(-12deg) scale(1);opacity:.9}}
+.pg-land .steps li{display:grid;grid-template-columns:44px minmax(0,1fr);column-gap:18px;align-items:start;padding:22px 0;border-bottom:1.5px dashed var(--ln)}
+.pg-land .steps li:last-child{border-bottom:0;padding-bottom:0}
+.pg-land .n{width:44px;height:44px;border-radius:50%;border:2px solid #003049;display:flex;align-items:center;justify-content:center;font-family:'Young Serif',Georgia,serif;font-size:18px;line-height:1;color:#003049;background:#FCBF49}
+.pg-land .steps h3{font-family:'Young Serif',Georgia,serif;font-weight:400;font-size:clamp(20px,2.4vw,24px);line-height:1.25;margin:8px 0 6px;color:var(--ink)}
+.pg-land .steps p{margin:0;max-width:52ch;text-wrap:pretty;font-size:15px;line-height:1.55;color:var(--mu)}
+.pg-land .stamp{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;letter-spacing:.02em;line-height:1;white-space:nowrap;color:#2E7D4F;background:color-mix(in srgb,#2E7D4F 10%,transparent);border:1.5px solid #2E7D4F;border-radius:999px;padding:8px 12px;opacity:0;transform:scale(.92);transition:opacity .35s,transform .35s;pointer-events:none}
+.night .pg-land .stamp{color:#7FC79B;border-color:#7FC79B;background:color-mix(in srgb,#7FC79B 12%,transparent)}
+.pg-land .stamp.on{opacity:1;transform:none}
 .pg-land .close{background:#003049;color:#F5F7FA;overflow:hidden}
 .pg-land .close h2{color:#F5F7FA;max-width:620px}
 .pg-land .close h2 em{font-style:normal;color:#FCBF49}
@@ -134,9 +132,8 @@ body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.6 'Schibsted Grot
 .pg-land .objs .obj{transform:none}
 .pg-land .cats{grid-template-columns:minmax(0,1fr)}
 .pg-land .scrollcue{display:none}
-.pg-land .stamp{top:10px;right:10px;font-size:18px}
 .pg-land .close .deco{display:none}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}
 .pg-land .rv{opacity:1;transform:none}
-.pg-land .stamp.on{opacity:.9;transform:rotate(-12deg)}
+.pg-land .stamp{opacity:1;transform:none}
 html{scroll-behavior:auto}}
