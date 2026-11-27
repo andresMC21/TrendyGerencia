@@ -130,13 +130,15 @@ export default function Landing() {
           <div className="wrap">
             <div className="sh rv" style={{ justifyContent: 'center', textAlign: 'center' }}><div><h2>Así de sencillo</h2><p className="sub" style={{ marginInline: 'auto' }}>Tres pasos y tu objeto sigue su historia.</p></div></div>
             <div className="receipt rv" id="receipt">
-              <div className="rh"><span>RECIBO DE TRUEQUE</span><span>Nº 0127 · CALI</span></div>
+              <div className="rh">
+                <div><span className="rk">Recibo de trueque</span><span className="rn">Nº 0127 · Cali</span></div>
+                <span className="stamp" id="stamp"><span aria-hidden="true">✓</span> Acordado</span>
+              </div>
               <ol className="steps">
                 <li><span className="n">1</span><div><h3>Haz espacio</h3><p>Describe lo que ya no usas, ponle precio y decide si aceptas trueque.</p></div></li>
                 <li><span className="n">2</span><div><h3>Pónganse de acuerdo</h3><p>Elijan un punto seguro y un horario que les funcione a los dos.</p></div></li>
                 <li><span className="n">3</span><div><h3>Que siga su historia</h3><p>Revisen el objeto en persona, confirmen el intercambio y califíquense.</p></div></li>
               </ol>
-              <div className="stamp" id="stamp">¡Acordado!</div>
             </div>
           </div>
         </section>
