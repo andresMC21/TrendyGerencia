@@ -62,9 +62,12 @@
   .pg-app header .btn2.cta{padding:8px 12px;min-height:40px;font-size:14px}
   .pg-app header .logo,.pg-land header .logo{font-size:30px}
 
-  /* Landing: el sello no tapa el título del recibo ni desborda la pantalla */
   .pg-land,.pg-app{overflow-x:clip}
-  .pg-land .stamp{top:-16px;right:8px;font-size:17px;padding:2px 10px;background:var(--sf)}
+  /* Landing: recibo más compacto */
+  .pg-land .rh .rn{font-size:18px}
+  .pg-land .steps li{grid-template-columns:40px minmax(0,1fr);column-gap:14px;padding:20px 0}
+  .pg-land .n{width:40px;height:40px;font-size:17px}
+  .pg-land .steps h3{margin-top:6px}
 
   /* Encabezados de resultados: el conteo baja a su propia línea */
   .pg-app .results{flex-wrap:wrap;row-gap:4px;margin:26px 0 14px}
